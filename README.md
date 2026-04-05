@@ -57,11 +57,11 @@ Claude Code requires an active Anthropic account. Use of the `claude` CLI is sub
 
 ```bash
 # Clone the repo
-git clone https://github.com/YOUR_USER/frameworx.git
-cd frameworx
+git clone https://github.com/8BitTacoSupreme/flowstate.git
+cd flowstate
 
 # Create a virtual environment (Python 3.12+ required)
-python3.13 -m venv .venv
+python3.12 -m venv .venv   # or python3.13
 source .venv/bin/activate
 
 # Install FlowState
@@ -147,7 +147,7 @@ Confirms the `claude` CLI is detected and shows configuration.
 ## Project structure
 
 ```
-frameworx/
+flowstate/
 ├── flowstate/
 │   ├── cli.py              # Click CLI entrypoints
 │   ├── interview.py        # Rich-powered intake interview
