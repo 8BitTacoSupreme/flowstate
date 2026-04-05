@@ -6,5 +6,6 @@ dist/
 build/
 .pytest_cache/
 flowstate.json
+.env
 .flox/cache/
 .flox/run/

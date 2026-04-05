@@ -85,6 +85,13 @@ common = '''
   export NPM_CONFIG_PREFIX="$NODE_PREFIX"
   export PATH="$NODE_PREFIX/bin:$FLOX_ENV_PROJECT/.venv/bin:$PATH"
 
+  # Load .env if it exists
+  if [ -f "$FLOX_ENV_PROJECT/.env" ]; then
+    set -a
+    . "$FLOX_ENV_PROJECT/.env"
+    set +a
+  fi
+
   # Prefer Flox-managed claude over system
   if [ -x "$NODE_PREFIX/bin/claude" ]; then
     export FLOWSTATE_CLAUDE_BIN="$NODE_PREFIX/bin/claude"
