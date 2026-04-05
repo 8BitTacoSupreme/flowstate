@@ -8,11 +8,13 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from flowstate.bridge import BridgeConfig, ClaudeBridge
 from flowstate.state import (
     FlowStateModel,
     ToolStatus,
     load_state,
     save_state,
+    state_path,
     update_tool,
 )
 from flowstate.tools.autoresearch import AutoresearchAdapter
@@ -31,107 +33,151 @@ STEP_LABELS = {
     "superpowers": "Discipline",
 }
 
+STEP_STYLES = {
+    "autoresearch": "cyan",
+    "gstack": "yellow",
+    "gsd": "green",
+    "superpowers": "magenta",
+}
 
-def _make_adapter(name: str, root: Path, dry_run: bool):
-    adapters = {
-        "autoresearch": AutoresearchAdapter,
-        "gstack": GstackAdapter,
-        "gsd": GSDAdapter,
-        "superpowers": SuperpowersAdapter,
-    }
-    return adapters[name](root=root, dry_run=dry_run)
+
+def _make_bridge(root: Path, dry_run: bool) -> ClaudeBridge:
+    config = BridgeConfig(project_root=root)
+    return ClaudeBridge(config=config, dry_run=dry_run)
+
+
+def _run_step(
+    state: FlowStateModel,
+    root: Path,
+    tool_name: str,
+    step_num: int,
+    execute_fn,
+) -> None:
+    """Generic step runner with status tracking and output."""
+    style = STEP_STYLES[tool_name]
+    label = STEP_LABELS[tool_name]
+
+    console.print(f"\n[bold {style}]{step_num}/4 {label}[/] — {tool_name}")
+    update_tool(state, tool_name, status=ToolStatus.RUNNING)
+    save_state(state, root)
+
+    result = execute_fn()
+
+    if result.success:
+        update_tool(state, tool_name, status=ToolStatus.COMPLETED)
+        for artifact in result.artifacts:
+            update_tool(state, tool_name, artifact=artifact)
+        console.print(f"  [green]{result.output[:300]}[/green]")
+    else:
+        update_tool(state, tool_name, status=ToolStatus.BLOCKED, error=result.error)
+        console.print(f"  [red]Failed: {result.error}[/red]")
+
+    save_state(state, root)
+    return result
 
 
 def run_pipeline(state: FlowStateModel, root: Path) -> FlowStateModel:
     dry_run = state.preferences.dry_run
+    bridge = _make_bridge(root, dry_run)
+
+    mode_tag = "[yellow](dry-run)[/yellow]" if dry_run else "[green](live)[/green]"
+    if not dry_run and not bridge.available:
+        mode_tag = "[red](no claude CLI — falling back to dry-run)[/red]"
+        bridge = ClaudeBridge(config=bridge.config, dry_run=True)
 
     console.print()
     console.print(
         Panel(
-            f"[bold]Running GrandSlam Pipeline[/bold]  "
-            f"{'[yellow](dry-run)[/yellow]' if dry_run else '[green](live)[/green]'}",
+            f"[bold]Running GrandSlam Pipeline[/bold]  {mode_tag}",
             border_style="blue",
         )
     )
 
     # Step 1: Intelligence — Autoresearch
-    console.print("\n[bold cyan]1/4 Intelligence[/] — Autoresearch")
-    update_tool(state, "autoresearch", status=ToolStatus.RUNNING)
-    save_state(state, root)
-
-    ar = AutoresearchAdapter(root=root, dry_run=dry_run)
-    result = ar.execute(state.interview)
-    if result.success:
-        update_tool(state, "autoresearch", status=ToolStatus.COMPLETED)
+    ar = AutoresearchAdapter(root=root, dry_run=dry_run, bridge=bridge)
+    result = _run_step(state, root, "autoresearch", 1, lambda: ar.execute(state.interview))
+    if result and result.success:
         for a in result.artifacts:
-            update_tool(state, "autoresearch", artifact=a)
             state.artifacts["research_report"] = a
-        console.print(f"  [green]{result.output}[/green]")
-    else:
-        update_tool(state, "autoresearch", status=ToolStatus.BLOCKED, error=result.error)
-        console.print(f"  [red]Failed: {result.error}[/red]")
-
-    save_state(state, root)
 
     # Step 2: Strategy — Gstack
-    console.print("\n[bold yellow]2/4 Strategy[/] — Gstack")
-    update_tool(state, "gstack", status=ToolStatus.RUNNING)
-    save_state(state, root)
+    gs = GstackAdapter(root=root, dry_run=dry_run, bridge=bridge)
 
-    gs = GstackAdapter(root=root, dry_run=dry_run)
-    env_result = gs.init_stack()
-    console.print(f"  [dim]env: {env_result.output}[/dim]")
+    def _gstack_combined():
+        env_result = gs.init_stack()
+        console.print(f"  [dim]env: {env_result.output[:200]}[/dim]")
+        return gs.office_hours(state.interview)
 
-    oh_result = gs.office_hours(state.interview)
-    if oh_result.success:
-        update_tool(state, "gstack", status=ToolStatus.COMPLETED)
-        for a in oh_result.artifacts:
-            update_tool(state, "gstack", artifact=a)
+    result = _run_step(state, root, "gstack", 2, _gstack_combined)
+    if result and result.success:
+        for a in result.artifacts:
             state.artifacts["strategy_report"] = a
-        console.print(f"  [green]{oh_result.output}[/green]")
-    else:
-        update_tool(state, "gstack", status=ToolStatus.BLOCKED, error=oh_result.error)
-        console.print(f"  [red]Failed: {oh_result.error}[/red]")
-
-    save_state(state, root)
 
     # Step 3: Management — GSD
-    console.print("\n[bold green]3/4 Management[/] — GSD")
-    update_tool(state, "gsd", status=ToolStatus.RUNNING)
-    save_state(state, root)
-
-    gsd = GSDAdapter(root=root, dry_run=dry_run)
-    gsd_result = gsd.new_project(state.interview)
-    if gsd_result.success:
-        update_tool(state, "gsd", status=ToolStatus.COMPLETED)
-        for a in gsd_result.artifacts:
-            update_tool(state, "gsd", artifact=a)
+    gsd = GSDAdapter(root=root, dry_run=dry_run, bridge=bridge)
+    result = _run_step(state, root, "gsd", 3, lambda: gsd.new_project(state.interview))
+    if result and result.success:
+        for a in result.artifacts:
             state.artifacts["roadmap"] = a
-        console.print(f"  [green]{gsd_result.output}[/green]")
-    else:
-        update_tool(state, "gsd", status=ToolStatus.BLOCKED, error=gsd_result.error)
-        console.print(f"  [red]Failed: {gsd_result.error}[/red]")
-
-    save_state(state, root)
 
     # Step 4: Discipline — Superpowers
-    console.print("\n[bold magenta]4/4 Discipline[/] — Superpowers")
-    update_tool(state, "superpowers", status=ToolStatus.RUNNING)
-    save_state(state, root)
-
-    sp = SuperpowersAdapter(root=root, dry_run=dry_run)
-    sp_result = sp.init_repo(state.interview)
-    if sp_result.success:
-        update_tool(state, "superpowers", status=ToolStatus.COMPLETED)
-        console.print(f"  [green]{sp_result.output}[/green]")
-    else:
-        update_tool(state, "superpowers", status=ToolStatus.BLOCKED, error=sp_result.error)
-        console.print(f"  [red]Failed: {sp_result.error}[/red]")
-
-    save_state(state, root)
+    sp = SuperpowersAdapter(root=root, dry_run=dry_run, bridge=bridge)
+    _run_step(state, root, "superpowers", 4, lambda: sp.init_repo(state.interview))
 
     console.print()
-    console.print("[bold green]Pipeline complete.[/bold green]")
+    _print_summary(state)
+    return state
+
+
+def _print_summary(state: FlowStateModel) -> None:
+    completed = sum(1 for ts in state.tools.values() if ts.status == ToolStatus.COMPLETED)
+    blocked = sum(1 for ts in state.tools.values() if ts.status == ToolStatus.BLOCKED)
+
+    if blocked == 0:
+        console.print("[bold green]Pipeline complete. All 4 tools succeeded.[/bold green]")
+    else:
+        console.print(
+            f"[bold yellow]Pipeline finished: {completed}/4 succeeded, "
+            f"{blocked} blocked.[/bold yellow]"
+        )
+
+
+def run_phase(state: FlowStateModel, root: Path, phase: int) -> FlowStateModel:
+    """Run a specific GSD phase (plan + execute)."""
+    dry_run = state.preferences.dry_run
+    bridge = _make_bridge(root, dry_run)
+    gsd = GSDAdapter(root=root, dry_run=dry_run, bridge=bridge)
+    sp = SuperpowersAdapter(root=root, dry_run=dry_run, bridge=bridge)
+
+    console.print(f"\n[bold blue]Running Phase {phase}[/bold blue]")
+
+    # Check if this phase needs worktree isolation
+    milestones = state.interview.milestones
+    phase_label = milestones[phase - 1] if phase <= len(milestones) else f"Phase {phase}"
+    if sp.should_branch(phase_label):
+        console.print(f"  [yellow]Hardening detected — creating worktree branch[/yellow]")
+        branch = f"phase-{phase}-{phase_label.lower().replace(' ', '-')}"
+        wt_result = sp.create_worktree(branch)
+        console.print(f"  [dim]{wt_result.output}[/dim]")
+
+    # Plan
+    console.print(f"  [cyan]Planning phase {phase}...[/cyan]")
+    plan_result = gsd.plan_phase(phase)
+    if plan_result.success:
+        console.print(f"  [green]Plan created[/green]")
+    else:
+        console.print(f"  [red]Planning failed: {plan_result.error}[/red]")
+        return state
+
+    # Execute
+    console.print(f"  [cyan]Executing phase {phase}...[/cyan]")
+    exec_result = gsd.execute_phase(phase)
+    if exec_result.success:
+        console.print(f"  [green]Phase {phase} complete[/green]")
+    else:
+        console.print(f"  [red]Execution failed: {exec_result.error}[/red]")
+
+    save_state(state, root)
     return state
 
 
@@ -159,8 +205,8 @@ def print_status(root: Path) -> None:
             name,
             STEP_LABELS[name],
             f"[{style}]{ts.status.value}[/{style}]",
-            ", ".join(ts.artifacts) or "—",
-            ts.error or "—",
+            ", ".join(ts.artifacts) or "---",
+            ts.error or "---",
         )
 
     console.print()
@@ -172,9 +218,4 @@ def print_status(root: Path) -> None:
             console.print(f"  {key}: {path}")
 
     console.print(f"\n[dim]Project: {state.preferences.project_name or '(not set)'}[/dim]")
-    console.print(f"[dim]State file: {state_path_display(root)}[/dim]")
-
-
-def state_path_display(root: Path) -> str:
-    from flowstate.state import state_path
-    return str(state_path(root))
+    console.print(f"[dim]State file: {state_path(root)}[/dim]")

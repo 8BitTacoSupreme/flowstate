@@ -1,4 +1,9 @@
-"""GSD adapter — roadmap and state management."""
+"""GSD adapter — roadmap and state management.
+
+Live mode invokes the real GSD skill system (`/gsd:new-project`) through
+the claude CLI. GSD creates .planning/ with PROJECT.md, REQUIREMENTS.md,
+ROADMAP.md, and STATE.md.
+"""
 
 from __future__ import annotations
 
@@ -38,4 +43,35 @@ class GSDAdapter(ToolAdapter):
                 artifacts=[str(roadmap_path)],
             )
 
-        return self.run_cmd(["gsd", "new-project"])
+        # Invoke the real GSD skill via claude CLI
+        br = self.bridge.invoke_skill("gsd:new-project", "--auto")
+
+        # Collect artifacts that GSD creates
+        artifacts = []
+        planning = self.root / ".planning"
+        for name in ("PROJECT.md", "REQUIREMENTS.md", "ROADMAP.md", "STATE.md"):
+            p = planning / name
+            if p.exists():
+                artifacts.append(str(p))
+
+        return ToolResult(
+            success=br.success,
+            output=br.output[:500] if br.success else "",
+            artifacts=artifacts,
+            error=br.error,
+        )
+
+    def plan_phase(self, phase: int) -> ToolResult:
+        """Plan a specific phase via /gsd:plan-phase."""
+        br = self.bridge.invoke_skill("gsd:plan-phase", str(phase))
+        return self.bridge_to_result(br)
+
+    def execute_phase(self, phase: int) -> ToolResult:
+        """Execute a specific phase via /gsd:execute-phase."""
+        br = self.bridge.invoke_skill("gsd:execute-phase", str(phase))
+        return self.bridge_to_result(br)
+
+    def progress(self) -> ToolResult:
+        """Check project progress via /gsd:progress."""
+        br = self.bridge.invoke_skill("gsd:progress")
+        return self.bridge_to_result(br)

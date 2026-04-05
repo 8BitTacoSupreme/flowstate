@@ -58,3 +58,40 @@ def status(root: Path):
 
     console.print(Panel(BANNER, title="v" + __version__, border_style="blue", expand=False))
     print_status(root)
+
+
+@main.command()
+@click.argument("phase", type=int)
+@click.option("--dry-run", is_flag=True, help="Simulate execution.")
+@click.option("--root", type=click.Path(exists=True, path_type=Path), default=".", help="Project root directory.")
+def run(phase: int, dry_run: bool, root: Path):
+    """Run a specific GSD phase (plan + execute)."""
+    from flowstate.orchestrator import run_phase
+    from flowstate.state import load_state, save_state
+
+    state = load_state(root)
+    state.preferences.dry_run = dry_run
+
+    console.print(Panel(BANNER, title="v" + __version__, border_style="blue", expand=False))
+    run_phase(state, root, phase)
+    save_state(state, root)
+
+
+@main.command("check")
+@click.option("--root", type=click.Path(exists=True, path_type=Path), default=".", help="Project root directory.")
+def check_bridge(root: Path):
+    """Check if the claude CLI bridge is available and configured."""
+    from flowstate.bridge import BridgeConfig, ClaudeBridge
+
+    config = BridgeConfig(project_root=root)
+    bridge = ClaudeBridge(config=config)
+
+    if bridge.available:
+        console.print(f"[green]claude CLI found:[/green] {config.claude_bin}")
+        console.print(f"[dim]Timeout: {config.timeout}s | Max turns: {config.max_turns}[/dim]")
+    else:
+        console.print("[red]claude CLI not found.[/red]")
+        console.print(
+            "[dim]Install Claude Code or set FLOWSTATE_CLAUDE_BIN "
+            "to the binary path.[/dim]"
+        )
