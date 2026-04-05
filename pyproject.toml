@@ -6,6 +6,8 @@ build-backend = "hatchling.build"
 name = "flowstate"
 version = "0.1.0"
 description = "The GrandSlam Orchestrator — unifies Autoresearch, Gstack, GSD, and Superpowers into a single agentic workflow."
+license = "Apache-2.0"
+readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "click>=8.1",

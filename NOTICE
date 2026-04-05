@@ -1,0 +1,18 @@
+FlowState — The GrandSlam Orchestrator
+Copyright 2026 FlowState Contributors
+
+This product includes software developed by third parties:
+
+  click (BSD-3-Clause) — https://github.com/pallets/click
+  pydantic (MIT) — https://github.com/pydantic/pydantic
+  rich (MIT) — https://github.com/willmcgugan/rich
+
+This product integrates with but does not include:
+
+  Claude Code by Anthropic PBC (proprietary) — use subject to
+  Anthropic's Commercial Terms of Service
+  https://www.anthropic.com/legal/commercial-terms
+
+  GSD (MIT) — https://github.com/gsd-build/gsd-2
+
+  Flox plugins (Apache 2.0) — https://github.com/flox
