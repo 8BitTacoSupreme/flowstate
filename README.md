@@ -47,6 +47,7 @@ FlowState is a CLI-first orchestrator that unifies four agentic frameworks (the 
 
 ## Prerequisites
 
+- **[Flox](https://flox.dev)** (recommended) — handles everything below automatically
 - **Python 3.12+**
 - **Claude Code CLI** (v2.0+) — [install guide](https://docs.anthropic.com/en/docs/claude-code/overview)
 - **GSD** (optional, for Management phase) — [github.com/gsd-build/gsd-2](https://github.com/gsd-build/gsd-2)
@@ -55,20 +56,38 @@ Claude Code requires an active Anthropic account. Use of the `claude` CLI is sub
 
 ## Installation
 
+### Option A: Flox (recommended)
+
+One command gives you Python, Node, Claude Code CLI, MCP servers (Context7, Exa), and FlowState — fully reproducible.
+
 ```bash
-# Clone the repo
+git clone https://github.com/8BitTacoSupreme/flowstate.git
+cd flowstate
+flox activate
+```
+
+On first activation, Flox automatically:
+- Creates a Python venv and installs FlowState
+- Installs Claude Code CLI via npm
+- Installs Context7 and Exa MCP servers
+- Configures `.claude/settings.json` with MCP server entries
+
+Subsequent activations are instant (everything is cached).
+
+### Option B: Manual (pip/venv)
+
+```bash
 git clone https://github.com/8BitTacoSupreme/flowstate.git
 cd flowstate
 
-# Create a virtual environment (Python 3.12+ required)
 python3.12 -m venv .venv   # or python3.13
 source .venv/bin/activate
-
-# Install FlowState
 pip install -e .
 ```
 
-Verify the install:
+You'll also need to install [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview) separately.
+
+### Verify
 
 ```bash
 flowstate --version

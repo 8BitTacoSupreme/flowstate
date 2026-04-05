@@ -1,0 +1,114 @@
+schema-version = "1.10.0"
+
+# ==========================================================================
+# FlowState — The GrandSlam Orchestrator
+# `flox activate` gives you: Python 3.13, Node 24, Claude Code CLI,
+# MCP servers (Context7, Exa), and a ready-to-go dev environment.
+# ==========================================================================
+
+[install]
+python313.pkg-path = "python313"
+nodejs_24.pkg-path = "nodejs_24"
+git.pkg-path = "git"
+jq.pkg-path = "jq"
+ripgrep.pkg-path = "ripgrep"
+
+[hook]
+on-activate = '''
+  # All installs go into Flox cache — nothing pollutes the system.
+  NODE_PREFIX="$FLOX_ENV_CACHE/node-global"
+  mkdir -p "$NODE_PREFIX"
+  export NPM_CONFIG_PREFIX="$NODE_PREFIX"
+  MCP_BINS="$NODE_PREFIX/bin"
+
+  # ── Claude Code CLI ──
+  if [ ! -x "$MCP_BINS/claude" ] && ! command -v claude &>/dev/null; then
+    echo "⚡ Installing Claude Code CLI..."
+    npm install -g @anthropic-ai/claude-code 2>/dev/null || \
+      echo "⚠  Claude Code install failed — set FLOWSTATE_CLAUDE_BIN manually"
+  fi
+
+  # ── MCP servers ──
+  if [ ! -x "$MCP_BINS/context7-mcp" ]; then
+    echo "⚡ Installing Context7 MCP server..."
+    npm install -g @upstash/context7-mcp 2>/dev/null || true
+  fi
+
+  if [ ! -x "$MCP_BINS/exa-mcp-server" ]; then
+    echo "⚡ Installing Exa MCP server..."
+    npm install -g exa-mcp-server 2>/dev/null || true
+  fi
+
+  # ── Python venv + FlowState ──
+  if [ ! -d "$FLOX_ENV_PROJECT/.venv" ]; then
+    echo "⚡ Creating Python venv..."
+    python3 -m venv "$FLOX_ENV_PROJECT/.venv"
+  fi
+
+  if ! "$FLOX_ENV_PROJECT/.venv/bin/python" -c "import flowstate" 2>/dev/null; then
+    echo "⚡ Installing FlowState..."
+    "$FLOX_ENV_PROJECT/.venv/bin/pip" install -q -e "$FLOX_ENV_PROJECT"
+  fi
+
+  # ── Project-level MCP config for Claude Code ──
+  SETTINGS="$FLOX_ENV_PROJECT/.claude/settings.json"
+  mkdir -p "$(dirname "$SETTINGS")"
+
+  if [ ! -f "$SETTINGS" ] || ! jq -e '.mcpServers.context7' "$SETTINGS" &>/dev/null; then
+    echo "⚡ Configuring MCP servers for Claude Code..."
+    EXISTING="{}"
+    [ -f "$SETTINGS" ] && EXISTING=$(cat "$SETTINGS")
+
+    echo "$EXISTING" | jq '
+      . * {
+        "mcpServers": {
+          "context7": {
+            "command": "npx",
+            "args": ["-y", "@upstash/context7-mcp"]
+          },
+          "exa": {
+            "command": "npx",
+            "args": ["-y", "exa-mcp-server"],
+            "env": {
+              "EXA_API_KEY": ""
+            }
+          }
+        }
+      }
+    ' > "$SETTINGS.tmp" && mv "$SETTINGS.tmp" "$SETTINGS"
+  fi
+'''
+
+[profile]
+common = '''
+  NODE_PREFIX="$FLOX_ENV_CACHE/node-global"
+  export NPM_CONFIG_PREFIX="$NODE_PREFIX"
+  export PATH="$NODE_PREFIX/bin:$FLOX_ENV_PROJECT/.venv/bin:$PATH"
+
+  # Prefer Flox-managed claude over system
+  if [ -x "$NODE_PREFIX/bin/claude" ]; then
+    export FLOWSTATE_CLAUDE_BIN="$NODE_PREFIX/bin/claude"
+  fi
+
+  echo ""
+  echo "  ⚡ FlowState environment ready"
+  echo "  Python:     $(python3 --version 2>&1)"
+  echo "  Node:       $(node --version 2>&1)"
+  echo "  Claude CLI: $(claude --version 2>&1 || echo 'not found — run: npm install -g @anthropic-ai/claude-code')"
+  echo "  FlowState:  $(flowstate --version 2>&1 || echo 'not found')"
+  echo ""
+  echo "  Commands:"
+  echo "    flowstate init --dry-run   # test the pipeline"
+  echo "    flowstate init             # live GrandSlam"
+  echo "    flowstate status           # check tool state"
+  echo "    flowstate check            # verify claude bridge"
+  echo ""
+'''
+
+[options]
+systems = [
+  "aarch64-darwin",
+  "aarch64-linux",
+  "x86_64-darwin",
+  "x86_64-linux",
+]
