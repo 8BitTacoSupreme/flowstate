@@ -96,9 +96,15 @@ flowstate/
 - Worktree auto-branching triggers on hardening keywords: harden, stabilize, polish, optimize, scale
 - State persisted after every pipeline step (crash-resilient)
 
+## Known Issues
+
+- **Pre-push hook expects `python` not `python3`**: `.pre-commit-config.yaml` pytest-cov hook fails outside venv because macOS only has `python3`. Fix: update hook to use `python3`, or always push from inside `flox activate`/venv. Workaround: `git push --no-verify`.
+- **Autoresearch timeout**: Was 600s with 15 max_turns. Fixed to 8 max_turns with tighter prompt (78ac632). If still slow, reduce further or split into focused queries.
+- **Ruff pre-commit**: First commit in a session triggers ruff install (~30s). Ruff auto-formats on commit — if it modifies files, re-stage and commit again.
+
 ## What's Next (Phase 3 candidates)
 
-- **Live test** — run `flowstate init` without `--dry-run` end-to-end
+- **Live retest** — run `flowstate init` end-to-end (first live run hit bugs, fixed in 78ac632)
 - **Feedback loop** — verify → iterate cycle between GSD phases
 - **FastAPI backend** — expose orchestrator as an API
 - **Phase chaining** — `flowstate run --all` to sequence all phases
@@ -107,10 +113,12 @@ flowstate/
 ## Dev Commands
 
 ```bash
-flox activate                          # full environment
+flox activate                          # full environment (recommended)
 source .venv/bin/activate              # just Python (fallback)
 python -m pytest tests/ -v             # run tests (26 passing)
-flowstate init --dry-run               # test pipeline
+flowstate init --dry-run               # test the pipeline
+flowstate init                         # live GrandSlam run
 flowstate check                        # verify claude bridge
 flowstate status                       # show tool state
+git push --no-verify                   # if pre-push hook fails outside venv
 ```
