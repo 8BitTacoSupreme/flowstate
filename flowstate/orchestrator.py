@@ -1,4 +1,4 @@
-"""FlowState Orchestrator — sequences the Agentic Quadruple."""
+"""FlowState Orchestrator — sequences context generation, research, strategy, and discipline."""
 
 from __future__ import annotations
 
@@ -9,6 +9,9 @@ from rich.panel import Panel
 from rich.table import Table
 
 from flowstate.bridge import BridgeConfig, ClaudeBridge
+from flowstate.context import write_context_files
+from flowstate.discipline import check_setup
+from flowstate.launcher import print_next_steps
 from flowstate.state import (
     FlowStateModel,
     ToolStatus,
@@ -17,27 +20,26 @@ from flowstate.state import (
     state_path,
     update_tool,
 )
-from flowstate.tools.autoresearch import AutoresearchAdapter
 from flowstate.tools.gsd_adapter import GSDAdapter
-from flowstate.tools.gstack import GstackAdapter
-from flowstate.tools.superpowers import SuperpowersAdapter
+from flowstate.tools.research import ResearchAdapter
+from flowstate.tools.strategy import StrategyAdapter
 
 console = Console()
 
-TOOL_ORDER = ["autoresearch", "gstack", "gsd", "superpowers"]
+TOOL_ORDER = ["research", "strategy", "gsd", "discipline"]
 
 STEP_LABELS = {
-    "autoresearch": "Intelligence",
-    "gstack": "Strategy",
+    "research": "Research",
+    "strategy": "Strategy",
     "gsd": "Management",
-    "superpowers": "Discipline",
+    "discipline": "Discipline",
 }
 
 STEP_STYLES = {
-    "autoresearch": "cyan",
-    "gstack": "yellow",
+    "research": "cyan",
+    "strategy": "yellow",
     "gsd": "green",
-    "superpowers": "magenta",
+    "discipline": "magenta",
 }
 
 
@@ -51,13 +53,14 @@ def _run_step(
     root: Path,
     tool_name: str,
     step_num: int,
+    total_steps: int,
     execute_fn,
 ) -> None:
     """Generic step runner with status tracking and output."""
     style = STEP_STYLES[tool_name]
     label = STEP_LABELS[tool_name]
 
-    console.print(f"\n[bold {style}]{step_num}/4 {label}[/] — {tool_name}")
+    console.print(f"\n[bold {style}]{step_num}/{total_steps} {label}[/] — {tool_name}")
     update_tool(state, tool_name, status=ToolStatus.RUNNING)
     save_state(state, root)
 
@@ -88,94 +91,106 @@ def run_pipeline(state: FlowStateModel, root: Path) -> FlowStateModel:
     console.print()
     console.print(
         Panel(
-            f"[bold]Running GrandSlam Pipeline[/bold]  {mode_tag}",
+            f"[bold]Running FlowState Pipeline[/bold]  {mode_tag}",
             border_style="blue",
         )
     )
 
-    # Step 1: Intelligence — Autoresearch
-    ar = AutoresearchAdapter(root=root, dry_run=dry_run, bridge=bridge)
-    result = _run_step(state, root, "autoresearch", 1, lambda: ar.execute(state.interview))
+    # Step 1: Context Generation — deterministic, <1s
+    console.print("\n[bold blue]1/5 Context Generation[/] — deterministic")
+    try:
+        created = write_context_files(state, root)
+        console.print(f"  [green]{len(created)} context files written[/green]")
+        for p in created:
+            console.print(f"    {p.relative_to(root)}")
+    except Exception as e:
+        console.print(f"  [red]Context generation failed: {e}[/red]")
+
+    save_state(state, root)
+
+    # Step 2: Research — split-topic bridge calls
+    research = ResearchAdapter(root=root, dry_run=dry_run, bridge=bridge)
+    result = _run_step(
+        state, root, "research", 2, 5, lambda: research.execute(state.interview)
+    )
     if result and result.success:
         for a in result.artifacts:
             state.artifacts["research_report"] = a
 
-    # Step 2: Strategy — Gstack
-    gs = GstackAdapter(root=root, dry_run=dry_run, bridge=bridge)
-
-    def _gstack_combined():
-        env_result = gs.init_stack()
-        console.print(f"  [dim]env: {env_result.output[:200]}[/dim]")
-        return gs.office_hours(state.interview)
-
-    result = _run_step(state, root, "gstack", 2, _gstack_combined)
+    # Step 3: Strategy — single bridge call
+    strategy = StrategyAdapter(root=root, dry_run=dry_run, bridge=bridge)
+    result = _run_step(
+        state, root, "strategy", 3, 5, lambda: strategy.pressure_test(state.interview)
+    )
     if result and result.success:
         for a in result.artifacts:
             state.artifacts["strategy_report"] = a
 
-    # Step 3: Management — GSD
+    # Step 4: Management — GSD context files (already written in step 1, this enriches)
     gsd = GSDAdapter(root=root, dry_run=dry_run, bridge=bridge)
-    result = _run_step(state, root, "gsd", 3, lambda: gsd.new_project(state.interview))
+    result = _run_step(state, root, "gsd", 4, 5, lambda: gsd.new_project(state))
     if result and result.success:
         for a in result.artifacts:
             state.artifacts["roadmap"] = a
 
-    # Step 4: Discipline — Superpowers
-    sp = SuperpowersAdapter(root=root, dry_run=dry_run, bridge=bridge)
-    _run_step(state, root, "superpowers", 4, lambda: sp.init_repo(state.interview))
+    # Step 5: Discipline — pure Python audit
+    console.print("\n[bold magenta]5/5 Discipline[/] — audit")
+    update_tool(state, "discipline", status=ToolStatus.RUNNING)
+    save_state(state, root)
+
+    audit = check_setup(root)
+    update_tool(state, "discipline", status=ToolStatus.COMPLETED)
+    console.print(f"  [green]{audit.summary}[/green]")
+    save_state(state, root)
 
     console.print()
     _print_summary(state)
+
+    # Show next steps
+    print_next_steps(state, root)
+
     return state
 
 
 def _print_summary(state: FlowStateModel) -> None:
-    completed = sum(1 for ts in state.tools.values() if ts.status == ToolStatus.COMPLETED)
+    completed = sum(
+        1 for ts in state.tools.values() if ts.status == ToolStatus.COMPLETED
+    )
     blocked = sum(1 for ts in state.tools.values() if ts.status == ToolStatus.BLOCKED)
 
     if blocked == 0:
-        console.print("[bold green]Pipeline complete. All 4 tools succeeded.[/bold green]")
+        console.print(
+            "[bold green]Pipeline complete. All steps succeeded.[/bold green]"
+        )
     else:
         console.print(
-            f"[bold yellow]Pipeline finished: {completed}/4 succeeded, "
+            f"[bold yellow]Pipeline finished: {completed}/{len(state.tools)} succeeded, "
             f"{blocked} blocked.[/bold yellow]"
         )
 
+    if state.context_files:
+        console.print("\n[bold]Context files:[/bold]")
+        for f in state.context_files:
+            console.print(f"  {f}")
+
 
 def run_phase(state: FlowStateModel, root: Path, phase: int) -> FlowStateModel:
-    """Run a specific GSD phase (plan + execute)."""
-    dry_run = state.preferences.dry_run
-    bridge = _make_bridge(root, dry_run)
-    gsd = GSDAdapter(root=root, dry_run=dry_run, bridge=bridge)
-    sp = SuperpowersAdapter(root=root, dry_run=dry_run, bridge=bridge)
+    """Print the launch command for a GSD phase.
 
-    console.print(f"\n[bold blue]Running Phase {phase}[/bold blue]")
+    Phases now run natively inside Claude Code sessions.
+    Use `flowstate launch gsd <phase>` for the exact command.
+    """
+    from flowstate.launcher import launch_command
 
-    # Check if this phase needs worktree isolation
-    milestones = state.interview.milestones
-    phase_label = milestones[phase - 1] if phase <= len(milestones) else f"Phase {phase}"
-    if sp.should_branch(phase_label):
-        console.print(f"  [yellow]Hardening detected — creating worktree branch[/yellow]")
-        branch = f"phase-{phase}-{phase_label.lower().replace(' ', '-')}"
-        wt_result = sp.create_worktree(branch)
-        console.print(f"  [dim]{wt_result.output}[/dim]")
+    console.print(f"\n[bold blue]Phase {phase} — Native Execution[/bold blue]")
+    console.print(
+        "\n[yellow]GSD phases run natively inside Claude Code sessions.[/yellow]"
+        "\nUse the following command:\n"
+    )
 
-    # Plan
-    console.print(f"  [cyan]Planning phase {phase}...[/cyan]")
-    plan_result = gsd.plan_phase(phase)
-    if plan_result.success:
-        console.print(f"  [green]Plan created[/green]")
-    else:
-        console.print(f"  [red]Planning failed: {plan_result.error}[/red]")
-        return state
-
-    # Execute
-    console.print(f"  [cyan]Executing phase {phase}...[/cyan]")
-    exec_result = gsd.execute_phase(phase)
-    if exec_result.success:
-        console.print(f"  [green]Phase {phase} complete[/green]")
-    else:
-        console.print(f"  [red]Execution failed: {exec_result.error}[/red]")
+    cmd = launch_command("gsd", phase, root)
+    console.print(f"  [cyan]{cmd}[/cyan]")
+    console.print()
 
     save_state(state, root)
     return state
@@ -199,11 +214,13 @@ def print_status(root: Path) -> None:
     }
 
     for name in TOOL_ORDER:
-        ts = state.tools[name]
+        ts = state.tools.get(name)
+        if ts is None:
+            continue
         style = status_style.get(ts.status, "")
         table.add_row(
             name,
-            STEP_LABELS[name],
+            STEP_LABELS.get(name, name),
             f"[{style}]{ts.status.value}[/{style}]",
             ", ".join(ts.artifacts) or "---",
             ts.error or "---",
@@ -212,10 +229,17 @@ def print_status(root: Path) -> None:
     console.print()
     console.print(table)
 
+    if state.context_files:
+        console.print("\n[bold]Context files:[/bold]")
+        for f in state.context_files:
+            console.print(f"  {f}")
+
     if state.artifacts:
         console.print("\n[bold]Artifacts:[/bold]")
         for key, path in state.artifacts.items():
             console.print(f"  {key}: {path}")
 
-    console.print(f"\n[dim]Project: {state.preferences.project_name or '(not set)'}[/dim]")
+    console.print(
+        f"\n[dim]Project: {state.preferences.project_name or '(not set)'}[/dim]"
+    )
     console.print(f"[dim]State file: {state_path(root)}[/dim]")

@@ -32,7 +32,7 @@ class BridgeResult:
 class BridgeConfig:
     claude_bin: str | None = None
     project_root: Path = field(default_factory=Path.cwd)
-    timeout: int = 600
+    timeout: int = 300
     allowed_tools: list[str] = field(default_factory=list)
     max_turns: int = 10
 
@@ -185,7 +185,6 @@ class ClaudeBridge:
                 "Bash",
                 "Glob",
                 "Grep",
-                "Task",
             ],
-            max_turns=30,
+            max_turns=15,
         )

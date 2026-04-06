@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -41,19 +39,31 @@ class ProjectPreferences(BaseModel):
     auto_branch_on_hardening: bool = True
 
 
+# Old tool keys for migration
+_OLD_TOOL_KEYS = {
+    "autoresearch": "research",
+    "gstack": "strategy",
+    "superpowers": "discipline",
+}
+_CURRENT_TOOL_KEYS = ["research", "strategy", "gsd", "discipline"]
+
+
 class FlowStateModel(BaseModel):
-    version: str = "0.1.0"
+    version: str = "0.2.0"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     interview: InterviewAnswers = Field(default_factory=InterviewAnswers)
     preferences: ProjectPreferences = Field(default_factory=ProjectPreferences)
-    tools: dict[str, ToolState] = Field(default_factory=lambda: {
-        "autoresearch": ToolState(),
-        "gstack": ToolState(),
-        "gsd": ToolState(),
-        "superpowers": ToolState(),
-    })
+    tools: dict[str, ToolState] = Field(
+        default_factory=lambda: {
+            "research": ToolState(),
+            "strategy": ToolState(),
+            "gsd": ToolState(),
+            "discipline": ToolState(),
+        }
+    )
     artifacts: dict[str, str] = Field(default_factory=dict)
+    context_files: list[str] = Field(default_factory=list)
 
 
 STATE_FILE = "flowstate.json"
@@ -63,10 +73,41 @@ def state_path(root: Path | None = None) -> Path:
     return (root or Path.cwd()) / STATE_FILE
 
 
+def _migrate_state(data: dict) -> dict:
+    """Migrate v0.1.0 state (old tool keys) to v0.2.0."""
+    version = data.get("version", "0.1.0")
+    if version >= "0.2.0":
+        return data
+
+    tools = data.get("tools", {})
+    migrated_tools = {}
+    for old_key, new_key in _OLD_TOOL_KEYS.items():
+        if old_key in tools:
+            migrated_tools[new_key] = tools[old_key]
+    # Keep gsd as-is
+    if "gsd" in tools:
+        migrated_tools["gsd"] = tools["gsd"]
+    # Fill any missing keys
+    for key in _CURRENT_TOOL_KEYS:
+        if key not in migrated_tools:
+            migrated_tools[key] = ToolState().model_dump()
+
+    data["tools"] = migrated_tools
+    data["version"] = "0.2.0"
+    if "context_files" not in data:
+        data["context_files"] = []
+
+    return data
+
+
 def load_state(root: Path | None = None) -> FlowStateModel:
     p = state_path(root)
     if p.exists():
-        return FlowStateModel.model_validate_json(p.read_text())
+        import json as json_mod
+
+        raw = json_mod.loads(p.read_text())
+        migrated = _migrate_state(raw)
+        return FlowStateModel.model_validate(migrated)
     return FlowStateModel()
 
 

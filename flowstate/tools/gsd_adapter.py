@@ -1,15 +1,18 @@
-"""GSD adapter — roadmap and state management.
+"""GSD adapter — thin wrapper around context.py for project setup.
 
-Live mode invokes the real GSD skill system (`/gsd:new-project`) through
-the claude CLI. GSD creates .planning/ with PROJECT.md, REQUIREMENTS.md,
-ROADMAP.md, and STATE.md.
+The full GSD skill system (/gsd:plan-phase, /gsd:execute-phase, /gsd:progress)
+runs natively inside Claude Code sessions. Use `flowstate launch gsd <phase>`
+to get the exact commands.
+
+This adapter handles initial project setup by delegating to context.py
+for file generation, with optional LLM enrichment.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
 
-from flowstate.state import InterviewAnswers
+from flowstate.context import write_context_files
+from flowstate.state import FlowStateModel
 from flowstate.tools.base import ToolAdapter, ToolResult
 
 MOCK_ROADMAP = """\
@@ -30,48 +33,32 @@ MOCK_ROADMAP = """\
 class GSDAdapter(ToolAdapter):
     name = "gsd"
 
-    def new_project(self, answers: InterviewAnswers) -> ToolResult:
+    def new_project(self, state: FlowStateModel) -> ToolResult:
+        """Generate project context files via context.py.
+
+        This replaces the old approach of calling /gsd:new-project via subprocess.
+        Context files are generated deterministically from interview answers.
+        """
         if self.dry_run:
-            roadmap_path = self.root / "ROADMAP.md"
-            milestone_text = "\n".join(
-                f"{i}. {m}" for i, m in enumerate(answers.milestones, 1)
-            ) or "1. Define milestones"
+            answers = state.interview
+            roadmap_path = self.root / ".planning" / "ROADMAP.md"
+            roadmap_path.parent.mkdir(exist_ok=True)
+            milestone_text = (
+                "\n".join(f"{i}. {m}" for i, m in enumerate(answers.milestones, 1))
+                or "1. Define milestones"
+            )
             roadmap_path.write_text(MOCK_ROADMAP.format(milestones=milestone_text))
             return ToolResult(
                 success=True,
-                output=f"[dry-run] Roadmap written to {roadmap_path}",
+                output="[dry-run] Context files written to .planning/",
                 artifacts=[str(roadmap_path)],
             )
 
-        # Invoke the real GSD skill via claude CLI
-        br = self.bridge.invoke_skill("gsd:new-project", "--auto")
-
-        # Collect artifacts that GSD creates
-        artifacts = []
-        planning = self.root / ".planning"
-        for name in ("PROJECT.md", "REQUIREMENTS.md", "ROADMAP.md", "STATE.md"):
-            p = planning / name
-            if p.exists():
-                artifacts.append(str(p))
+        created = write_context_files(state, self.root)
+        artifacts = [str(p) for p in created]
 
         return ToolResult(
-            success=br.success,
-            output=br.output[:500] if br.success else "",
+            success=True,
+            output=f"Context files written: {len(created)} files to .planning/, .claude/, research/",
             artifacts=artifacts,
-            error=br.error,
         )
-
-    def plan_phase(self, phase: int) -> ToolResult:
-        """Plan a specific phase via /gsd:plan-phase."""
-        br = self.bridge.invoke_skill("gsd:plan-phase", str(phase))
-        return self.bridge_to_result(br)
-
-    def execute_phase(self, phase: int) -> ToolResult:
-        """Execute a specific phase via /gsd:execute-phase."""
-        br = self.bridge.invoke_skill("gsd:execute-phase", str(phase))
-        return self.bridge_to_result(br)
-
-    def progress(self) -> ToolResult:
-        """Check project progress via /gsd:progress."""
-        br = self.bridge.invoke_skill("gsd:progress")
-        return self.bridge_to_result(br)
