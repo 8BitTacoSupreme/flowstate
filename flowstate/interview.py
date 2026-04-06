@@ -5,7 +5,6 @@ from __future__ import annotations
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import IntPrompt, Prompt
-from rich.text import Text
 
 from flowstate.state import FlowStateModel, InterviewAnswers
 
@@ -17,7 +16,10 @@ SECTIONS = [
         "title": "Intelligence (Autoresearch)",
         "color": "cyan",
         "questions": [
-            ("research_focus", "What specific libraries, APIs, or edge cases should we research before starting?"),
+            (
+                "research_focus",
+                "What specific libraries, APIs, or edge cases should we research before starting?",
+            ),
         ],
     },
     {
@@ -34,7 +36,10 @@ SECTIONS = [
         "title": "Management (GSD)",
         "color": "green",
         "questions": [
-            ("milestones", "What are the three most critical milestones for this phase? (comma-separated)"),
+            (
+                "milestones",
+                "What are the three most critical milestones for this phase? (comma-separated)",
+            ),
         ],
     },
     {
@@ -43,7 +48,10 @@ SECTIONS = [
         "color": "magenta",
         "questions": [
             ("test_coverage", "Required test coverage percentage?"),
-            ("architecture_pattern", "Architectural pattern to follow? (e.g., hexagonal, event-driven, layered)"),
+            (
+                "architecture_pattern",
+                "Architectural pattern to follow? (e.g., hexagonal, event-driven, layered)",
+            ),
         ],
     },
 ]
@@ -72,14 +80,23 @@ def run_interview(state: FlowStateModel) -> InterviewAnswers:
 
             if field == "milestones":
                 default_str = ", ".join(current) if current else None
-                raw = Prompt.ask(f"  {question}", default=default_str or "", console=console)
-                setattr(answers, field, [m.strip() for m in raw.split(",") if m.strip()])
+                raw = Prompt.ask(
+                    f"  {question}", default=default_str or "", console=console
+                )
+                raw = raw.replace("\r", "").strip()
+                setattr(
+                    answers, field, [m.strip() for m in raw.split(",") if m.strip()]
+                )
             elif field == "test_coverage":
-                val = IntPrompt.ask(f"  {question}", default=current or 80, console=console)
+                val = IntPrompt.ask(
+                    f"  {question}", default=current or 80, console=console
+                )
                 setattr(answers, field, val)
             else:
-                val = Prompt.ask(f"  {question}", default=default_display or "", console=console)
-                setattr(answers, field, val)
+                val = Prompt.ask(
+                    f"  {question}", default=default_display or "", console=console
+                )
+                setattr(answers, field, val.replace("\r", "").strip())
 
     # Project name
     console.print()
