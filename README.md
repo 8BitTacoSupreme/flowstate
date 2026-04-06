@@ -254,6 +254,15 @@ Wraps `claude --print` (non-interactive mode) with:
 
 The orchestrator persists state to `flowstate.json` after each step. If a tool fails, it's marked `BLOCKED` and the pipeline continues. State files from v0.1.0 are automatically migrated to v0.2.0 format.
 
+## Acknowledgments
+
+FlowState was inspired by and designed to integrate with these projects:
+
+- **[Autoresearch](https://github.com/karpathy/autoresearch)** by Andrej Karpathy — An ML experiment loop (modify, measure, keep/discard). FlowState's research adapter draws on the idea of structured, iterative research but adapts it for general-purpose topic research via Claude.
+- **[Gstack](https://github.com/garrytan/gstack)** by Garry Tan — 23 slash commands for Claude Code including `/office-hours` for strategic pressure-testing. FlowState's strategy adapter implements a similar advisor-style evaluation without requiring the Gstack skill installation.
+- **[GSD (Get Shit Done)](https://github.com/gsd-build/gsd-2)** — 29 slash commands + 12 specialized agents for project management. FlowState generates the context files GSD consumes (PROJECT.md, ROADMAP.md) and provides `flowstate launch` to hand off to native GSD execution.
+- **[Superpowers](https://github.com/obra/claude-code-superpowers)** by Jesse Vincent — A Claude Code plugin enforcing TDD workflow and git worktrees. FlowState's discipline module implements similar project auditing in pure Python.
+
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
