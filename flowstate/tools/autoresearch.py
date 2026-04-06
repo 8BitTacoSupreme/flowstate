@@ -6,7 +6,6 @@ focus areas provided during the interview.
 
 from __future__ import annotations
 
-from pathlib import Path
 from textwrap import dedent
 
 from flowstate.state import InterviewAnswers
@@ -32,13 +31,13 @@ MOCK_REPORT = """\
 """
 
 RESEARCH_SYSTEM_PROMPT = dedent("""\
-    You are an expert technical researcher. Your job is to produce a comprehensive
-    research report in Markdown format. For each focus area:
-    1. Search for the latest documentation, best practices, and known issues.
-    2. Compare competing libraries/approaches with pros and cons.
-    3. Identify edge cases, gotchas, and migration considerations.
-    4. Provide concrete recommendations with rationale.
-    Output ONLY the Markdown report, no preamble.
+    You are an expert technical researcher. Produce a concise Markdown research
+    report. Keep it focused — no more than 500 lines. For each focus area:
+    1. Search for current best practices and known issues.
+    2. Compare top 2-3 approaches with pros/cons.
+    3. Note critical edge cases.
+    4. Give a concrete recommendation.
+    Output ONLY the Markdown report, no preamble. Be direct and brief.
 """).strip()
 
 
@@ -64,7 +63,9 @@ class AutoresearchAdapter(ToolAdapter):
         report_path = report_dir / "report.md"
 
         if self.dry_run:
-            content = MOCK_REPORT.format(focus=answers.research_focus or "Not specified")
+            content = MOCK_REPORT.format(
+                focus=answers.research_focus or "Not specified"
+            )
             report_path.write_text(content)
             return ToolResult(
                 success=True,
@@ -77,7 +78,7 @@ class AutoresearchAdapter(ToolAdapter):
             prompt,
             system_prompt=RESEARCH_SYSTEM_PROMPT,
             allowed_tools=["WebSearch", "WebFetch", "Read"],
-            max_turns=15,
+            max_turns=8,
         )
 
         if br.success and br.output.strip():

@@ -126,7 +126,10 @@ class ClaudeBridge:
         if system_prompt:
             cmd.extend(["--system-prompt", system_prompt])
 
-        # Prompt is a positional argument — must come last
+        # "--" separates CLI flags from the positional prompt.
+        # Without this, flags inside the prompt (e.g., "/gsd:new-project --auto")
+        # get parsed as claude CLI flags instead of prompt content.
+        cmd.append("--")
         cmd.append(prompt)
 
         # Unset CLAUDECODE env var to allow nested invocation
@@ -176,7 +179,13 @@ class ClaudeBridge:
         return self.run(
             prompt,
             allowed_tools=[
-                "Read", "Write", "Edit", "Bash", "Glob", "Grep", "Task",
+                "Read",
+                "Write",
+                "Edit",
+                "Bash",
+                "Glob",
+                "Grep",
+                "Task",
             ],
             max_turns=30,
         )
