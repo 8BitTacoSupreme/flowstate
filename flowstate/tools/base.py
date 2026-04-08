@@ -5,8 +5,12 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from flowstate.bridge import BridgeConfig, BridgeResult, ClaudeBridge
+
+if TYPE_CHECKING:
+    from flowstate.memory import MemoryStore
 
 
 @dataclass
@@ -20,10 +24,17 @@ class ToolResult:
 class ToolAdapter:
     name: str = "base"
 
-    def __init__(self, root: Path, dry_run: bool = False, bridge: ClaudeBridge | None = None):
+    def __init__(
+        self,
+        root: Path,
+        dry_run: bool = False,
+        bridge: ClaudeBridge | None = None,
+        memory: MemoryStore | None = None,
+    ):
         self.root = root
         self.dry_run = dry_run
         self._bridge = bridge
+        self.memory = memory
 
     @property
     def bridge(self) -> ClaudeBridge:
@@ -39,6 +50,12 @@ class ToolAdapter:
             artifacts=artifacts or [],
             error=br.error,
         )
+
+    def get_memory_context(self, query: str, max_tokens: int = 1500) -> str:
+        """Retrieve relevant prior knowledge for prompt injection."""
+        if self.memory is None:
+            return ""
+        return self.memory.get_context(query, max_tokens=max_tokens)
 
     def run_cmd(self, cmd: list[str], capture: bool = True) -> ToolResult:
         if self.dry_run:

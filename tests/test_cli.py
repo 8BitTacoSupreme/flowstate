@@ -84,3 +84,54 @@ def test_context_command(tmp_path: Path):
     )
     assert result.exit_code == 0
     assert "context files" in result.output.lower()
+
+
+def test_init_with_model_flag(tmp_path: Path):
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["init", "--dry-run", "--skip-interview", "--root", str(tmp_path), "--model", "haiku"],
+    )
+    assert result.exit_code == 0
+
+
+def test_init_with_budget_flag(tmp_path: Path):
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["init", "--dry-run", "--skip-interview", "--root", str(tmp_path), "--budget", "0.25"],
+    )
+    assert result.exit_code == 0
+
+
+def test_init_with_effort_flag(tmp_path: Path):
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["init", "--dry-run", "--skip-interview", "--root", str(tmp_path), "--effort", "low"],
+    )
+    assert result.exit_code == 0
+
+
+def test_init_model_persists_in_state(tmp_path: Path):
+    """--model flag should persist into flowstate.json preferences."""
+    import json
+
+    runner = CliRunner()
+    runner.invoke(
+        main,
+        ["init", "--dry-run", "--skip-interview", "--root", str(tmp_path), "--model", "haiku"],
+    )
+    state_file = tmp_path / "flowstate.json"
+    assert state_file.exists()
+    data = json.loads(state_file.read_text())
+    assert data["preferences"]["model"] == "haiku"
+
+
+def test_run_with_model_flag(tmp_path: Path):
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["run", "--dry-run", "--root", str(tmp_path), "--model", "opus", "1"],
+    )
+    assert result.exit_code == 0

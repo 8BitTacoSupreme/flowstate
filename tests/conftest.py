@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from flowstate.events.bus import EventBus
@@ -12,6 +14,7 @@ from flowstate.events.event import (
     StepFailed,
     StepStarted,
 )
+from flowstate.memory import MemoryStore
 from flowstate.state import FlowStateModel
 
 
@@ -57,3 +60,10 @@ def step_failed() -> StepFailed:
         payload={"tool": "gsd", "step": 3, "error": "command not found"},
         source="test",
     )
+
+
+@pytest.fixture()
+def memory_store(tmp_path: Path) -> MemoryStore:
+    """MemoryStore backed by a temp directory."""
+    with MemoryStore(root=tmp_path) as store:
+        yield store

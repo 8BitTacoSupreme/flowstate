@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 
 from pydantic import BaseModel, Field
 
 
-class ToolStatus(str, Enum):
+class ToolStatus(StrEnum):
     READY = "ready"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -37,6 +37,9 @@ class ProjectPreferences(BaseModel):
     project_name: str = ""
     dry_run: bool = False
     auto_branch_on_hardening: bool = True
+    model: str = ""
+    max_budget_usd: float | None = None
+    effort: str = ""
 
 
 # Old tool keys for migration
@@ -50,8 +53,8 @@ _CURRENT_TOOL_KEYS = ["research", "strategy", "gsd", "discipline"]
 
 class FlowStateModel(BaseModel):
     version: str = "0.2.0"
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     interview: InterviewAnswers = Field(default_factory=InterviewAnswers)
     preferences: ProjectPreferences = Field(default_factory=ProjectPreferences)
     tools: dict[str, ToolState] = Field(
@@ -113,7 +116,7 @@ def load_state(root: Path | None = None) -> FlowStateModel:
 
 def save_state(state: FlowStateModel, root: Path | None = None) -> Path:
     p = state_path(root)
-    state.updated_at = datetime.now(timezone.utc)
+    state.updated_at = datetime.now(UTC)
     p.write_text(state.model_dump_json(indent=2) + "\n")
     return p
 
@@ -130,9 +133,9 @@ def update_tool(
     if status is not None:
         ts.status = status
         if status == ToolStatus.RUNNING:
-            ts.started_at = datetime.now(timezone.utc)
+            ts.started_at = datetime.now(UTC)
         elif status in (ToolStatus.COMPLETED, ToolStatus.BLOCKED):
-            ts.completed_at = datetime.now(timezone.utc)
+            ts.completed_at = datetime.now(UTC)
     if error is not None:
         ts.error = error
     if artifact is not None:

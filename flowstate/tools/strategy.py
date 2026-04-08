@@ -89,11 +89,15 @@ class StrategyAdapter(ToolAdapter):
             )
 
         prompt = _build_pressure_test_prompt(answers)
+        prior = self.get_memory_context(f"{answers.core_problem} {answers.ten_x_vision}")
+        if prior:
+            prompt = prior + "\n\n---\n\n" + prompt
         br = self.bridge.run(
             prompt,
             system_prompt=STRATEGY_SYSTEM_PROMPT,
             allowed_tools=["WebSearch"],
             max_turns=5,
+            model="sonnet",
         )
 
         if br.success and br.output.strip():

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from flowstate.state import InterviewAnswers
+from flowstate.tools.base import ToolAdapter
 from flowstate.tools.research import _build_topic_prompt, _split_topics
 from flowstate.tools.strategy import _build_pressure_test_prompt
-from flowstate.tools.base import ToolAdapter
-from flowstate.state import InterviewAnswers
 
 
 class TestBuildPrompts:

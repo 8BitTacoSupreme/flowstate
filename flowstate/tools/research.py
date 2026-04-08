@@ -87,18 +87,20 @@ class ResearchAdapter(ToolAdapter):
         sections = []
         for topic in topics:
             prompt = _build_topic_prompt(topic, answers)
+            prior = self.get_memory_context(topic)
+            if prior:
+                prompt = prior + "\n\n---\n\n" + prompt
             br = self.bridge.run(
                 prompt,
                 system_prompt=RESEARCH_SYSTEM_PROMPT,
                 allowed_tools=["WebSearch", "WebFetch"],
                 max_turns=3,
+                model="sonnet",
             )
             if br.success and br.output.strip():
                 sections.append(br.output.strip())
             else:
-                sections.append(
-                    f"## {topic}\n\n*Research failed: {br.error or 'no output'}*\n"
-                )
+                sections.append(f"## {topic}\n\n*Research failed: {br.error or 'no output'}*\n")
 
         report = "# Research Report\n\n" + "\n\n---\n\n".join(sections) + "\n"
         report_path.write_text(report)

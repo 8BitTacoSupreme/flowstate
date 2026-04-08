@@ -17,12 +17,13 @@ FlowState is a CLI-first orchestrator that prepares context files for agentic fr
 ```
 ┌──────────────────────────────────────────────────┐
 │                   flowstate CLI                   │
-│    init · status · launch · context · check       │
+│  init · status · launch · context · memory · check│
 └─────────────────────┬────────────────────────────┘
                       │
 ┌─────────────────────▼────────────────────────────┐
 │                 Orchestrator                       │
 │   5-step pipeline with state persistence           │
+│   EventBus emits StepCompleted / StepFailed        │
 └──┬──────────┬──────────┬──────────┬──────────┬───┘
    │          │          │          │          │
    ▼          ▼          ▼          ▼          ▼
@@ -33,9 +34,17 @@ Generator  Adapter    Adapter   Adapter     Audit
    ▼          ▼          ▼          ▼          ▼
  5 files   claude     claude    .planning/  git/test
  written   --print    --print   files       checks
+                      │
+              ┌───────▼────────┐
+              │  MemoryStore   │
+              │  (SQLite FTS5) │
+              │  memory.db     │
+              └────────────────┘
 ```
 
 **State flow:** All pipeline state is persisted to `flowstate.json` — a Pydantic-validated file tracking tool status (Ready/Running/Completed/Blocked), artifact paths, context files, and user preferences.
+
+**Memory:** Research findings, strategy decisions, and failure context are stored in `memory.db` (SQLite FTS5) and automatically injected into subsequent pipeline runs. See [Persistent Memory](#persistent-memory) below.
 
 ## Prerequisites
 
@@ -166,7 +175,22 @@ flowstate run 1
 
 Prints the native session command for executing a GSD phase.
 
-### 6. Verify the bridge
+### 6. Query memory
+
+```bash
+# Search stored knowledge
+flowstate memory search "kafka streams"
+
+# Show counts by kind
+flowstate memory stats
+
+# Clear all memories (with confirmation)
+flowstate memory clear
+```
+
+On each pipeline run, research findings, strategy assessments, and failure logs are automatically stored. Subsequent runs inject relevant prior knowledge into bridge prompts so research compounds over time. See [Persistent Memory](#persistent-memory) below.
+
+### 7. Verify the bridge
 
 ```bash
 flowstate check
@@ -187,15 +211,18 @@ flowstate/
 │   ├── context.py          # Deterministic context file generator
 │   ├── launcher.py         # Native session launch helpers
 │   ├── discipline.py       # Pure Python project audit
+│   ├── memory.py           # SQLite FTS5 memory store
+│   ├── memory_handlers.py  # EventBus handlers for auto-storing results
 │   ├── events/             # Event-driven infrastructure
 │   └── tools/
 │       ├── base.py         # ToolAdapter base class + ToolResult
 │       ├── research.py     # Research adapter (split-topic)
 │       ├── strategy.py     # Strategy adapter (pressure-test)
 │       └── gsd_adapter.py  # Management adapter (context files)
-├── tests/                  # 111 tests, 93% coverage
+├── tests/                  # 155 tests, 90% coverage
 ├── research/               # Generated research artifacts
 ├── flowstate.json          # Pipeline state (gitignored)
+├── memory.db               # Persistent memory (gitignored)
 ├── pyproject.toml
 ├── LICENSE                 # Apache 2.0
 └── NOTICE                  # Third-party attributions
@@ -253,6 +280,24 @@ Wraps `claude --print` (non-interactive mode) with:
 ### State persistence
 
 The orchestrator persists state to `flowstate.json` after each step. If a tool fails, it's marked `BLOCKED` and the pipeline continues. State files from v0.1.0 are automatically migrated to v0.2.0 format.
+
+### Persistent memory
+
+Each pipeline run stores research findings, strategy assessments, interview decisions, and failure logs in `memory.db` — a single SQLite file using FTS5 for full-text search with porter stemming.
+
+**How it works:**
+
+1. The orchestrator creates a `MemoryStore` and `EventBus` at pipeline start
+2. Memory handlers listen for `StepCompleted` / `StepFailed` events
+3. On completion, artifact files are split by `## ` headings and stored as individual memory entries
+4. On failure, the error is stored as a `tool_run` memory for future reference
+5. Before each bridge call, the adapter calls `get_memory_context(topic)` — if relevant prior knowledge exists, it's prepended to the prompt as a `## Prior Knowledge` section
+
+**Memory kinds:** `research`, `strategy`, `decision`, `tool_run`, `insight`
+
+**Search:** FTS5 with BM25 ranking. Queries use porter stemming so "streaming" matches "streams". Results are ranked by relevance and truncated to a configurable token budget before prompt injection.
+
+**Storage:** Single `memory.db` file in the project root. Portable, inspectable with `sqlite3`, gitignored by default. The `sqlite-vec` dependency is included for future vector search but dormant in v1.
 
 ## Acknowledgments
 

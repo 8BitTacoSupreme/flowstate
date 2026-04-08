@@ -10,7 +10,6 @@ for file generation, with optional LLM enrichment.
 
 from __future__ import annotations
 
-
 from flowstate.context import write_context_files
 from flowstate.state import FlowStateModel
 from flowstate.tools.base import ToolAdapter, ToolResult

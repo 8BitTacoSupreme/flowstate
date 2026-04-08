@@ -6,10 +6,10 @@ from pathlib import Path
 from flowstate.state import (
     FlowStateModel,
     ToolStatus,
+    _migrate_state,
     load_state,
     save_state,
     update_tool,
-    _migrate_state,
 )
 
 
@@ -42,9 +42,7 @@ def test_update_tool_status():
     assert state.tools["research"].status == ToolStatus.RUNNING
     assert state.tools["research"].started_at is not None
 
-    update_tool(
-        state, "research", status=ToolStatus.COMPLETED, artifact="research/report.md"
-    )
+    update_tool(state, "research", status=ToolStatus.COMPLETED, artifact="research/report.md")
     assert state.tools["research"].status == ToolStatus.COMPLETED
     assert "research/report.md" in state.tools["research"].artifacts
 
@@ -109,6 +107,28 @@ def test_migrate_v020_noop():
     migrated = _migrate_state(data)
     assert migrated["version"] == "0.2.0"
     assert "research" in migrated["tools"]
+
+
+def test_preferences_model_fields():
+    """New model/budget/effort fields have correct defaults."""
+    state = FlowStateModel()
+    assert state.preferences.model == ""
+    assert state.preferences.max_budget_usd is None
+    assert state.preferences.effort == ""
+
+
+def test_preferences_model_roundtrip(tmp_path: Path):
+    """Model preferences survive save/load."""
+    state = FlowStateModel()
+    state.preferences.model = "haiku"
+    state.preferences.max_budget_usd = 0.50
+    state.preferences.effort = "low"
+    save_state(state, tmp_path)
+
+    loaded = load_state(tmp_path)
+    assert loaded.preferences.model == "haiku"
+    assert loaded.preferences.max_budget_usd == 0.50
+    assert loaded.preferences.effort == "low"
 
 
 def test_load_v010_state_file(tmp_path: Path):

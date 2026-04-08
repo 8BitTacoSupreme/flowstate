@@ -11,7 +11,11 @@ from rich.table import Table
 from flowstate.bridge import BridgeConfig, ClaudeBridge
 from flowstate.context import write_context_files
 from flowstate.discipline import check_setup
+from flowstate.events.bus import EventBus
+from flowstate.events.event import StepCompleted, StepFailed
 from flowstate.launcher import print_next_steps
+from flowstate.memory import MemoryEntry, MemoryKind, MemoryStore
+from flowstate.memory_handlers import create_memory_handlers
 from flowstate.state import (
     FlowStateModel,
     ToolStatus,
@@ -43,8 +47,16 @@ STEP_STYLES = {
 }
 
 
-def _make_bridge(root: Path, dry_run: bool) -> ClaudeBridge:
-    config = BridgeConfig(project_root=root)
+def _make_bridge(root: Path, dry_run: bool, preferences=None) -> ClaudeBridge:
+    kwargs = {"project_root": root}
+    if preferences:
+        if preferences.model:
+            kwargs["model"] = preferences.model
+        if preferences.max_budget_usd is not None:
+            kwargs["max_budget_usd"] = preferences.max_budget_usd
+        if preferences.effort:
+            kwargs["effort"] = preferences.effort
+    config = BridgeConfig(**kwargs)
     return ClaudeBridge(config=config, dry_run=dry_run)
 
 
@@ -55,6 +67,7 @@ def _run_step(
     step_num: int,
     total_steps: int,
     execute_fn,
+    bus: EventBus | None = None,
 ) -> None:
     """Generic step runner with status tracking and output."""
     style = STEP_STYLES[tool_name]
@@ -71,9 +84,23 @@ def _run_step(
         for artifact in result.artifacts:
             update_tool(state, tool_name, artifact=artifact)
         console.print(f"  [green]{result.output[:300]}[/green]")
+        if bus:
+            bus.emit(
+                StepCompleted(
+                    payload={"tool": tool_name, "artifacts": result.artifacts},
+                    source="orchestrator",
+                )
+            )
     else:
         update_tool(state, tool_name, status=ToolStatus.BLOCKED, error=result.error)
         console.print(f"  [red]Failed: {result.error}[/red]")
+        if bus:
+            bus.emit(
+                StepFailed(
+                    payload={"tool": tool_name, "error": result.error or "unknown"},
+                    source="orchestrator",
+                )
+            )
 
     save_state(state, root)
     return result
@@ -81,12 +108,40 @@ def _run_step(
 
 def run_pipeline(state: FlowStateModel, root: Path) -> FlowStateModel:
     dry_run = state.preferences.dry_run
-    bridge = _make_bridge(root, dry_run)
+    bridge = _make_bridge(root, dry_run, state.preferences)
 
     mode_tag = "[yellow](dry-run)[/yellow]" if dry_run else "[green](live)[/green]"
     if not dry_run and not bridge.available:
         mode_tag = "[red](no claude CLI — falling back to dry-run)[/red]"
         bridge = ClaudeBridge(config=bridge.config, dry_run=True)
+
+    # Set up memory store and event bus
+    from uuid import uuid4
+
+    run_id = uuid4().hex[:12]
+    memory = MemoryStore(root=root)
+    bus = EventBus()
+    for h in create_memory_handlers(memory, root, run_id=run_id):
+        bus.register(h)
+
+    # Store interview answers as a decision memory
+    answers = state.interview
+    if answers.core_problem or answers.ten_x_vision:
+        memory.add(
+            MemoryEntry.create(
+                MemoryKind.DECISION,
+                (
+                    f"Core problem: {answers.core_problem}\n"
+                    f"10x vision: {answers.ten_x_vision}\n"
+                    f"Architecture: {answers.architecture_pattern}\n"
+                    f"Research focus: {answers.research_focus}"
+                ),
+                "Interview answers",
+                source="interview",
+                tags=["interview", "decision"],
+                run_id=run_id,
+            )
+        )
 
     console.print()
     console.print(
@@ -109,26 +164,38 @@ def run_pipeline(state: FlowStateModel, root: Path) -> FlowStateModel:
     save_state(state, root)
 
     # Step 2: Research — split-topic bridge calls
-    research = ResearchAdapter(root=root, dry_run=dry_run, bridge=bridge)
+    research = ResearchAdapter(root=root, dry_run=dry_run, bridge=bridge, memory=memory)
     result = _run_step(
-        state, root, "research", 2, 5, lambda: research.execute(state.interview)
+        state,
+        root,
+        "research",
+        2,
+        5,
+        lambda: research.execute(state.interview),
+        bus=bus,
     )
     if result and result.success:
         for a in result.artifacts:
             state.artifacts["research_report"] = a
 
     # Step 3: Strategy — single bridge call
-    strategy = StrategyAdapter(root=root, dry_run=dry_run, bridge=bridge)
+    strategy = StrategyAdapter(root=root, dry_run=dry_run, bridge=bridge, memory=memory)
     result = _run_step(
-        state, root, "strategy", 3, 5, lambda: strategy.pressure_test(state.interview)
+        state,
+        root,
+        "strategy",
+        3,
+        5,
+        lambda: strategy.pressure_test(state.interview),
+        bus=bus,
     )
     if result and result.success:
         for a in result.artifacts:
             state.artifacts["strategy_report"] = a
 
     # Step 4: Management — GSD context files (already written in step 1, this enriches)
-    gsd = GSDAdapter(root=root, dry_run=dry_run, bridge=bridge)
-    result = _run_step(state, root, "gsd", 4, 5, lambda: gsd.new_project(state))
+    gsd = GSDAdapter(root=root, dry_run=dry_run, bridge=bridge, memory=memory)
+    result = _run_step(state, root, "gsd", 4, 5, lambda: gsd.new_project(state), bus=bus)
     if result and result.success:
         for a in result.artifacts:
             state.artifacts["roadmap"] = a
@@ -143,6 +210,8 @@ def run_pipeline(state: FlowStateModel, root: Path) -> FlowStateModel:
     console.print(f"  [green]{audit.summary}[/green]")
     save_state(state, root)
 
+    memory.close()
+
     console.print()
     _print_summary(state)
 
@@ -153,15 +222,11 @@ def run_pipeline(state: FlowStateModel, root: Path) -> FlowStateModel:
 
 
 def _print_summary(state: FlowStateModel) -> None:
-    completed = sum(
-        1 for ts in state.tools.values() if ts.status == ToolStatus.COMPLETED
-    )
+    completed = sum(1 for ts in state.tools.values() if ts.status == ToolStatus.COMPLETED)
     blocked = sum(1 for ts in state.tools.values() if ts.status == ToolStatus.BLOCKED)
 
     if blocked == 0:
-        console.print(
-            "[bold green]Pipeline complete. All steps succeeded.[/bold green]"
-        )
+        console.print("[bold green]Pipeline complete. All steps succeeded.[/bold green]")
     else:
         console.print(
             f"[bold yellow]Pipeline finished: {completed}/{len(state.tools)} succeeded, "
@@ -239,7 +304,5 @@ def print_status(root: Path) -> None:
         for key, path in state.artifacts.items():
             console.print(f"  {key}: {path}")
 
-    console.print(
-        f"\n[dim]Project: {state.preferences.project_name or '(not set)'}[/dim]"
-    )
+    console.print(f"\n[dim]Project: {state.preferences.project_name or '(not set)'}[/dim]")
     console.print(f"[dim]State file: {state_path(root)}[/dim]")

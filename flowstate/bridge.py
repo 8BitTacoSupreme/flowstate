@@ -35,6 +35,9 @@ class BridgeConfig:
     timeout: int = 300
     allowed_tools: list[str] = field(default_factory=list)
     max_turns: int = 10
+    model: str | None = None
+    max_budget_usd: float | None = None
+    effort: str | None = None
 
     def __post_init__(self):
         if self.claude_bin is None:
@@ -84,6 +87,7 @@ class ClaudeBridge:
         allowed_tools: list[str] | None = None,
         output_format: str = "text",
         max_turns: int | None = None,
+        model: str | None = _SENTINEL,
     ) -> BridgeResult:
         """Execute a prompt through claude CLI.
 
@@ -93,6 +97,7 @@ class ClaudeBridge:
             allowed_tools: Tool permissions (e.g., ["Read", "Bash(git:*)"]).
             output_format: "text" or "json".
             max_turns: Max agentic turns for this invocation.
+            model: Model override for this call. _SENTINEL = use config default.
         """
         if self.dry_run:
             return BridgeResult(
@@ -125,6 +130,17 @@ class ClaudeBridge:
 
         if system_prompt:
             cmd.extend(["--system-prompt", system_prompt])
+
+        # Model: per-call override > config default
+        effective_model = model if model is not _SENTINEL else self.config.model
+        if effective_model:
+            cmd.extend(["--model", effective_model])
+
+        if self.config.max_budget_usd is not None:
+            cmd.extend(["--max-budget-usd", str(self.config.max_budget_usd)])
+
+        if self.config.effort:
+            cmd.extend(["--effort", self.config.effort])
 
         # "--" separates CLI flags from the positional prompt.
         # Without this, flags inside the prompt (e.g., "/gsd:new-project --auto")

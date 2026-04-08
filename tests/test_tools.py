@@ -4,9 +4,9 @@ from pathlib import Path
 
 from flowstate.bridge import ClaudeBridge
 from flowstate.state import FlowStateModel, InterviewAnswers
+from flowstate.tools.gsd_adapter import GSDAdapter
 from flowstate.tools.research import ResearchAdapter
 from flowstate.tools.strategy import StrategyAdapter
-from flowstate.tools.gsd_adapter import GSDAdapter
 
 
 def _mock_bridge() -> ClaudeBridge:
@@ -38,9 +38,7 @@ def test_research_multi_topic_dry_run(tmp_path: Path):
 
 def test_strategy_dry_run(tmp_path: Path):
     adapter = StrategyAdapter(root=tmp_path, dry_run=True, bridge=_mock_bridge())
-    answers = InterviewAnswers(
-        core_problem="Slow deploys", ten_x_vision="One-click shipping"
-    )
+    answers = InterviewAnswers(core_problem="Slow deploys", ten_x_vision="One-click shipping")
 
     result = adapter.pressure_test(answers)
     assert result.success
@@ -72,3 +70,37 @@ def test_gsd_live_writes_context_files(tmp_path: Path):
     assert (tmp_path / ".planning" / "ROADMAP.md").exists()
     assert (tmp_path / ".claude" / "CLAUDE.md").exists()
     assert (tmp_path / "research" / "brief.md").exists()
+
+
+def test_research_passes_model_to_bridge(tmp_path: Path, monkeypatch):
+    """Research adapter passes model='sonnet' to bridge.run()."""
+    from unittest.mock import MagicMock
+
+    from flowstate.bridge import BridgeResult
+
+    bridge = MagicMock()
+    bridge.run.return_value = BridgeResult(success=True, output="# Research", exit_code=0)
+
+    adapter = ResearchAdapter(root=tmp_path, dry_run=False, bridge=bridge)
+    answers = InterviewAnswers(research_focus="websockets")
+    adapter.execute(answers)
+
+    call_kwargs = bridge.run.call_args[1]
+    assert call_kwargs["model"] == "sonnet"
+
+
+def test_strategy_passes_model_to_bridge(tmp_path: Path):
+    """Strategy adapter passes model='sonnet' to bridge.run()."""
+    from unittest.mock import MagicMock
+
+    from flowstate.bridge import BridgeResult
+
+    bridge = MagicMock()
+    bridge.run.return_value = BridgeResult(success=True, output="# Strategy", exit_code=0)
+
+    adapter = StrategyAdapter(root=tmp_path, dry_run=False, bridge=bridge)
+    answers = InterviewAnswers(core_problem="Slow deploys", ten_x_vision="Fast")
+    adapter.pressure_test(answers)
+
+    call_kwargs = bridge.run.call_args[1]
+    assert call_kwargs["model"] == "sonnet"
