@@ -27,8 +27,8 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Status Snapshot (STAT)
 
-- [ ] **STAT-01**: `flowstate status --markdown` renders the current Pydantic state as a markdown handoff — one table for tool status (Ready/Running/Completed/Blocked + last-run timestamp + artifact paths), one section for active phase, one section for memory stats (entry count by kind, total tokens of context available)
-- [ ] **STAT-02**: `flowstate status --markdown --write [path]` writes the rendered output to the given path (default `status.md` in cwd); stdout shows a one-line confirmation and the absolute path written
+- [x] **STAT-01**: `flowstate status --markdown` renders the current Pydantic state as a markdown handoff — one table for tool status (Ready/Running/Completed/Blocked + last-run timestamp + artifact paths), one section for active phase, one section for memory stats (entry count by kind, total tokens of context available)
+- [x] **STAT-02**: `flowstate status --markdown --write [path]` writes the rendered output to the given path (default `status.md` in cwd); stdout shows a one-line confirmation and the absolute path written
 
 ### Hook Profile (HOOK)
 
@@ -84,8 +84,8 @@ Explicitly excluded for this milestone. Documented to prevent scope creep.
 | INST-03 | Phase 2 | Complete |
 | DOCT-01 | Phase 2 | Pending |
 | DOCT-02 | Phase 2 | Pending |
-| STAT-01 | Phase 2 | Pending |
-| STAT-02 | Phase 2 | Pending |
+| STAT-01 | Phase 2 | Complete |
+| STAT-02 | Phase 2 | Complete |
 | HOOK-01 | Phase 2 | Complete |
 | HOOK-02 | Phase 2 | Complete |
 

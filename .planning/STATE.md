@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.3.0
 milestone_name: milestone
 status: executing
-stopped_at: "Completed 02-01-PLAN.md (INST-01/02/03): install_manifest tracking on FlowStateModel, init populates it, fresh consults it"
-last_updated: "2026-05-25T19:13:59.694Z"
+stopped_at: "Completed 02-03-PLAN.md (STAT-01/STAT-02): status_markdown renderer + --markdown/--write CLI flags"
+last_updated: "2026-05-25T19:22:32.517Z"
 last_activity: 2026-05-25
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 4
-  completed_plans: 2
+  completed_plans: 3
   percent: 50
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-25)
 ## Current Position
 
 Phase: 02 (operate-safely) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-05-25
 
@@ -54,6 +54,7 @@ Progress: [█████░░░░░] 50% (1/2 phases complete)
 *Updated after each plan completion*
 | Phase 02 P04 | 3m24s | 2 tasks | 4 files |
 | Phase 02 P01 | 12min | 3 tasks | 8 files |
+| Phase 02 P03 | 4min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,9 @@ Recent decisions affecting current work:
 - [Phase 02]: InstallEntry uses Literal[5 kinds] for Pydantic kind validation — catches typos at write time, not at fresh time
 - [Phase 02]: checksum=None semantically means mutable file (memory.db) — _verify_checksum returns True for None, skipping verification
 - [Phase 02]: Orphan scan bounded to .planning/, research/, memory.db, flowstate.json — .claude/ and source never candidates (safe-by-default)
+- [Phase 02]: Status renderer is a pure function: state + root in, str out; never raises on missing files (memory.db, ROADMAP.md absent → graceful fallback)
+- [Phase 02]: click.echo (not console.print) for raw markdown + 'Wrote:' path output — Rich soft-wraps long absolute paths and breaks pipe friendliness
+- [Phase 02]: MemoryStore.last_entry_at() public helper replaces ad-hoc store._conn.execute(...) from outside — encapsulation boundary preserved
 
 ### Pending Todos
 
@@ -83,7 +87,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-05-25T19:13:59.692Z
-Stopped at: Completed 02-01-PLAN.md (INST-01/02/03): install_manifest tracking on FlowStateModel, init populates it, fresh consults it
+Last session: 2026-05-25T19:22:22.375Z
+Stopped at: Completed 02-03-PLAN.md (STAT-01/STAT-02): status_markdown renderer + --markdown/--write CLI flags
 Resume file: None
 Next step: `/gsd:plan-phase 2` to plan the install-manifest + doctor/repair + status --markdown + hook env-gating work.

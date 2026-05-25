@@ -39,7 +39,7 @@ deliveries that compound the core loop.
 **Plans**: 4 plans
   - [x] 02-01-PLAN.md — Install manifest: InstallEntry schema, init populates, fresh consults (INST-01..03)
   - [ ] 02-02-PLAN.md — Doctor + repair: pure-Python health check with 6 checks + safe-by-default fixer (DOCT-01..02)
-  - [ ] 02-03-PLAN.md — Status markdown: --markdown + --write flags, 3-section renderer for handoff (STAT-01..02)
+  - [x] 02-03-PLAN.md — Status markdown: --markdown + --write flags, 3-section renderer for handoff (STAT-01..02)
   - [x] 02-04-PLAN.md — Hook env-gating: @handler profile= kwarg + FLOWSTATE_HANDLERS / FLOWSTATE_DISABLED_HANDLERS (HOOK-01..02)
 **UI hint**: no
 
