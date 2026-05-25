@@ -2,6 +2,10 @@
 
 Listens for StepCompleted and StepFailed events, reads artifact files,
 and stores content as searchable memory entries.
+
+Both on_step_completed and on_step_failed are tagged profile="minimal"
+so they register under any FLOWSTATE_HANDLERS setting. Use
+FLOWSTATE_DISABLED_HANDLERS=on_step_completed,on_step_failed to disable.
 """
 
 from __future__ import annotations
@@ -53,7 +57,7 @@ def create_memory_handlers(store: MemoryStore, root: Path, run_id: str = "") -> 
     Returns a list of decorated handler functions ready for bus.register().
     """
 
-    @handler("step.completed", priority=EventPriority.AUDIT)
+    @handler("step.completed", priority=EventPriority.AUDIT, profile="minimal")
     def on_step_completed(event: Event) -> None:
         tool_name = event.payload.get("tool", "")
         artifacts = event.payload.get("artifacts", [])
@@ -97,7 +101,7 @@ def create_memory_handlers(store: MemoryStore, root: Path, run_id: str = "") -> 
                 )
             store.add_many(entries)
 
-    @handler("step.failed", priority=EventPriority.AUDIT)
+    @handler("step.failed", priority=EventPriority.AUDIT, profile="minimal")
     def on_step_failed(event: Event) -> None:
         tool_name = event.payload.get("tool", "")
         error = event.payload.get("error", "unknown error")
