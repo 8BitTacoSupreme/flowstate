@@ -9,7 +9,7 @@ deliveries that compound the core loop.
 
 ## Phases
 
-- [ ] **Phase 1: Land the v2 Pivot** - Commit the unstaged work cleanly, wire config.py into all CLI commands, purge stale artifacts, and bump to v0.3.0
+- [x] **Phase 1: Land the v2 Pivot** - Commit the unstaged work cleanly, wire config.py into all CLI commands, purge stale artifacts, and bump to v0.3.0 ✓ Complete (commit b38bbd6)
 - [ ] **Phase 2: Operate Safely** - Install manifest, doctor/repair, status snapshot, and hook env-gating so the tool is maintainable over time
 
 ## Phase Details
@@ -43,5 +43,5 @@ deliveries that compound the core loop.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Land the v2 Pivot | 0/TBD | Not started | - |
+| 1. Land the v2 Pivot | - | Complete | 2026-05-25 (b38bbd6) |
 | 2. Operate Safely | 0/TBD | Not started | - |

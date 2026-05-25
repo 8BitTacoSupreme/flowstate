@@ -75,10 +75,10 @@ Explicitly excluded for this milestone. Documented to prevent scope creep.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PIVOT-01 | Phase 1 | Pending |
-| PIVOT-02 | Phase 1 | Pending |
-| PIVOT-03 | Phase 1 | Pending |
-| PIVOT-04 | Phase 1 | Pending |
+| PIVOT-01 | Phase 1 | Complete |
+| PIVOT-02 | Phase 1 | Complete |
+| PIVOT-03 | Phase 1 | Complete |
+| PIVOT-04 | Phase 1 | Complete |
 | INST-01 | Phase 2 | Pending |
 | INST-02 | Phase 2 | Pending |
 | INST-03 | Phase 2 | Pending |

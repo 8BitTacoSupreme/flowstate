@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-05-25)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Phase 1 — Land the v2 Pivot
+**Current focus:** Phase 2 — Operate Safely (Phase 1 complete)
 
 ## Current Position
 
-Phase: 1 of 2 (Land the v2 Pivot)
+Phase: 2 of 2 (Operate Safely)
 Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-05-25 — Roadmap created; milestone-2 initialized
+Status: Phase 1 complete — ready to plan Phase 2
+Last activity: 2026-05-25 — Phase 1 landed (commit b38bbd6); PIVOT-01..04 all verified
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█████░░░░░] 50% (1/2 phases complete)
 
 ## Performance Metrics
 
@@ -59,5 +59,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-05-25
-Stopped at: Roadmap and state files written; no plans created yet
+Stopped at: Phase 1 landed (commit b38bbd6, 176 tests passing at 90.79% coverage, version bumped to 0.3.0). Phase 2 not yet planned.
 Resume file: None
+Next step: `/gsd:plan-phase 2` to plan the install-manifest + doctor/repair + status --markdown + hook env-gating work.
