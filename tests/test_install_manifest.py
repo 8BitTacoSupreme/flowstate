@@ -199,3 +199,172 @@ class TestPipelineRegistration:
 
         memory_entries = [e for e in state.install_manifest if e.path == "memory.db"]
         assert len(memory_entries) == 1
+
+
+class TestFreshCommand:
+    """Tests for the manifest-aware `flowstate fresh` command."""
+
+    def _make_state_with_manifest(self, tmp_path: Path, entries: list[dict]) -> None:
+        """Write a flowstate.json populated with the given manifest entries."""
+        from flowstate.state import FlowStateModel, InstallEntry, save_state
+
+        state = FlowStateModel()
+        state.install_manifest = [InstallEntry(**e) for e in entries]
+        save_state(state, tmp_path)
+
+    def test_fresh_removes_only_manifest_files(self, tmp_path: Path):
+        """`fresh --yes` removes manifest files only; orphans are reported but left."""
+        from click.testing import CliRunner
+
+        from flowstate.cli import main
+
+        # Manifest tracks PROJECT.md only
+        planning = tmp_path / ".planning"
+        planning.mkdir()
+        (planning / "PROJECT.md").write_text("# Project")
+        (planning / "EXTRA.md").write_text("# Orphan")  # not in manifest
+
+        self._make_state_with_manifest(
+            tmp_path,
+            [
+                {
+                    "path": ".planning/PROJECT.md",
+                    "owner": "context",
+                    "kind": "context",
+                    "created_at": datetime.now(UTC),
+                    "checksum": None,
+                }
+            ],
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["fresh", "--yes", "--root", str(tmp_path)])
+        assert result.exit_code == 0, result.output
+        # Manifest file removed
+        assert not (planning / "PROJECT.md").exists()
+        # Orphan preserved
+        assert (planning / "EXTRA.md").exists()
+        # Orphans section was reported
+        assert "Orphans" in result.output
+
+    def test_fresh_force_removes_orphans(self, tmp_path: Path):
+        """`fresh --yes --force` removes both manifest files and orphans."""
+        from click.testing import CliRunner
+
+        from flowstate.cli import main
+
+        planning = tmp_path / ".planning"
+        planning.mkdir()
+        (planning / "PROJECT.md").write_text("# Project")
+        (planning / "EXTRA.md").write_text("# Orphan")
+
+        self._make_state_with_manifest(
+            tmp_path,
+            [
+                {
+                    "path": ".planning/PROJECT.md",
+                    "owner": "context",
+                    "kind": "context",
+                    "created_at": datetime.now(UTC),
+                    "checksum": None,
+                }
+            ],
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["fresh", "--yes", "--force", "--root", str(tmp_path)])
+        assert result.exit_code == 0, result.output
+        assert not (planning / "PROJECT.md").exists()
+        assert not (planning / "EXTRA.md").exists()
+
+    def test_fresh_skips_missing_manifest_files(self, tmp_path: Path):
+        """Manifest entries that don't exist on disk are skipped silently."""
+        from click.testing import CliRunner
+
+        from flowstate.cli import main
+
+        self._make_state_with_manifest(
+            tmp_path,
+            [
+                {
+                    "path": ".planning/GONE.md",
+                    "owner": "context",
+                    "kind": "context",
+                    "created_at": datetime.now(UTC),
+                    "checksum": "deadbeef",
+                }
+            ],
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["fresh", "--yes", "--root", str(tmp_path)])
+        assert result.exit_code == 0, result.output
+
+    def test_fresh_warns_on_checksum_mismatch(self, tmp_path: Path):
+        """Manifest file whose checksum changed surfaces a 'modified' warning."""
+        from click.testing import CliRunner
+
+        from flowstate.cli import main
+
+        planning = tmp_path / ".planning"
+        planning.mkdir()
+        (planning / "PROJECT.md").write_text("# DRIFTED")
+
+        self._make_state_with_manifest(
+            tmp_path,
+            [
+                {
+                    "path": ".planning/PROJECT.md",
+                    "owner": "context",
+                    "kind": "context",
+                    "created_at": datetime.now(UTC),
+                    "checksum": "a" * 64,  # doesn't match the actual file
+                }
+            ],
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["fresh", "--yes", "--root", str(tmp_path)])
+        assert result.exit_code == 0, result.output
+        assert "modified" in result.output.lower()
+
+    def test_fresh_cancels_on_no(self, tmp_path: Path):
+        """Without --yes, answering 'n' to the prompt cancels deletion."""
+        from click.testing import CliRunner
+
+        from flowstate.cli import main
+
+        planning = tmp_path / ".planning"
+        planning.mkdir()
+        (planning / "PROJECT.md").write_text("# Project")
+
+        self._make_state_with_manifest(
+            tmp_path,
+            [
+                {
+                    "path": ".planning/PROJECT.md",
+                    "owner": "context",
+                    "kind": "context",
+                    "created_at": datetime.now(UTC),
+                    "checksum": None,
+                }
+            ],
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["fresh", "--root", str(tmp_path)], input="n\n")
+        assert result.exit_code == 0, result.output
+        assert "Cancelled" in result.output
+        # File survived
+        assert (planning / "PROJECT.md").exists()
+
+    def test_fresh_works_on_empty_directory(self, tmp_path: Path):
+        """`fresh --yes` on a fresh directory (no flowstate.json) exits cleanly."""
+        from click.testing import CliRunner
+
+        from flowstate.cli import main
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["fresh", "--yes", "--root", str(tmp_path)])
+        assert result.exit_code == 0, result.output
+        assert "Nothing to clean" in result.output
