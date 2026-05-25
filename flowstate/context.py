@@ -6,11 +6,45 @@ No LLM calls. Pure Python templates. All files consumed by downstream tools
 
 from __future__ import annotations
 
+import hashlib
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from textwrap import dedent
 
-from flowstate.state import FlowStateModel, InterviewAnswers
+from flowstate.state import FlowStateModel, InstallEntry, InterviewAnswers
+
+
+def _sha256_of(path: Path) -> str:
+    """Return the hex sha256 digest of a file's contents."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _register(
+    state: FlowStateModel,
+    root: Path,
+    path: Path,
+    *,
+    owner: str,
+    kind: str,
+) -> None:
+    """Add or replace an InstallEntry for the given file on state.install_manifest.
+
+    Idempotent: removes any existing entry for the same relative path before appending.
+    Checksums are computed for all kinds except "memory" (memory.db mutates).
+    """
+    rel = str(path.relative_to(root))
+    checksum = _sha256_of(path) if kind != "memory" else None
+    state.install_manifest = [e for e in state.install_manifest if e.path != rel]
+    state.install_manifest.append(
+        InstallEntry(
+            path=rel,
+            owner=owner,
+            kind=kind,  # type: ignore[arg-type]
+            created_at=datetime.now(UTC),
+            checksum=checksum,
+        )
+    )
 
 
 def generate_project_md(answers: InterviewAnswers, project_name: str = "") -> str:
@@ -146,16 +180,19 @@ def write_context_files(state: FlowStateModel, root: Path) -> list[Path]:
 
     project_path = planning / "PROJECT.md"
     project_path.write_text(generate_project_md(answers, project_name))
+    _register(state, root, project_path, owner="context", kind="context")
     created.append(project_path)
 
     # .planning/ROADMAP.md
     roadmap_path = planning / "ROADMAP.md"
     roadmap_path.write_text(generate_roadmap_md(answers))
+    _register(state, root, roadmap_path, owner="context", kind="context")
     created.append(roadmap_path)
 
     # .planning/config.json
     config_path = planning / "config.json"
     config_path.write_text(json.dumps(generate_gsd_config(), indent=2) + "\n")
+    _register(state, root, config_path, owner="context", kind="config")
     created.append(config_path)
 
     # .claude/CLAUDE.md (project-level)
@@ -163,6 +200,7 @@ def write_context_files(state: FlowStateModel, root: Path) -> list[Path]:
     claude_dir.mkdir(exist_ok=True)
     claude_md_path = claude_dir / "CLAUDE.md"
     claude_md_path.write_text(generate_claude_md(state))
+    _register(state, root, claude_md_path, owner="context", kind="context")
     created.append(claude_md_path)
 
     # research/brief.md
@@ -170,6 +208,7 @@ def write_context_files(state: FlowStateModel, root: Path) -> list[Path]:
     research_dir.mkdir(exist_ok=True)
     brief_path = research_dir / "brief.md"
     brief_path.write_text(generate_research_brief(answers))
+    _register(state, root, brief_path, owner="context", kind="research")
     created.append(brief_path)
 
     # Track in state

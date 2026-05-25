@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+from datetime import UTC, datetime
 from pathlib import Path
 
 from rich.console import Console
@@ -18,6 +20,7 @@ from flowstate.memory import MemoryEntry, MemoryKind, MemoryStore
 from flowstate.memory_handlers import create_memory_handlers
 from flowstate.state import (
     FlowStateModel,
+    InstallEntry,
     ToolStatus,
     load_state,
     save_state,
@@ -45,6 +48,55 @@ STEP_STYLES = {
     "gsd": "green",
     "discipline": "magenta",
 }
+
+
+def _register_memory_artifact(state: FlowStateModel, root: Path) -> None:
+    """Register memory.db on the install_manifest (idempotent).
+
+    memory.db is mutable; checksum is left as None.
+    """
+    if any(e.path == "memory.db" for e in state.install_manifest):
+        return
+    state.install_manifest.append(
+        InstallEntry(
+            path="memory.db",
+            owner="memory",
+            kind="memory",
+            created_at=datetime.now(UTC),
+            checksum=None,
+        )
+    )
+
+
+def _register_tool_artifact(
+    state: FlowStateModel, root: Path, artifact_path: str, tool_name: str
+) -> None:
+    """Register a tool-adapter-produced artifact on the install_manifest.
+
+    Idempotent: replaces any existing entry for the same relative path.
+    Skips silently if the file does not exist on disk.
+    """
+    p = Path(artifact_path)
+    if not p.is_absolute():
+        p = root / p
+    if not p.exists():
+        return
+    try:
+        rel = str(p.relative_to(root))
+    except ValueError:
+        rel = str(p)
+    kind = "research" if tool_name == "research" else "artifact"
+    checksum = hashlib.sha256(p.read_bytes()).hexdigest()
+    state.install_manifest = [e for e in state.install_manifest if e.path != rel]
+    state.install_manifest.append(
+        InstallEntry(
+            path=rel,
+            owner=tool_name,
+            kind=kind,  # type: ignore[arg-type]
+            created_at=datetime.now(UTC),
+            checksum=checksum,
+        )
+    )
 
 
 def _make_bridge(root: Path, dry_run: bool, preferences=None) -> ClaudeBridge:
@@ -83,6 +135,7 @@ def _run_step(
         update_tool(state, tool_name, status=ToolStatus.COMPLETED)
         for artifact in result.artifacts:
             update_tool(state, tool_name, artifact=artifact)
+            _register_tool_artifact(state, root, artifact, tool_name)
         console.print(f"  [green]{result.output[:300]}[/green]")
         if bus:
             bus.emit(
@@ -120,6 +173,7 @@ def run_pipeline(state: FlowStateModel, root: Path) -> FlowStateModel:
 
     run_id = uuid4().hex[:12]
     memory = MemoryStore(root=root)
+    _register_memory_artifact(state, root)
     bus = EventBus()
     for h in create_memory_handlers(memory, root, run_id=run_id):
         bus.register(h)
