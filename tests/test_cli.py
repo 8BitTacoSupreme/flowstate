@@ -156,12 +156,30 @@ def test_fresh_nothing_to_clean(tmp_path: Path):
     assert "already fresh" in result.output
 
 
+def _populate_state_with_manifest(tmp_path: Path, paths: list[tuple[str, str]]) -> None:
+    """Helper: write a flowstate.json with manifest entries for the given (path, kind) pairs."""
+    from datetime import UTC, datetime
+
+    from flowstate.state import FlowStateModel, InstallEntry, save_state
+
+    state = FlowStateModel()
+    state.install_manifest = [
+        InstallEntry(
+            path=p,
+            owner="context",
+            kind=kind,  # type: ignore[arg-type]
+            created_at=datetime.now(UTC),
+            checksum=None,
+        )
+        for p, kind in paths
+    ]
+    save_state(state, tmp_path)
+
+
 def test_fresh_removes_state_files(tmp_path: Path):
-    """fresh --yes removes generated artifacts but not source code."""
+    """fresh --yes --force removes generated artifacts (manifest + orphans) but not source code."""
     # Create the files that init would generate
-    (tmp_path / "flowstate.json").write_text("{}")
     (tmp_path / "memory.db").write_text("")
-    (tmp_path / "CONTEXT.md").write_text("")
     planning = tmp_path / ".planning"
     planning.mkdir()
     (planning / "PROJECT.md").write_text("")
@@ -174,20 +192,32 @@ def test_fresh_removes_state_files(tmp_path: Path):
     top_research.mkdir()
     (top_research / "report.md").write_text("")
 
+    # Populate manifest with files we own; STACK.md will be an orphan
+    _populate_state_with_manifest(
+        tmp_path,
+        [
+            (".planning/PROJECT.md", "context"),
+            (".planning/ROADMAP.md", "context"),
+            (".planning/config.json", "config"),
+            ("research/report.md", "research"),
+            ("memory.db", "memory"),
+        ],
+    )
+
     # Create a source file that should survive
     src = tmp_path / "flowstate"
     src.mkdir()
     (src / "cli.py").write_text("# source")
 
     runner = CliRunner()
-    result = runner.invoke(main, ["fresh", "--yes", "--root", str(tmp_path)])
+    # --force needed to remove orphans (.planning/research/STACK.md, flowstate.json)
+    result = runner.invoke(main, ["fresh", "--yes", "--force", "--root", str(tmp_path)])
     assert result.exit_code == 0
     assert "Removed" in result.output
 
     # Generated files should be gone
     assert not (tmp_path / "flowstate.json").exists()
     assert not (tmp_path / "memory.db").exists()
-    assert not (tmp_path / "CONTEXT.md").exists()
     assert not (planning / "PROJECT.md").exists()
     assert not (planning / "research").exists()
     assert not (tmp_path / "research").exists()
@@ -197,8 +227,8 @@ def test_fresh_removes_state_files(tmp_path: Path):
 
 
 def test_fresh_preserves_claude_md(tmp_path: Path):
-    """fresh does NOT delete .claude/CLAUDE.md."""
-    (tmp_path / "flowstate.json").write_text("{}")
+    """fresh does NOT delete .claude/CLAUDE.md unless it's in the manifest."""
+    _populate_state_with_manifest(tmp_path, [])
     claude_dir = tmp_path / ".claude"
     claude_dir.mkdir()
     (claude_dir / "CLAUDE.md").write_text("# keep me")
@@ -206,12 +236,13 @@ def test_fresh_preserves_claude_md(tmp_path: Path):
     runner = CliRunner()
     result = runner.invoke(main, ["fresh", "--yes", "--root", str(tmp_path)])
     assert result.exit_code == 0
+    # .claude/ is not scanned for orphans (only .planning/ and research/)
     assert (claude_dir / "CLAUDE.md").exists()
 
 
 def test_fresh_cancelled_without_yes(tmp_path: Path):
     """fresh without --yes prompts, and 'n' cancels."""
-    (tmp_path / "flowstate.json").write_text("{}")
+    _populate_state_with_manifest(tmp_path, [])
 
     runner = CliRunner()
     result = runner.invoke(main, ["fresh", "--root", str(tmp_path)], input="n\n")
@@ -226,8 +257,12 @@ def test_fresh_removes_empty_planning_dir(tmp_path: Path):
     planning.mkdir()
     (planning / "PROJECT.md").write_text("")
 
+    # Track PROJECT.md in the manifest so fresh owns it
+    _populate_state_with_manifest(tmp_path, [(".planning/PROJECT.md", "context")])
+
     runner = CliRunner()
-    result = runner.invoke(main, ["fresh", "--yes", "--root", str(tmp_path)])
+    # --force so the flowstate.json orphan is also removed
+    result = runner.invoke(main, ["fresh", "--yes", "--force", "--root", str(tmp_path)])
     assert result.exit_code == 0
     assert not planning.exists()
 
