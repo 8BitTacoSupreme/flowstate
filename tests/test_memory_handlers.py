@@ -127,3 +127,37 @@ class TestStepFailed:
         assert "timeout" in entries[0].content
         assert entries[0].run_id == "test-run"
         assert "failure" in entries[0].tags
+
+
+class TestMemoryHandlersProfileGating:
+    """HOOK-01 / HOOK-02 integration: memory handlers tagged 'minimal'."""
+
+    def test_handlers_tagged_minimal(self, tmp_path):
+        with MemoryStore(root=tmp_path) as store:
+            handlers = create_memory_handlers(store, tmp_path)
+        assert len(handlers) == 2
+        for h in handlers:
+            assert h.profile == "minimal"
+
+    def test_register_with_minimal_env_succeeds(self, tmp_path, monkeypatch):
+        from flowstate.events.registry import HandlerRegistry
+
+        monkeypatch.setenv("FLOWSTATE_HANDLERS", "minimal")
+        monkeypatch.delenv("FLOWSTATE_DISABLED_HANDLERS", raising=False)
+        reg = HandlerRegistry()
+        with MemoryStore(root=tmp_path) as store:
+            handlers = create_memory_handlers(store, tmp_path)
+        for h in handlers:
+            assert reg.register_handler(h) is True
+
+    def test_disabled_handler_skipped(self, tmp_path, monkeypatch):
+        from flowstate.events.registry import HandlerRegistry
+
+        monkeypatch.setenv("FLOWSTATE_HANDLERS", "standard")
+        monkeypatch.setenv("FLOWSTATE_DISABLED_HANDLERS", "on_step_failed")
+        reg = HandlerRegistry()
+        with MemoryStore(root=tmp_path) as store:
+            handlers = create_memory_handlers(store, tmp_path)
+        results = {h.__name__: reg.register_handler(h) for h in handlers}
+        assert results["on_step_completed"] is True
+        assert results["on_step_failed"] is False
