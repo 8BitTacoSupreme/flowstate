@@ -115,3 +115,103 @@ class TestFormatHelpers:
 
     def test_fmt_error_escapes_pipes(self):
         assert _fmt_error("error | with | pipes") == "error \\| with \\| pipes"
+
+
+class TestStatusMarkdownCli:
+    def _isolate_config(self, tmp_path: Path, monkeypatch):
+        import flowstate.config as config_mod
+
+        cfg_dir = tmp_path / ".config_flowstate"
+        monkeypatch.setattr(config_mod, "_CONFIG_DIR", cfg_dir)
+        monkeypatch.setattr(config_mod, "_CONFIG_FILE", cfg_dir / "config.toml")
+
+    def test_status_no_flags_uses_rich_table(self, tmp_path: Path, monkeypatch):
+        """Backward compat: no --markdown means Rich table output (banner present)."""
+        from click.testing import CliRunner
+
+        from flowstate.cli import main
+
+        self._isolate_config(tmp_path, monkeypatch)
+        runner = CliRunner()
+        result = runner.invoke(main, ["status", "--root", str(tmp_path)])
+        assert result.exit_code == 0
+        # Banner is rendered for non-markdown path
+        assert "FlowState" in result.output
+
+    def test_status_markdown_prints_markdown_to_stdout(self, tmp_path: Path, monkeypatch):
+        from click.testing import CliRunner
+
+        from flowstate.cli import main
+
+        self._isolate_config(tmp_path, monkeypatch)
+        runner = CliRunner()
+        result = runner.invoke(main, ["status", "--markdown", "--root", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "# FlowState Status" in result.output
+        assert "## Tools" in result.output
+        assert "## Memory" in result.output
+        # No banner ASCII art in markdown mode
+        assert "_____ _" not in result.output
+
+    def test_status_write_default_path(self, tmp_path: Path, monkeypatch):
+        from click.testing import CliRunner
+
+        from flowstate.cli import main
+
+        self._isolate_config(tmp_path, monkeypatch)
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
+            result = runner.invoke(
+                main,
+                ["status", "--markdown", "--write", "--root", str(tmp_path)],
+            )
+            assert result.exit_code == 0
+            default_target = Path(cwd) / "status.md"
+            assert default_target.exists()
+            assert "# FlowState Status" in default_target.read_text()
+            assert "Wrote:" in result.output
+            assert str(default_target.resolve()) in result.output
+
+    def test_status_write_explicit_path(self, tmp_path: Path, monkeypatch):
+        from click.testing import CliRunner
+
+        from flowstate.cli import main
+
+        self._isolate_config(tmp_path, monkeypatch)
+        runner = CliRunner()
+        target = tmp_path / "custom_status.md"
+        result = runner.invoke(
+            main,
+            ["status", "--markdown", "--write", str(target), "--root", str(tmp_path)],
+        )
+        assert result.exit_code == 0
+        assert target.exists()
+        assert "# FlowState Status" in target.read_text()
+
+    def test_status_write_implies_markdown(self, tmp_path: Path, monkeypatch):
+        """--write without --markdown should still produce markdown."""
+        from click.testing import CliRunner
+
+        from flowstate.cli import main
+
+        self._isolate_config(tmp_path, monkeypatch)
+        runner = CliRunner()
+        target = tmp_path / "implicit.md"
+        result = runner.invoke(
+            main,
+            ["status", "--write", str(target), "--root", str(tmp_path)],
+        )
+        assert result.exit_code == 0
+        assert target.exists()
+        assert "# FlowState Status" in target.read_text()
+
+    def test_status_help_lists_new_flags(self):
+        from click.testing import CliRunner
+
+        from flowstate.cli import main
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["status", "--help"])
+        assert result.exit_code == 0
+        assert "--markdown" in result.output
+        assert "--write" in result.output
