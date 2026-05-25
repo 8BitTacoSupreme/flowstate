@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-05-25)
 
 Phase: 02
 Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-05-25
+Status: Milestone v0.3 complete — quick task 260525-m9v landed (unified memory injection)
+Last activity: 2026-05-25 - Completed quick task 260525-m9v: Unify memory injection at orchestrator
 
 Progress: [█████░░░░░] 50% (1/2 phases complete)
 
@@ -89,6 +89,12 @@ None yet.
 
 - Phase 1 has known fragile files (cli.py, discipline.py, launcher.py, memory.py) with ~370 unstaged lines; commit order matters — run full test suite before each commit
 - INST-01 must land before DOCT-01/DOCT-02 (doctor reads the manifest); within Phase 2 HOOK-01/HOOK-02 are independent of INST/DOCT/STAT work
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260525-m9v | Unify memory injection at orchestrator (CAG-inspired, arXiv 2412.15605) | 2026-05-25 | 27708c5 | [260525-m9v-unify-memory-injection-at-orchestrator-b](./quick/260525-m9v-unify-memory-injection-at-orchestrator-b/) |
 
 ## Session Continuity
 
