@@ -88,3 +88,13 @@ class TestToolAdapterBase:
         result = adapter.bridge_to_result(br, artifacts=["a.txt"])
         assert result.success
         assert result.artifacts == ["a.txt"]
+
+    def test_prior_knowledge_accepted_and_stored(self, tmp_path: Path):
+        """ToolAdapter accepts prior_knowledge kwarg and stores it on self."""
+        adapter = ToolAdapter(root=tmp_path, prior_knowledge="## Prior Knowledge\n\nfoo")
+        assert adapter.prior_knowledge == "## Prior Knowledge\n\nfoo"
+
+    def test_prior_knowledge_default_none_when_omitted(self, tmp_path: Path):
+        """ToolAdapter defaults prior_knowledge to None when not provided."""
+        adapter = ToolAdapter(root=tmp_path)
+        assert adapter.prior_knowledge is None
