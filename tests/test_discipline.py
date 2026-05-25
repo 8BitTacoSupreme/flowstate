@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from flowstate.discipline import check_setup, check_superpowers_installed
+from flowstate.discipline import check_setup
 
 
 class TestCheckSetup:
@@ -60,9 +60,3 @@ class TestCheckSetup:
         result = check_setup(tmp_path)
         assert "Audit:" in result.summary
         assert "[+]" in result.summary or "[-]" in result.summary
-
-
-def test_check_superpowers_installed():
-    # Just verify it doesn't crash — result depends on the machine
-    result = check_superpowers_installed()
-    assert isinstance(result, bool)

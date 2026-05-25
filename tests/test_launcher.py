@@ -9,17 +9,14 @@ class TestDetectTools:
     def test_no_tools(self, tmp_path: Path):
         tools = detect_tools(tmp_path)
         assert not tools["gsd"]
-        assert not tools["gstack"]
-        assert not tools["superpowers"]
+        # strategy and discipline are built-in, always available
+        assert tools["strategy"]
+        assert tools["discipline"]
 
     def test_gsd_detected(self, tmp_path: Path):
         (tmp_path / ".planning").mkdir()
         tools = detect_tools(tmp_path)
         assert tools["gsd"]
-
-    def test_gstack_not_installed(self, tmp_path: Path):
-        tools = detect_tools(tmp_path)
-        assert not tools["gstack"]
 
 
 class TestLaunchCommand:

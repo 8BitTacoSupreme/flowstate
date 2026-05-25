@@ -16,11 +16,12 @@ from flowstate.state import FlowStateModel, ToolStatus
 
 console = Console()
 
-# Known tool markers — files/dirs that indicate a tool is installed
+# Known tool markers — files/dirs that indicate a tool is installed.
+# strategy and discipline are built-in (no external plugin needed).
 TOOL_MARKERS = {
     "gsd": [".planning"],
-    "gstack": [".claude/skills/gstack"],
-    "superpowers": [".claude/plugins/superpowers"],
+    "strategy": [],
+    "discipline": [],
 }
 
 
@@ -30,9 +31,12 @@ def detect_tools(root: Path) -> dict[str, bool]:
     home = Path.home()
 
     for tool, markers in TOOL_MARKERS.items():
+        if not markers:
+            # Built-in tools (strategy, discipline) are always available
+            results[tool] = True
+            continue
         found = False
         for marker in markers:
-            # Check project root and home directory
             if (root / marker).exists() or (home / marker).exists():
                 found = True
                 break
@@ -46,9 +50,7 @@ def detect_tools(root: Path) -> dict[str, bool]:
     return results
 
 
-def launch_command(
-    tool: str, phase: int | None = None, root: Path | None = None
-) -> str:
+def launch_command(tool: str, phase: int | None = None, root: Path | None = None) -> str:
     """Generate the exact claude invocation command for a tool."""
     project_dir = str(root or Path.cwd())
 

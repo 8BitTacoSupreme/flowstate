@@ -190,6 +190,19 @@ class MemoryStore:
         self._conn.commit()
         return ids
 
+    @staticmethod
+    def _sanitize_fts_query(query: str) -> str:
+        """Escape a raw string for FTS5 MATCH.
+
+        FTS5 interprets bare words as column names if they match a column,
+        and operators like AND/OR/NOT/NEAR have special meaning.  Wrapping
+        each token in double-quotes forces literal matching.
+        """
+        tokens = query.split()
+        if not tokens:
+            return query
+        return " ".join(f'"{t}"' for t in tokens)
+
     def search(
         self,
         query: str,
@@ -200,6 +213,8 @@ class MemoryStore:
         if not query.strip():
             return []
 
+        safe_query = self._sanitize_fts_query(query)
+
         if kind is not None:
             rows = self._conn.execute(
                 """SELECT m.*, rank
@@ -209,7 +224,7 @@ class MemoryStore:
                      AND m.kind = ?
                    ORDER BY rank
                    LIMIT ?""",
-                (query, kind.value, limit),
+                (safe_query, kind.value, limit),
             ).fetchall()
         else:
             rows = self._conn.execute(
@@ -219,7 +234,7 @@ class MemoryStore:
                    WHERE memories_fts MATCH ?
                    ORDER BY rank
                    LIMIT ?""",
-                (query, limit),
+                (safe_query, limit),
             ).fetchall()
 
         return [SearchResult(entry=_row_to_entry(row), score=abs(row["rank"])) for row in rows]

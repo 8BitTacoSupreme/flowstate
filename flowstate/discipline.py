@@ -59,12 +59,6 @@ def check_setup(root: Path) -> AuditResult:
     )
 
 
-def check_superpowers_installed() -> bool:
-    """Check if the Superpowers plugin is installed."""
-    plugin_dir = Path.home() / ".claude" / "plugins" / "superpowers"
-    return plugin_dir.exists()
-
-
 def _has_python_package(root: Path) -> bool:
     """Check if root contains a Python package (dir with __init__.py)."""
     return any(child.is_dir() and (child / "__init__.py").exists() for child in root.iterdir())

@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flowstate"
-version = "0.1.0"
-description = "The GrandSlam Orchestrator — unifies Autoresearch, Gstack, GSD, and Superpowers into a single agentic workflow."
+version = "0.3.0"
+description = "The Context Orchestrator — runs a deterministic 5-step pipeline (context → research → strategy → gsd → discipline) for agentic frameworks, with persistent SQLite FTS5 memory across runs."
 license = "Apache-2.0"
 readme = "README.md"
 requires-python = ">=3.12"

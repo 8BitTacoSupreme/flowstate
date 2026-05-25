@@ -9,6 +9,12 @@ from rich.console import Console
 from rich.panel import Panel
 
 from flowstate import __version__
+from flowstate.config import (
+    clear_default_root,
+    load_default_root,
+    resolve_root,
+    save_default_root,
+)
 
 console = Console()
 
@@ -21,6 +27,12 @@ BANNER = r"""
 """
 
 
+def _root_was_explicit() -> bool:
+    """Check if --root was passed on the command line."""
+    ctx = click.get_current_context()
+    return ctx.get_parameter_source("root") == click.core.ParameterSource.COMMANDLINE
+
+
 @click.group()
 @click.version_option(__version__, prog_name="flowstate")
 def main():
@@ -31,8 +43,8 @@ def main():
 @click.option("--dry-run", is_flag=True, help="Simulate tool execution without calling real CLIs.")
 @click.option(
     "--root",
-    type=click.Path(exists=True, path_type=Path),
-    default=".",
+    type=click.Path(path_type=Path),
+    default=None,
     help="Project root directory.",
 )
 @click.option("--skip-interview", is_flag=True, help="Skip the interview and use existing state.")
@@ -56,7 +68,7 @@ def main():
 )
 def init(
     dry_run: bool,
-    root: Path,
+    root: Path | None,
     skip_interview: bool,
     model: str | None,
     budget: float | None,
@@ -66,6 +78,12 @@ def init(
     from flowstate.interview import run_interview
     from flowstate.orchestrator import run_pipeline
     from flowstate.state import load_state, save_state
+
+    explicit = _root_was_explicit()
+    root = resolve_root(root, option_was_explicit=explicit)
+
+    if explicit:
+        save_default_root(root)
 
     console.print(Panel(BANNER, title="v" + __version__, border_style="blue", expand=False))
 
@@ -89,13 +107,15 @@ def init(
 @main.command()
 @click.option(
     "--root",
-    type=click.Path(exists=True, path_type=Path),
-    default=".",
+    type=click.Path(path_type=Path),
+    default=None,
     help="Project root directory.",
 )
-def status(root: Path):
+def status(root: Path | None):
     """Show the current state of the FlowState pipeline."""
     from flowstate.orchestrator import print_status
+
+    root = resolve_root(root, option_was_explicit=_root_was_explicit())
 
     console.print(Panel(BANNER, title="v" + __version__, border_style="blue", expand=False))
     print_status(root)
@@ -106,8 +126,8 @@ def status(root: Path):
 @click.option("--dry-run", is_flag=True, help="Simulate execution.")
 @click.option(
     "--root",
-    type=click.Path(exists=True, path_type=Path),
-    default=".",
+    type=click.Path(path_type=Path),
+    default=None,
     help="Project root directory.",
 )
 @click.option(
@@ -131,7 +151,7 @@ def status(root: Path):
 def run(
     phase: int,
     dry_run: bool,
-    root: Path,
+    root: Path | None,
     model: str | None,
     budget: float | None,
     effort: str | None,
@@ -139,6 +159,8 @@ def run(
     """Run a specific GSD phase (prints native session command)."""
     from flowstate.orchestrator import run_phase
     from flowstate.state import load_state, save_state
+
+    root = resolve_root(root, option_was_explicit=_root_was_explicit())
 
     state = load_state(root)
     state.preferences.dry_run = dry_run
@@ -159,11 +181,11 @@ def run(
 @click.argument("phase", type=int, required=False)
 @click.option(
     "--root",
-    type=click.Path(exists=True, path_type=Path),
-    default=".",
+    type=click.Path(path_type=Path),
+    default=None,
     help="Project root directory.",
 )
-def launch(tool: str, phase: int | None, root: Path):
+def launch(tool: str, phase: int | None, root: Path | None):
     """Print the native Claude Code command for a tool.
 
     Examples:
@@ -171,6 +193,8 @@ def launch(tool: str, phase: int | None, root: Path):
         flowstate launch gsd        — Print /gsd:progress command
     """
     from flowstate.launcher import launch_command
+
+    root = resolve_root(root, option_was_explicit=_root_was_explicit())
 
     console.print(Panel(BANNER, title="v" + __version__, border_style="blue", expand=False))
     cmd = launch_command(tool, phase, root)
@@ -182,14 +206,16 @@ def launch(tool: str, phase: int | None, root: Path):
 @main.command("context")
 @click.option(
     "--root",
-    type=click.Path(exists=True, path_type=Path),
-    default=".",
+    type=click.Path(path_type=Path),
+    default=None,
     help="Project root directory.",
 )
-def context(root: Path):
+def context(root: Path | None):
     """Regenerate context files from current state."""
     from flowstate.context import write_context_files
     from flowstate.state import load_state, save_state
+
+    root = resolve_root(root, option_was_explicit=_root_was_explicit())
 
     console.print(Panel(BANNER, title="v" + __version__, border_style="blue", expand=False))
 
@@ -219,15 +245,17 @@ def memory():
 @click.option("--limit", type=int, default=10, help="Max results to return.")
 @click.option(
     "--root",
-    type=click.Path(exists=True, path_type=Path),
-    default=".",
+    type=click.Path(path_type=Path),
+    default=None,
     help="Project root directory.",
 )
-def memory_search(query: str, kind: str | None, limit: int, root: Path):
+def memory_search(query: str, kind: str | None, limit: int, root: Path | None):
     """Search stored memories via full-text search."""
     from rich.table import Table
 
     from flowstate.memory import MemoryKind, MemoryStore
+
+    root = resolve_root(root, option_was_explicit=_root_was_explicit())
 
     store = MemoryStore(root=root)
     kind_filter = MemoryKind(kind) if kind else None
@@ -260,15 +288,17 @@ def memory_search(query: str, kind: str | None, limit: int, root: Path):
 @memory.command("stats")
 @click.option(
     "--root",
-    type=click.Path(exists=True, path_type=Path),
-    default=".",
+    type=click.Path(path_type=Path),
+    default=None,
     help="Project root directory.",
 )
-def memory_stats(root: Path):
+def memory_stats(root: Path | None):
     """Show memory counts by kind."""
     from rich.table import Table
 
     from flowstate.memory import MemoryKind, MemoryStore
+
+    root = resolve_root(root, option_was_explicit=_root_was_explicit())
 
     store = MemoryStore(root=root)
 
@@ -290,14 +320,16 @@ def memory_stats(root: Path):
 @memory.command("clear")
 @click.option(
     "--root",
-    type=click.Path(exists=True, path_type=Path),
-    default=".",
+    type=click.Path(path_type=Path),
+    default=None,
     help="Project root directory.",
 )
 @click.option("--yes", is_flag=True, help="Skip confirmation prompt.")
-def memory_clear(root: Path, yes: bool):
+def memory_clear(root: Path | None, yes: bool):
     """Delete all stored memories."""
     from flowstate.memory import MemoryStore
+
+    root = resolve_root(root, option_was_explicit=_root_was_explicit())
 
     if not yes and not click.confirm("Delete all memories? This cannot be undone"):
         console.print("[dim]Cancelled.[/dim]")
@@ -312,16 +344,83 @@ def memory_clear(root: Path, yes: bool):
 main.add_command(memory)
 
 
+# Files and directories that `fresh` removes — everything generated by init/pipeline.
+_FRESH_TARGETS = [
+    "flowstate.json",
+    "memory.db",
+    ".planning/PROJECT.md",
+    ".planning/ROADMAP.md",
+    ".planning/config.json",
+    ".planning/research",
+    "research",
+    "CONTEXT.md",
+]
+
+
+@main.command()
+@click.option(
+    "--root",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Project root directory.",
+)
+@click.option("--yes", is_flag=True, help="Skip confirmation prompt.")
+def fresh(root: Path | None, yes: bool):
+    """Remove all generated state so you can re-run init cleanly.
+
+    Deletes flowstate.json, memory.db, .planning/ artifacts, and
+    research/ output. Source code and .claude/CLAUDE.md are preserved.
+    """
+    import shutil
+
+    root = resolve_root(root, option_was_explicit=_root_was_explicit())
+
+    targets = [(root / t) for t in _FRESH_TARGETS]
+    existing = [t for t in targets if t.exists()]
+
+    if not existing:
+        console.print("[dim]Nothing to clean — project is already fresh.[/dim]")
+        return
+
+    console.print(Panel(BANNER, title="v" + __version__, border_style="blue", expand=False))
+    console.print("[bold]The following will be removed:[/bold]")
+    for t in existing:
+        label = "dir " if t.is_dir() else "file"
+        console.print(f"  [{label}] {t.relative_to(root)}")
+
+    if not yes and not click.confirm("\nProceed?"):
+        console.print("[dim]Cancelled.[/dim]")
+        return
+
+    removed = 0
+    for t in existing:
+        if t.is_dir():
+            shutil.rmtree(t)
+        else:
+            t.unlink()
+        removed += 1
+
+    # Remove .planning dir itself if it's now empty
+    planning = root / ".planning"
+    if planning.is_dir() and not any(planning.iterdir()):
+        planning.rmdir()
+        console.print("  [dim]Removed empty .planning/[/dim]")
+
+    console.print(f"\n[green]Removed {removed} items. Ready for flowstate init.[/green]")
+
+
 @main.command("check")
 @click.option(
     "--root",
-    type=click.Path(exists=True, path_type=Path),
-    default=".",
+    type=click.Path(path_type=Path),
+    default=None,
     help="Project root directory.",
 )
-def check_bridge(root: Path):
+def check_bridge(root: Path | None):
     """Check if the claude CLI bridge is available and configured."""
     from flowstate.bridge import BridgeConfig, ClaudeBridge
+
+    root = resolve_root(root, option_was_explicit=_root_was_explicit())
 
     config = BridgeConfig(project_root=root)
     bridge = ClaudeBridge(config=config)
@@ -334,3 +433,38 @@ def check_bridge(root: Path):
         console.print(
             "[dim]Install Claude Code or set FLOWSTATE_CLAUDE_BIN to the binary path.[/dim]"
         )
+
+
+# ── config subgroup ─────────────────────────────────────────────────
+
+
+@main.group("config")
+def config_group():
+    """Manage FlowState global configuration."""
+
+
+@config_group.command("show")
+def config_show():
+    """Display current configuration."""
+    saved = load_default_root()
+    if saved:
+        console.print(f"[bold]default_root[/bold] = {saved}")
+    else:
+        console.print("[dim]No default root configured.[/dim]")
+
+
+@config_group.command("set-root")
+@click.argument("path", type=click.Path(exists=True, path_type=Path))
+def config_set_root(path: Path):
+    """Set the default project root directory."""
+    save_default_root(path)
+    console.print(f"[green]Default root set to:[/green] {path.resolve()}")
+
+
+@config_group.command("clear-root")
+def config_clear_root():
+    """Remove the saved default root."""
+    if clear_default_root():
+        console.print("[green]Default root cleared.[/green]")
+    else:
+        console.print("[dim]No default root was configured.[/dim]")
