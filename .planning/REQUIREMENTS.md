@@ -16,9 +16,9 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Install Manifest (INST)
 
-- [ ] **INST-01**: `FlowStateModel` (in `flowstate/state.py`) gains an `install_manifest: list[InstallEntry]` field where each entry records `path`, `owner` (which init step wrote it), `kind` (config / context / memory / research), `created_at`, and `checksum`
-- [ ] **INST-02**: `flowstate init` populates the manifest for every file it writes (PROJECT.md, ROADMAP.md, CLAUDE.md, config.json, research/brief.md, memory.db, plus any tool-adapter artifacts); state migration adds the field with backfill from the existing filesystem when loading a pre-manifest `flowstate.json`
-- [ ] **INST-03**: `flowstate fresh` consults the manifest instead of blindly deleting — only files recorded as owned by FlowState are removed; non-manifest files in `.planning/` are reported as "orphaned" and left in place unless `--force` is passed
+- [x] **INST-01**: `FlowStateModel` (in `flowstate/state.py`) gains an `install_manifest: list[InstallEntry]` field where each entry records `path`, `owner` (which init step wrote it), `kind` (config / context / memory / research), `created_at`, and `checksum`
+- [x] **INST-02**: `flowstate init` populates the manifest for every file it writes (PROJECT.md, ROADMAP.md, CLAUDE.md, config.json, research/brief.md, memory.db, plus any tool-adapter artifacts); state migration adds the field with backfill from the existing filesystem when loading a pre-manifest `flowstate.json`
+- [x] **INST-03**: `flowstate fresh` consults the manifest instead of blindly deleting — only files recorded as owned by FlowState are removed; non-manifest files in `.planning/` are reported as "orphaned" and left in place unless `--force` is passed
 
 ### Doctor / Repair (DOCT)
 
@@ -79,9 +79,9 @@ Explicitly excluded for this milestone. Documented to prevent scope creep.
 | PIVOT-02 | Phase 1 | Complete |
 | PIVOT-03 | Phase 1 | Complete |
 | PIVOT-04 | Phase 1 | Complete |
-| INST-01 | Phase 2 | Pending |
-| INST-02 | Phase 2 | Pending |
-| INST-03 | Phase 2 | Pending |
+| INST-01 | Phase 2 | Complete |
+| INST-02 | Phase 2 | Complete |
+| INST-03 | Phase 2 | Complete |
 | DOCT-01 | Phase 2 | Pending |
 | DOCT-02 | Phase 2 | Pending |
 | STAT-01 | Phase 2 | Pending |

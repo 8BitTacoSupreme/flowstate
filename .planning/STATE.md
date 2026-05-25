@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.3.0
 milestone_name: milestone
 status: executing
-stopped_at: "Completed 02-04-PLAN.md (HOOK-01 + HOOK-02): env-var-driven handler gating, 211 tests passing at 90.58% coverage"
-last_updated: "2026-05-25T19:08:47.210Z"
+stopped_at: "Completed 02-01-PLAN.md (INST-01/02/03): install_manifest tracking on FlowStateModel, init populates it, fresh consults it"
+last_updated: "2026-05-25T19:13:59.694Z"
 last_activity: 2026-05-25
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 4
-  completed_plans: 1
+  completed_plans: 2
   percent: 50
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-25)
 ## Current Position
 
 Phase: 02 (operate-safely) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-05-25
 
@@ -53,6 +53,7 @@ Progress: [█████░░░░░] 50% (1/2 phases complete)
 
 *Updated after each plan completion*
 | Phase 02 P04 | 3m24s | 2 tasks | 4 files |
+| Phase 02 P01 | 12min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -67,6 +68,9 @@ Recent decisions affecting current work:
 - Borrow install-manifest from ECC: `flowstate fresh` is currently destructive without knowing what it owns
 - [Phase 02]: Per-call env-var lookup over module-level cache for handler gating — easiest to monkeypatch, no stale state
 - [Phase 02]: Disabled-names denylist takes precedence over profile rank — explicit override semantics
+- [Phase 02]: InstallEntry uses Literal[5 kinds] for Pydantic kind validation — catches typos at write time, not at fresh time
+- [Phase 02]: checksum=None semantically means mutable file (memory.db) — _verify_checksum returns True for None, skipping verification
+- [Phase 02]: Orphan scan bounded to .planning/, research/, memory.db, flowstate.json — .claude/ and source never candidates (safe-by-default)
 
 ### Pending Todos
 
@@ -79,7 +83,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-05-25T19:08:47.208Z
-Stopped at: Completed 02-04-PLAN.md (HOOK-01 + HOOK-02): env-var-driven handler gating, 211 tests passing at 90.58% coverage
+Last session: 2026-05-25T19:13:59.692Z
+Stopped at: Completed 02-01-PLAN.md (INST-01/02/03): install_manifest tracking on FlowStateModel, init populates it, fresh consults it
 Resume file: None
 Next step: `/gsd:plan-phase 2` to plan the install-manifest + doctor/repair + status --markdown + hook env-gating work.
