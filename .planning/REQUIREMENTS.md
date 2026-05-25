@@ -32,8 +32,8 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Hook Profile (HOOK)
 
-- [ ] **HOOK-01**: `FLOWSTATE_HANDLERS=minimal|standard|strict` env var read in `flowstate/events/registry.py` at handler-register time; each `@handler` decorator gains a `profile=` kwarg with default `standard`; handlers whose profile is stricter than the current setting are skipped at registration. Default = `standard`; setting to `minimal` registers only memory-storage handlers; `strict` registers everything plus extra audit handlers
-- [ ] **HOOK-02**: `FLOWSTATE_DISABLED_HANDLERS=name1,name2` env var (comma-separated handler names) skips specific handlers regardless of profile; takes precedence over `FLOWSTATE_HANDLERS`. Covered by `tests/test_events_registry.py`
+- [x] **HOOK-01**: `FLOWSTATE_HANDLERS=minimal|standard|strict` env var read in `flowstate/events/registry.py` at handler-register time; each `@handler` decorator gains a `profile=` kwarg with default `standard`; handlers whose profile is stricter than the current setting are skipped at registration. Default = `standard`; setting to `minimal` registers only memory-storage handlers; `strict` registers everything plus extra audit handlers
+- [x] **HOOK-02**: `FLOWSTATE_DISABLED_HANDLERS=name1,name2` env var (comma-separated handler names) skips specific handlers regardless of profile; takes precedence over `FLOWSTATE_HANDLERS`. Covered by `tests/test_events_registry.py`
 
 ## v2 Requirements
 
@@ -86,8 +86,8 @@ Explicitly excluded for this milestone. Documented to prevent scope creep.
 | DOCT-02 | Phase 2 | Pending |
 | STAT-01 | Phase 2 | Pending |
 | STAT-02 | Phase 2 | Pending |
-| HOOK-01 | Phase 2 | Pending |
-| HOOK-02 | Phase 2 | Pending |
+| HOOK-01 | Phase 2 | Complete |
+| HOOK-02 | Phase 2 | Complete |
 
 **Coverage:**
 - v1 requirements: 13 total
