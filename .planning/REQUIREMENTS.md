@@ -22,8 +22,8 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Doctor / Repair (DOCT)
 
-- [ ] **DOCT-01**: `flowstate doctor` (new Click command, pure Python, no LLM) produces a structured report covering: manifest drift (missing or mutated files vs. checksums), memory.db schema mismatch, broken `--root` resolution, missing Claude CLI on PATH, stale tool status (e.g., Running for >24h), orphaned files in `.planning/`. Exits non-zero when any check fails so it composes in CI/precommit
-- [ ] **DOCT-02**: `flowstate repair` applies the safe subset of doctor's findings: regenerate missing context files from `state.interview`, recreate `memory.db` schema and FTS5 triggers if drifted, reset stale Running statuses to Blocked, rewrite manifest checksums after intentional regenerations. Destructive fixes (delete orphans, drop memory rows) gated behind `--apply-destructive`
+- [x] **DOCT-01**: `flowstate doctor` (new Click command, pure Python, no LLM) produces a structured report covering: manifest drift (missing or mutated files vs. checksums), memory.db schema mismatch, broken `--root` resolution, missing Claude CLI on PATH, stale tool status (e.g., Running for >24h), orphaned files in `.planning/`. Exits non-zero when any check fails so it composes in CI/precommit
+- [x] **DOCT-02**: `flowstate repair` applies the safe subset of doctor's findings: regenerate missing context files from `state.interview`, recreate `memory.db` schema and FTS5 triggers if drifted, reset stale Running statuses to Blocked, rewrite manifest checksums after intentional regenerations. Destructive fixes (delete orphans, drop memory rows) gated behind `--apply-destructive`
 
 ### Status Snapshot (STAT)
 
@@ -82,8 +82,8 @@ Explicitly excluded for this milestone. Documented to prevent scope creep.
 | INST-01 | Phase 2 | Complete |
 | INST-02 | Phase 2 | Complete |
 | INST-03 | Phase 2 | Complete |
-| DOCT-01 | Phase 2 | Pending |
-| DOCT-02 | Phase 2 | Pending |
+| DOCT-01 | Phase 2 | Complete |
+| DOCT-02 | Phase 2 | Complete |
 | STAT-01 | Phase 2 | Complete |
 | STAT-02 | Phase 2 | Complete |
 | HOOK-01 | Phase 2 | Complete |
