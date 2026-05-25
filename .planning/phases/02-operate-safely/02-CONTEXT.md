@@ -97,7 +97,7 @@ Phase 1 already landed (`b38bbd6`) — the v2 pivot is committed, version is 0.3
 ### HOOK — Hook Env-Gating
 
 **HOOK-01: `FLOWSTATE_HANDLERS` env var profile gate**
-- Read the env var at module-import time in `flowstate/events/registry.py` (before any `@handler` decorators fire)
+- The env var must be **read at handler-registration time** (i.e., the env value in effect when each `@handler` decorator fires determines whether that handler registers). The exact mechanism — module-level cached constant vs. per-call lookup vs. helper function — is implementer's discretion. Per-call lookup is preferred because it's straightforward to monkeypatch in tests.
 - Three profiles: `minimal` | `standard` | `unset = standard` | `strict`
 - Extend the existing `@handler` decorator (in `flowstate/events/handler.py`) with a `profile: Literal["minimal", "standard", "strict"]` kwarg (default `"standard"`)
 - At register time, if the handler's profile is stricter than the current env profile, skip registration (log an info-level message naming the skipped handler)
@@ -176,16 +176,26 @@ class FlowStateModel(BaseModel):
 ```
 
 **INST-03 — `fresh` rewrite skeleton:**
+
+NOTE: `flowstate.state.load_state(root)` has no `missing_ok` parameter and will raise `FileNotFoundError` (or similar) if `flowstate.json` doesn't exist. The `fresh` command must guard against this — if there's no state file, there's no manifest to consult, so behave as if the manifest is empty.
+
 ```python
 def fresh(root: Path | None, yes: bool, force: bool):
     root = resolve_root(root, option_was_explicit=_root_was_explicit())
-    state = load_state(root, missing_ok=True)
-    manifest = state.install_manifest if state else []
+
+    # Guard: missing state → empty manifest (fresh project, nothing to do via manifest)
+    state_path = root / "flowstate.json"
+    if state_path.exists():
+        state = load_state(root)
+        manifest = state.install_manifest
+    else:
+        manifest = []
+
     manifest_paths = {root / e.path for e in manifest}
 
-    # Files we own (manifest)
+    # Files we own (manifest) — only these are removed by default
     to_remove = [p for p in manifest_paths if p.exists()]
-    # Files we don't own (orphans)
+    # Files we don't own (orphans) — left in place unless --force
     orphans = _scan_planning_and_research(root) - manifest_paths
     if force:
         to_remove.extend(orphans)
