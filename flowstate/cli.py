@@ -523,6 +523,115 @@ def check_bridge(root: Path | None):
         )
 
 
+@main.command("doctor")
+@click.option(
+    "--root",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Project root directory.",
+)
+def doctor(root: Path | None):
+    """Run health checks against the FlowState install.
+
+    Exits non-zero (count of error-severity findings) so it composes
+    in CI / pre-commit hooks.
+    """
+    import sys
+
+    from rich.table import Table
+
+    from flowstate.doctor import run_doctor
+    from flowstate.state import load_state
+
+    root = resolve_root(root, option_was_explicit=_root_was_explicit())
+    console.print(Panel(BANNER, title="v" + __version__, border_style="blue", expand=False))
+
+    state = load_state(root)
+    findings = run_doctor(state, root)
+
+    if not findings:
+        console.print("[green]All checks passed.[/green]")
+        return
+
+    table = Table(title="flowstate doctor", border_style="blue")
+    table.add_column("Check", style="bold")
+    table.add_column("Severity")
+    table.add_column("Message")
+    sev_style = {"error": "red", "warning": "yellow", "info": "dim"}
+    for d in findings:
+        style = sev_style.get(d.severity, "white")
+        table.add_row(
+            d.name,
+            f"[{style}]{d.severity}[/{style}]",
+            d.message,
+        )
+    console.print(table)
+
+    errors = sum(1 for d in findings if d.severity == "error")
+    warnings = sum(1 for d in findings if d.severity == "warning")
+    console.print(f"\n[bold]Summary:[/bold] {errors} error(s), {warnings} warning(s)")
+    if errors:
+        sys.exit(errors)
+
+
+@main.command("repair")
+@click.option(
+    "--root",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Project root directory.",
+)
+@click.option(
+    "--apply-destructive",
+    is_flag=True,
+    help="Also apply destructive fixes (delete orphans, recreate corrupt memory.db).",
+)
+def repair(root: Path | None, apply_destructive: bool):
+    """Apply safe fixes for doctor findings; destructive fixes require --apply-destructive."""
+    from flowstate.doctor import run_doctor
+    from flowstate.repair import apply_destructive_fixes, apply_safe_fixes
+    from flowstate.state import load_state, save_state
+
+    root = resolve_root(root, option_was_explicit=_root_was_explicit())
+    console.print(Panel(BANNER, title="v" + __version__, border_style="blue", expand=False))
+
+    state = load_state(root)
+    findings = run_doctor(state, root)
+    if not findings:
+        console.print("[green]Nothing to repair — all checks passed.[/green]")
+        return
+
+    safe = apply_safe_fixes(state, root, findings)
+    if safe:
+        console.print(f"[green]Applied {len(safe)} safe fix(es):[/green]")
+        for line in safe:
+            console.print(f"  - {line}")
+    else:
+        console.print("[dim]No safe fixes applied.[/dim]")
+
+    if apply_destructive:
+        destructive = apply_destructive_fixes(state, root, findings)
+        if destructive:
+            console.print(f"[yellow]Applied {len(destructive)} destructive fix(es):[/yellow]")
+            for line in destructive:
+                console.print(f"  - {line}")
+        else:
+            console.print("[dim]No destructive fixes applied.[/dim]")
+    else:
+        destructive_pending = [
+            d
+            for d in findings
+            if d.name == "orphan_files" or "unreadable" in d.message.lower()
+        ]
+        if destructive_pending:
+            console.print(
+                f"\n[dim]{len(destructive_pending)} destructive fix(es) skipped. "
+                "Re-run with --apply-destructive.[/dim]"
+            )
+
+    save_state(state, root)
+
+
 # ── config subgroup ─────────────────────────────────────────────────
 
 
