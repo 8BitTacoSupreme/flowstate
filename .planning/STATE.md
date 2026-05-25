@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-05-25)
 
 Phase: 02
 Plan: Not started
-Status: Milestone v0.3 complete — quick task 260525-m9v landed (unified memory injection)
-Last activity: 2026-05-25 - Completed quick task 260525-m9v: Unify memory injection at orchestrator
+Status: Milestone v0.3 complete — quick task 260525-o6h landed (claude --print cache spike confirmed)
+Last activity: 2026-05-25 - Completed quick task 260525-o6h: Spike claude --print prompt cache behavior
 
 Progress: [█████░░░░░] 50% (1/2 phases complete)
 
@@ -95,6 +95,7 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260525-m9v | Unify memory injection at orchestrator (CAG-inspired, arXiv 2412.15605) | 2026-05-25 | 27708c5 | [260525-m9v-unify-memory-injection-at-orchestrator-b](./quick/260525-m9v-unify-memory-injection-at-orchestrator-b/) |
+| 260525-o6h | Spike: confirm `claude --print` prompt cache fires (-32% wall, -37% API on call 2) | 2026-05-25 | 996049b | [260525-o6h-spike-confirm-claude-print-server-side-p](./quick/260525-o6h-spike-confirm-claude-print-server-side-p/) |
 
 ## Session Continuity
 
