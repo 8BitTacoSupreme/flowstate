@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -19,6 +21,149 @@ def _isolate_config(tmp_path: Path, monkeypatch):
     cfg_file = cfg_dir / "config.toml"
     monkeypatch.setattr(config_mod, "_CONFIG_DIR", cfg_dir)
     monkeypatch.setattr(config_mod, "_CONFIG_FILE", cfg_file)
+
+
+@pytest.fixture()
+def healthy_install(tmp_path, monkeypatch):
+    """Create an init'd FlowState project with manifest + memory.db; mock claude CLI as present.
+
+    Uses monkeypatch.setenv (writes to os.environ) so click.testing.CliRunner.invoke()
+    picks up FLOWSTATE_CLAUDE_BIN without needing `env=` plumbing per call. This is the
+    pattern blessed by plan-checker iteration 1 (W4).
+    """
+    from flowstate.memory import MemoryStore
+    from flowstate.state import FlowStateModel, InstallEntry, save_state
+
+    # Ensure claude CLI check passes — write env BEFORE invoking CLI
+    fake_claude = tmp_path / "fake_claude"
+    fake_claude.write_text("#!/bin/sh\nexit 0\n")
+    fake_claude.chmod(0o755)
+    monkeypatch.setenv("FLOWSTATE_CLAUDE_BIN", str(fake_claude))
+
+    # Memory.db
+    with MemoryStore(root=tmp_path):
+        pass
+
+    # One context file + matching manifest entry
+    planning = tmp_path / ".planning"
+    planning.mkdir()
+    pm = planning / "PROJECT.md"
+    pm.write_text("# Project\n")
+    checksum = hashlib.sha256(pm.read_bytes()).hexdigest()
+
+    state = FlowStateModel()
+    state.install_manifest.append(
+        InstallEntry(
+            path=".planning/PROJECT.md",
+            owner="context",
+            kind="context",
+            created_at=datetime.now(UTC),
+            checksum=checksum,
+        )
+    )
+    state.install_manifest.append(
+        InstallEntry(
+            path="memory.db",
+            owner="memory",
+            kind="memory",
+            created_at=datetime.now(UTC),
+            checksum=None,
+        )
+    )
+    save_state(state, tmp_path)
+    return tmp_path
+
+
+class TestDoctorCommand:
+    def test_doctor_healthy_install_exits_zero(self, healthy_install):
+        runner = CliRunner()
+        result = runner.invoke(main, ["doctor", "--root", str(healthy_install)])
+        assert result.exit_code == 0
+        assert "All checks passed" in result.output
+
+    def test_doctor_missing_manifest_file_exits_nonzero(self, tmp_path, monkeypatch):
+        from flowstate.memory import MemoryStore
+        from flowstate.state import FlowStateModel, InstallEntry, save_state
+
+        fake_claude = tmp_path / "fake_claude"
+        fake_claude.write_text("#!/bin/sh\nexit 0\n")
+        fake_claude.chmod(0o755)
+        monkeypatch.setenv("FLOWSTATE_CLAUDE_BIN", str(fake_claude))
+
+        with MemoryStore(root=tmp_path):
+            pass
+
+        state = FlowStateModel()
+        state.install_manifest.append(
+            InstallEntry(
+                path=".planning/MISSING.md",
+                owner="context",
+                kind="context",
+                created_at=datetime.now(UTC),
+                checksum="0" * 64,
+            )
+        )
+        save_state(state, tmp_path)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["doctor", "--root", str(tmp_path)])
+        assert result.exit_code >= 1
+        assert "manifest_integrity" in result.output
+
+    def test_doctor_orphan_files_does_not_fail(self, healthy_install):
+        # Plant an orphan
+        (healthy_install / ".planning" / "EXTRA.md").write_text("orphan")
+        runner = CliRunner()
+        result = runner.invoke(main, ["doctor", "--root", str(healthy_install)])
+        assert result.exit_code == 0
+        assert "orphan_files" in result.output
+        assert "info" in result.output
+
+    def test_doctor_help_lists_command(self):
+        runner = CliRunner()
+        result = runner.invoke(main, ["doctor", "--help"])
+        assert result.exit_code == 0
+        assert "doctor" in result.output.lower()
+
+
+class TestRepairCommand:
+    def test_repair_safe_fixes_applied(self, healthy_install):
+        # Delete PROJECT.md so the manifest entry is "missing"
+        (healthy_install / ".planning" / "PROJECT.md").unlink()
+        runner = CliRunner()
+        result = runner.invoke(main, ["repair", "--root", str(healthy_install)])
+        assert result.exit_code == 0
+        assert "regenerated context files" in result.output
+
+    def test_repair_skips_destructive_without_flag(self, healthy_install):
+        orphan = healthy_install / ".planning" / "EXTRA.md"
+        orphan.write_text("orphan")
+        runner = CliRunner()
+        result = runner.invoke(main, ["repair", "--root", str(healthy_install)])
+        assert result.exit_code == 0
+        assert orphan.exists()
+
+    def test_repair_apply_destructive_deletes_orphans(self, healthy_install):
+        orphan = healthy_install / ".planning" / "EXTRA.md"
+        orphan.write_text("orphan")
+        runner = CliRunner()
+        result = runner.invoke(
+            main, ["repair", "--apply-destructive", "--root", str(healthy_install)]
+        )
+        assert result.exit_code == 0
+        assert not orphan.exists()
+
+    def test_repair_help_lists_flag(self):
+        runner = CliRunner()
+        result = runner.invoke(main, ["repair", "--help"])
+        assert result.exit_code == 0
+        assert "--apply-destructive" in result.output
+
+    def test_repair_no_findings_exits_zero(self, healthy_install):
+        runner = CliRunner()
+        result = runner.invoke(main, ["repair", "--root", str(healthy_install)])
+        assert result.exit_code == 0
+        assert "Nothing to repair" in result.output
 
 
 def test_cli_version():
