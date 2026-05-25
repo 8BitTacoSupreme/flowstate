@@ -36,7 +36,11 @@ deliveries that compound the core loop.
   3. `flowstate repair` regenerates missing context files from `state.interview` and resets stale Running statuses; destructive operations (orphan deletion, memory row drops) require `--apply-destructive`
   4. `flowstate status --markdown > /tmp/status.md` produces a valid markdown file containing a tool-status table, active phase section, and memory stats section
   5. `FLOWSTATE_HANDLERS=minimal flowstate run` registers only memory-storage handlers; `FLOWSTATE_DISABLED_HANDLERS=audit_handler flowstate run` skips that handler regardless of profile
-**Plans**: TBD
+**Plans**: 4 plans
+  - [ ] 02-01-PLAN.md — Install manifest: InstallEntry schema, init populates, fresh consults (INST-01..03)
+  - [ ] 02-02-PLAN.md — Doctor + repair: pure-Python health check with 6 checks + safe-by-default fixer (DOCT-01..02)
+  - [ ] 02-03-PLAN.md — Status markdown: --markdown + --write flags, 3-section renderer for handoff (STAT-01..02)
+  - [ ] 02-04-PLAN.md — Hook env-gating: @handler profile= kwarg + FLOWSTATE_HANDLERS / FLOWSTATE_DISABLED_HANDLERS (HOOK-01..02)
 **UI hint**: no
 
 ## Progress
@@ -44,4 +48,4 @@ deliveries that compound the core loop.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Land the v2 Pivot | - | Complete | 2026-05-25 (b38bbd6) |
-| 2. Operate Safely | 0/TBD | Not started | - |
+| 2. Operate Safely | 0/4 | Not started | - |
