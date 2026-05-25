@@ -27,26 +27,17 @@ If everything else fails, that compounding loop is what FlowState exists to deli
 - ✓ 8-command Click CLI (`init`, `status`, `launch`, `run`, `context`, `memory`, `check`, `fresh`, `config`) — v0.2
 - ✓ Interview flow + deterministic context-file generation (no LLM) — v0.2
 - ✓ pytest + pytest-cov with 80% floor enforced via `--cov-fail-under=80` — v0.2
+- ✓ **PIVOT-01..04**: v2 pivot landed (cli/discipline/launcher/memory/config edits + new config.py) — v0.3 / Phase 1
+- ✓ **INST-01..03**: `install_manifest` on `FlowStateModel`; `init` populates with sha256; `fresh` consults manifest, reports orphans, `--force` removes them — v0.3 / Phase 2
+- ✓ **DOCT-01..02**: pure-Python `flowstate doctor` (6 checks) + safe-by-default `flowstate repair` with `--apply-destructive` gate — v0.3 / Phase 2
+- ✓ **STAT-01..02**: `flowstate status --markdown [--write FILE]` renders 3-section handoff doc (tools, active phase, memory stats) — v0.3 / Phase 2
+- ✓ **HOOK-01..02**: `@handler(profile=...)` + `FLOWSTATE_HANDLERS` (minimal/standard/strict) + `FLOWSTATE_DISABLED_HANDLERS` precedence — v0.3 / Phase 2
 
 ### Active
 
-<!-- This milestone: land the in-flight v2 work + add the "operate this thing safely over time" surface. -->
+<!-- Milestone v0.3 complete (Phases 1 + 2). Next milestone TBD. -->
 
-**Land the v2 pivot (Phase 1):**
-- [ ] **PIVOT-01**: Unstaged `cli.py`, `discipline.py`, `launcher.py`, `memory.py`, `config.py` edits commit cleanly with tests green and coverage ≥80%
-- [ ] **PIVOT-02**: New `flowstate/config.py` (default-root resolution + precedence: `--root` > saved > cwd) is wired into every CLI command that takes a root
-- [ ] **PIVOT-03**: Stale/deleted artifacts (`.planning/PROJECT.md` v1, `.planning/config.json` v1, `CONTEXT.md`) replaced or removed cleanly with no dangling references
-- [ ] **PIVOT-04**: `README.md` and `.claude/CLAUDE.md` still accurate after the merge
-
-**Operate-safely trio + hook env-gating (Phase 2, borrowed from ECC):**
-- [ ] **INST-01**: `flowstate init` writes an `install_manifest` list onto `FlowStateModel` recording every file it provisioned
-- [ ] **INST-02**: `flowstate fresh` consults the manifest instead of blindly deleting — drift and orphans surface; only manifest-owned files are removed
-- [ ] **DOCT-01**: `flowstate doctor` reports drift, missing files, schema mismatches, unreachable paths — pure Python diagnose-only, no LLM
-- [ ] **DOCT-02**: `flowstate repair` applies the safe subset of doctor's findings (regenerate context files from state, recreate memory.db schema, re-link manifest entries)
-- [ ] **STAT-01**: `flowstate status --markdown` renders the Pydantic state as a markdown table (tool status, artifacts, last-run timestamps)
-- [ ] **STAT-02**: `flowstate status --markdown --write status.md` writes the rendered output to a file for cross-session handoff
-- [ ] **HOOK-01**: `FLOWSTATE_HANDLERS=minimal|standard|strict` env var gates handler registration in `flowstate/events/registry.py` at register time
-- [ ] **HOOK-02**: `FLOWSTATE_DISABLED_HANDLERS=name1,name2` env var disables specific named handlers without code edits
+_None — see `/gsd:new-milestone` to plan the next cycle._
 
 ### Out of Scope
 
@@ -78,11 +69,11 @@ If everything else fails, that compounding loop is what FlowState exists to deli
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Coarse granularity (2 phases) | Single maintainer, scope is bounded, "one small phase" was the explicit user framing for the operate-safely work | — Pending |
-| Land v2 pivot before adding new surface | Compounding the unstaged work with new features makes the diff unreviewable and the bug surface ambiguous | — Pending |
+| Coarse granularity (2 phases) | Single maintainer, scope is bounded, "one small phase" was the explicit user framing for the operate-safely work | ✓ Validated (v0.3) — both phases shipped clean |
+| Land v2 pivot before adding new surface | Compounding the unstaged work with new features makes the diff unreviewable and the bug surface ambiguous | ✓ Validated (Phase 1, b38bbd6) |
 | Skip Codex/OpenCode/Cursor adapters | ECC ships to 7 harnesses with one maintainer and it's visibly straining; FlowState stays Claude-Code-native until users ask | — Pending |
-| Hook profile via env var, not config file | Matches ECC's pattern (`ECC_HOOK_PROFILE`) and avoids a new config surface; one env var + one filter pass at handler register time | — Pending |
-| Borrow install-manifest pattern from ECC | `flowstate fresh` is currently destructive without a manifest of what it owns — same gap ECC's `doctor`/`repair` exists to solve | — Pending |
+| Hook profile via env var, not config file | Matches ECC's pattern (`ECC_HOOK_PROFILE`) and avoids a new config surface; one env var + one filter pass at handler register time | ✓ Validated (HOOK-01/02) |
+| Borrow install-manifest pattern from ECC | `flowstate fresh` is currently destructive without a manifest of what it owns — same gap ECC's `doctor`/`repair` exists to solve | ✓ Validated (INST-01..03, DOCT-01..02) |
 
 ## Evolution
 
@@ -102,4 +93,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-25 after milestone-2 initialization (v2 pivot + operate-safely)*
+*Last updated: 2026-05-25 after Phase 2 (operate-safely) completion — milestone v0.3 complete*
