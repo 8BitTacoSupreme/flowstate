@@ -30,11 +30,17 @@ class ToolAdapter:
         dry_run: bool = False,
         bridge: ClaudeBridge | None = None,
         memory: MemoryStore | None = None,
+        prior_knowledge: str | None = None,
     ):
         self.root = root
         self.dry_run = dry_run
         self._bridge = bridge
         self.memory = memory
+        # Unified prior_knowledge block built once at orchestrator pipeline start
+        # and threaded into every adapter. Default None == "not provided"; adapters
+        # coerce with `or ""` at use time. get_memory_context() remains as the
+        # escape hatch for callers needing a query-specific slice.
+        self.prior_knowledge = prior_knowledge
 
     @property
     def bridge(self) -> ClaudeBridge:

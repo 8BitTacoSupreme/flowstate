@@ -217,8 +217,34 @@ def run_pipeline(state: FlowStateModel, root: Path) -> FlowStateModel:
 
     save_state(state, root)
 
+    # Unified prior_knowledge block: built ONCE after memory is seeded with
+    # interview answers, threaded into every tool adapter so the same prefix
+    # is reused across Research / Strategy / GSD. This eliminates N+1 redundant
+    # FTS5 searches and enables Anthropic's server-side prompt cache to hit
+    # across pipeline steps (5-min TTL). The query is intentionally broad —
+    # core_problem + ten_x_vision + research_focus — so one block covers all
+    # downstream tools. Adapters needing a tighter slice can still call
+    # self.get_memory_context() directly (escape hatch, intentionally preserved).
+    _pk_query = " ".join(
+        filter(
+            None,
+            [
+                answers.core_problem,
+                answers.ten_x_vision,
+                answers.research_focus,
+            ],
+        )
+    ).strip()
+    prior_knowledge = memory.get_context(_pk_query) if _pk_query else ""
+
     # Step 2: Research — split-topic bridge calls
-    research = ResearchAdapter(root=root, dry_run=dry_run, bridge=bridge, memory=memory)
+    research = ResearchAdapter(
+        root=root,
+        dry_run=dry_run,
+        bridge=bridge,
+        memory=memory,
+        prior_knowledge=prior_knowledge,
+    )
     result = _run_step(
         state,
         root,
@@ -233,7 +259,13 @@ def run_pipeline(state: FlowStateModel, root: Path) -> FlowStateModel:
             state.artifacts["research_report"] = a
 
     # Step 3: Strategy — single bridge call
-    strategy = StrategyAdapter(root=root, dry_run=dry_run, bridge=bridge, memory=memory)
+    strategy = StrategyAdapter(
+        root=root,
+        dry_run=dry_run,
+        bridge=bridge,
+        memory=memory,
+        prior_knowledge=prior_knowledge,
+    )
     result = _run_step(
         state,
         root,
@@ -248,7 +280,15 @@ def run_pipeline(state: FlowStateModel, root: Path) -> FlowStateModel:
             state.artifacts["strategy_report"] = a
 
     # Step 4: Management — GSD context files (already written in step 1, this enriches)
-    gsd = GSDAdapter(root=root, dry_run=dry_run, bridge=bridge, memory=memory)
+    # GSD doesn't currently consume prior_knowledge, but threading uniformly
+    # future-proofs the contract and keeps adapter construction consistent.
+    gsd = GSDAdapter(
+        root=root,
+        dry_run=dry_run,
+        bridge=bridge,
+        memory=memory,
+        prior_knowledge=prior_knowledge,
+    )
     result = _run_step(state, root, "gsd", 4, 5, lambda: gsd.new_project(state), bus=bus)
     if result and result.success:
         for a in result.artifacts:

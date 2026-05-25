@@ -89,7 +89,10 @@ class StrategyAdapter(ToolAdapter):
             )
 
         prompt = _build_pressure_test_prompt(answers)
-        prior = self.get_memory_context(f"{answers.core_problem} {answers.ten_x_vision}")
+        # prior_knowledge is built ONCE upstream in orchestrator.run_pipeline and
+        # injected via __init__. Same block as Research/GSD adapters so the
+        # server-side prompt cache hits across pipeline steps.
+        prior = self.prior_knowledge or ""
         if prior:
             prompt = prior + "\n\n---\n\n" + prompt
         br = self.bridge.run(

@@ -83,11 +83,15 @@ class ResearchAdapter(ToolAdapter):
                 artifacts=[str(report_path)],
             )
 
-        # One call per topic — short and focused
+        # One call per topic — short and focused.
+        # prior_knowledge is built ONCE upstream in orchestrator.run_pipeline and
+        # injected via __init__, so the same block prefixes every per-topic prompt.
+        # This enables Anthropic's server-side prompt cache to hit across topics
+        # (and across Research -> Strategy -> GSD) within the 5-min TTL.
+        prior = self.prior_knowledge or ""
         sections = []
         for topic in topics:
             prompt = _build_topic_prompt(topic, answers)
-            prior = self.get_memory_context(topic)
             if prior:
                 prompt = prior + "\n\n---\n\n" + prompt
             br = self.bridge.run(
