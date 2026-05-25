@@ -283,6 +283,23 @@ class MemoryStore:
 
         return "".join(lines)
 
+    def last_entry_at(self) -> datetime | None:
+        """Return the created_at timestamp of the most recently inserted memory, or None.
+
+        Public helper so callers don't reach into the private `_conn` attribute.
+        Used by the status_markdown renderer.
+        """
+        row = self._conn.execute(
+            "SELECT created_at FROM memories ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+        if row is None:
+            return None
+        raw = row["created_at"] if hasattr(row, "keys") else row[0]
+        try:
+            return datetime.fromisoformat(raw)
+        except (TypeError, ValueError):
+            return None
+
     def count(self, kind: MemoryKind | None = None) -> int:
         if kind is not None:
             row = self._conn.execute(
