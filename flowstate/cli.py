@@ -111,11 +111,53 @@ def init(
     default=None,
     help="Project root directory.",
 )
-def status(root: Path | None):
-    """Show the current state of the FlowState pipeline."""
-    from flowstate.orchestrator import print_status
+@click.option(
+    "--markdown",
+    is_flag=True,
+    help="Render as markdown (cross-session handoff format) instead of Rich table.",
+)
+@click.option(
+    "--write",
+    "write_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    is_flag=False,
+    flag_value="status.md",
+    help="Write markdown to PATH (default: status.md in cwd). Implies --markdown.",
+)
+def status(root: Path | None, markdown: bool, write_path: Path | None):
+    """Show the current state of the FlowState pipeline.
 
+    Default output is a Rich table. Use --markdown for cross-session handoff
+    format; --write PATH writes the markdown to a file.
+    """
     root = resolve_root(root, option_was_explicit=_root_was_explicit())
+
+    # --write implies --markdown
+    if write_path is not None:
+        markdown = True
+
+    if markdown:
+        from flowstate.state import load_state
+        from flowstate.status_markdown import render_status_markdown
+
+        state = load_state(root)
+        rendered = render_status_markdown(state, root)
+
+        if write_path is not None:
+            target = Path(write_path)
+            if not target.is_absolute():
+                target = Path.cwd() / target
+            target.write_text(rendered)
+            # Use click.echo (not Rich) so long absolute paths don't get soft-wrapped
+            click.echo(f"Wrote: {target.resolve()}")
+        else:
+            # Print raw markdown without Rich formatting so pipes/redirects work cleanly
+            click.echo(rendered)
+        return
+
+    # Default Rich-table path (unchanged behavior)
+    from flowstate.orchestrator import print_status
 
     console.print(Panel(BANNER, title="v" + __version__, border_style="blue", expand=False))
     print_status(root)
