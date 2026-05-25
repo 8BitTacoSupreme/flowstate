@@ -7,6 +7,19 @@ Claude CLI usage:
     claude --print [options] "prompt text"
 
 The prompt is a positional argument, not a flag.
+
+Prompt cache behavior:
+    Anthropic's server-side prompt cache fires automatically for back-to-back
+    `claude --print` subprocesses with matching ≥1024-token prefixes; no
+    per-call CLI flag exists or is needed. Empirically confirmed in spike
+    260525-o6h (see .planning/quick/260525-o6h-spike-confirm-claude-print-
+    server-side-p/260525-o6h-SPIKE.md) via `usage.cache_read_input_tokens`
+    in `--output-format json` responses. Default TTL is 5 minutes; subscribers
+    and `ENABLE_PROMPT_CACHING_1H` API-key users get 1 hour. FlowState's
+    unified memory injection (quick task 260525-m9v) produces the byte-
+    identical `## Prior Knowledge` prefix across one pipeline run, so
+    Strategy/GSD/discipline steps benefit from this caching for free —
+    document only, no BridgeConfig field required.
 """
 
 from __future__ import annotations
