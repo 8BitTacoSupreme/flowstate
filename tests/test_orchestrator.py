@@ -50,3 +50,26 @@ def test_dry_run_creates_context_files(tmp_path: Path):
     assert (tmp_path / ".planning" / "PROJECT.md").exists()
     assert (tmp_path / ".claude" / "CLAUDE.md").exists()
     assert (tmp_path / "research" / "brief.md").exists()
+
+
+def test_run_pipeline_registers_tool_artifacts(tmp_path: Path):
+    """Tool adapters that write artifacts get registered on install_manifest."""
+    state = FlowStateModel()
+    state.preferences.dry_run = True
+    state.interview.research_focus = "testing"
+    state.interview.core_problem = "Test problem"
+
+    run_pipeline(state, tmp_path)
+
+    # The research adapter writes research/report.md in dry-run mode
+    research_entries = [
+        e for e in state.install_manifest
+        if e.owner == "research" and e.kind in {"research", "artifact"}
+    ]
+    assert len(research_entries) >= 1, (
+        f"expected at least one research-owned manifest entry, got: "
+        f"{[(e.path, e.owner, e.kind) for e in state.install_manifest]}"
+    )
+    # Strategy adapter also writes research/strategy.md
+    strategy_entries = [e for e in state.install_manifest if e.owner == "strategy"]
+    assert len(strategy_entries) >= 1

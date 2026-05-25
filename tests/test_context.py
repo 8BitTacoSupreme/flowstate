@@ -144,3 +144,59 @@ class TestWriteContextFiles:
         second_content = (tmp_path / ".planning" / "PROJECT.md").read_text()
 
         assert first_content == second_content
+
+
+class TestWriteContextFilesManifest:
+    def test_write_context_files_populates_manifest(self, tmp_path: Path):
+        """write_context_files appends 5 InstallEntry rows to state.install_manifest."""
+        state = FlowStateModel()
+        state.preferences.project_name = "test-proj"
+        state.interview.core_problem = "Slow"
+        state.interview.research_focus = "x"
+
+        write_context_files(state, tmp_path)
+
+        assert len(state.install_manifest) == 5
+        expected = {
+            ".planning/PROJECT.md",
+            ".planning/ROADMAP.md",
+            ".planning/config.json",
+            ".claude/CLAUDE.md",
+            "research/brief.md",
+        }
+        actual = {e.path for e in state.install_manifest}
+        assert actual == expected
+        # All entries have sha256 checksums (64 hex chars)
+        for entry in state.install_manifest:
+            assert entry.checksum is not None
+            assert len(entry.checksum) == 64
+            assert all(c in "0123456789abcdef" for c in entry.checksum)
+
+    def test_write_context_files_is_idempotent_for_manifest(self, tmp_path: Path):
+        """Re-running write_context_files does not duplicate entries."""
+        state = FlowStateModel()
+        state.interview.core_problem = "x"
+        state.interview.research_focus = "y"
+
+        write_context_files(state, tmp_path)
+        write_context_files(state, tmp_path)
+
+        assert len(state.install_manifest) == 5
+
+    def test_write_context_files_kind_mapping(self, tmp_path: Path):
+        """config.json -> config; brief.md -> research; PROJECT.md -> context."""
+        state = FlowStateModel()
+        state.interview.core_problem = "x"
+        state.interview.research_focus = "y"
+
+        write_context_files(state, tmp_path)
+
+        by_path = {e.path: e for e in state.install_manifest}
+        assert by_path[".planning/config.json"].kind == "config"
+        assert by_path["research/brief.md"].kind == "research"
+        assert by_path[".planning/PROJECT.md"].kind == "context"
+        assert by_path[".planning/ROADMAP.md"].kind == "context"
+        assert by_path[".claude/CLAUDE.md"].kind == "context"
+        # owner is "context" for all (written by context.write_context_files)
+        for entry in state.install_manifest:
+            assert entry.owner == "context"

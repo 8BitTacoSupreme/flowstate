@@ -164,3 +164,38 @@ class TestMigration:
         # config.json entry kind
         cfg_entry = next(e for e in state.install_manifest if e.path == ".planning/config.json")
         assert cfg_entry.kind == "config"
+
+
+class TestPipelineRegistration:
+    def test_memory_db_registered_on_pipeline_start(self, tmp_path: Path):
+        """run_pipeline creates memory.db and registers it on the manifest."""
+        from flowstate.orchestrator import run_pipeline
+
+        state = FlowStateModel()
+        state.preferences.dry_run = True
+        state.interview.research_focus = "testing"
+        state.interview.core_problem = "test problem"
+
+        run_pipeline(state, tmp_path)
+
+        memory_entries = [e for e in state.install_manifest if e.path == "memory.db"]
+        assert len(memory_entries) >= 1, "expected memory.db entry in install_manifest"
+        entry = memory_entries[0]
+        assert entry.kind == "memory"
+        assert entry.checksum is None
+        assert entry.owner == "memory"
+
+    def test_memory_db_registration_is_idempotent(self, tmp_path: Path):
+        """Re-running pipeline does not duplicate memory.db entry."""
+        from flowstate.orchestrator import run_pipeline
+
+        state = FlowStateModel()
+        state.preferences.dry_run = True
+        state.interview.research_focus = "x"
+        state.interview.core_problem = "y"
+
+        run_pipeline(state, tmp_path)
+        run_pipeline(state, tmp_path)
+
+        memory_entries = [e for e in state.install_manifest if e.path == "memory.db"]
+        assert len(memory_entries) == 1
