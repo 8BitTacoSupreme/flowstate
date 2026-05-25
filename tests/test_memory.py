@@ -200,6 +200,24 @@ class TestGetContext:
         assert len(ctx) < 500 * 4 + 200  # budget + overhead
 
 
+class TestLastEntryAt:
+    def test_empty_store_returns_none(self, tmp_path: Path):
+        with MemoryStore(root=tmp_path) as store:
+            assert store.last_entry_at() is None
+
+    def test_returns_most_recent_timestamp(self, tmp_path: Path):
+        import time
+        from datetime import datetime
+
+        with MemoryStore(root=tmp_path) as store:
+            store.add(MemoryEntry.create(MemoryKind.RESEARCH, "first", "s1"))
+            time.sleep(0.01)
+            store.add(MemoryEntry.create(MemoryKind.DECISION, "second", "s2"))
+            ts = store.last_entry_at()
+            assert ts is not None
+            assert isinstance(ts, datetime)
+
+
 class TestPersistence:
     def test_data_persists_across_reopen(self, tmp_path: Path):
         entry = MemoryEntry.create(MemoryKind.RESEARCH, "persistent data", "test persistence")
