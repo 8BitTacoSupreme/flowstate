@@ -16,3 +16,6 @@ memory.db
 .coverage
 htmlcov/
 coverage.xml
+
+# Local artifacts (downloaded apps, scratch dirs)
+Claude Console-darwin-arm64/
