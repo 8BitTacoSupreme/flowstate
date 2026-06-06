@@ -133,6 +133,11 @@ def generate_claude_md(state: FlowStateModel) -> str:
 
         ## Current Phase
         See `.planning/ROADMAP.md` for phase details.
+
+        ## Repomix Pack
+        When analyzing this codebase, consult `.planning/codebase/repomix-pack.xml`
+        instead of crawling source files each wave. The pack is updated by `flowstate pack`.
+        Use the repomix MCP server (`mcp__repomix`) for targeted retrieval from the pack.
     """)
 
 
@@ -300,7 +305,23 @@ def write_context_files(state: FlowStateModel, root: Path) -> list[Path]:
     _register(state, root, brief_path, owner="context", kind="research")
     created.append(brief_path)
 
-    # Track in state
+    # .planning/fixtures/starter.json (FIX-02)
+    fixtures_dir = planning / "fixtures"
+    fixtures_dir.mkdir(exist_ok=True)
+    fixture_path = fixtures_dir / "starter.json"
+    fixture_path.write_text(
+        json.dumps(generate_starter_fixture(answers, project_name), indent=2) + "\n"
+    )
+    _register(state, root, fixture_path, owner="context", kind="fixture")
+    created.append(fixture_path)
+
+    # .mcp.json — repomix MCP server registration (PACK-03)
+    mcp_path = root / ".mcp.json"
+    mcp_path.write_text(json.dumps(scaffold_mcp_json(root), indent=2) + "\n")
+    _register(state, root, mcp_path, owner="context", kind="config")
+    created.append(mcp_path)
+
+    # Track in state — include .mcp.json in context_files (MEDIUM-5)
     state.context_files = [str(p.relative_to(root)) for p in created]
 
     return created

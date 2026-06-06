@@ -123,17 +123,19 @@ class TestWriteContextFiles:
 
         created = write_context_files(state, tmp_path)
 
-        assert len(created) == 5
+        assert len(created) == 7
         assert (tmp_path / ".planning" / "PROJECT.md").exists()
         assert (tmp_path / ".planning" / "ROADMAP.md").exists()
         assert (tmp_path / ".planning" / "config.json").exists()
         assert (tmp_path / ".claude" / "CLAUDE.md").exists()
         assert (tmp_path / "research" / "brief.md").exists()
+        assert (tmp_path / ".planning" / "fixtures" / "starter.json").exists()
+        assert (tmp_path / ".mcp.json").exists()
 
     def test_updates_state_context_files(self, tmp_path: Path):
         state = FlowStateModel()
         write_context_files(state, tmp_path)
-        assert len(state.context_files) == 5
+        assert len(state.context_files) == 7
         assert ".planning/PROJECT.md" in state.context_files
 
     def test_idempotent(self, tmp_path: Path):

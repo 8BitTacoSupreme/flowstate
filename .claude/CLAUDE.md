@@ -31,3 +31,9 @@ A CLI-first orchestrator that runs a deterministic 5-step pipeline — **Context
 ## Current Phase
 
 See `.planning/ROADMAP.md` for phase details. Codebase reference docs live in `.planning/codebase/` (run `/gsd:map-codebase` to refresh).
+
+## Repomix Pack
+
+When analyzing the FlowState codebase, consult `.planning/codebase/repomix-pack.xml`
+instead of crawling source files each wave. The pack is updated by `flowstate pack`.
+Use the repomix MCP server (`mcp__repomix`) for targeted retrieval from the pack.
