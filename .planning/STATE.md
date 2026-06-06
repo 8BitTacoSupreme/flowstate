@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v0.4.0
 milestone_name: Context Compaction & Compounding
-status: planning
+status: in_progress
 last_updated: "2026-06-06T17:20:33.845Z"
 last_activity: 2026-06-06
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,17 +17,24 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-25)
+See: .planning/PROJECT.md (updated 2026-06-06)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Phase 02 — operate-safely
+**Current focus:** Phase 03 — Ingredients (Pack, Canon, Fixtures)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 3 — Ingredients (Pack, Canon, Fixtures)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-06 — Milestone v0.4.0 started
+Status: Not started
+Last activity: 2026-06-06 — Roadmap created for v0.4.0 (Phases 3–5)
+
+```
+v0.4.0 Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/3 phases)
+Phase 3: Not started
+Phase 4: Not started
+Phase 5: Not started
+```
 
 ## Performance Metrics
 
@@ -77,6 +84,8 @@ Recent decisions affecting current work:
 - [Phase 02]: Pydantic-immutable-safe checksum updates via entry.model_copy(update={...}) + rebuilt list, NOT in-place attribute assignment
 - [Phase 02]: Safe vs destructive repair split: orphan deletion + corrupt-db recreation require explicit --apply-destructive flag
 - [Phase 02]: CliRunner env-isolation via monkeypatch.setenv (writes to os.environ) — avoids env= per-invoke plumbing (plan-checker W4)
+- [v0.4.0 roadmap]: Coarse granularity (3 phases) — single maintainer; phases 3/4/5 follow natural dependency boundary (ingredients → compose → UX)
+- [v0.4.0 roadmap]: Phase 5 depends on Phase 4 softly — kickoff reuses pack+fixture scaffold from Phases 3-4, but DX-01 (SUMMARY frontmatter) is independent
 
 ### Pending Todos
 
@@ -84,8 +93,7 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 1 has known fragile files (cli.py, discipline.py, launcher.py, memory.py) with ~370 unstaged lines; commit order matters — run full test suite before each commit
-- INST-01 must land before DOCT-01/DOCT-02 (doctor reads the manifest); within Phase 2 HOOK-01/HOOK-02 are independent of INST/DOCT/STAT work
+None at roadmap start. PACK-01 (repomix CLI locator) should mirror bridge._find_claude() pattern — check that pattern is stable before Phase 3 planning.
 
 ### Quick Tasks Completed
 
@@ -96,11 +104,11 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-05-25T19:28:01.453Z
-Stopped at: Completed 02-02-PLAN.md (DOCT-01/02): doctor + repair with safe vs destructive split, Pydantic model_copy for checksum drift
+Last session: 2026-06-06
+Stopped at: Roadmap created for v0.4.0 — Phases 3, 4, 5 defined with success criteria
 Resume file: None
-Next step: `/gsd:plan-phase 2` to plan the install-manifest + doctor/repair + status --markdown + hook env-gating work.
+Next step: `/gsd:plan-phase 3` to plan the Ingredients phase (pack + canon + fixtures)
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Run `/gsd:plan-phase 3` to plan Phase 3 (Ingredients: Pack, Canon, Fixtures)
