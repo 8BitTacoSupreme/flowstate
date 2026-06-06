@@ -35,7 +35,7 @@ Requirements for this milestone. Each maps to a roadmap phase (Phases 3–5, con
 
 ### Developer Experience (DX)
 
-- [ ] **DX-01**: Standardize a `status:` field (`complete` / `verified` / `blocked` / `paused` / `drafted`) in quick-task and phase SUMMARY frontmatter; backfill the two existing quick tasks so `audit-open` stops false-flagging shipped work.
+- [x] **DX-01**: Standardize a `status:` field (`complete` / `verified` / `blocked` / `paused` / `drafted`) in quick-task and phase SUMMARY frontmatter; backfill the two existing quick tasks so `audit-open` stops false-flagging shipped work.
 - [x] **DX-02**: Add "use the Repomix pack instead of crawling source every wave" guidance to FlowState's own `.claude/CLAUDE.md` AND the `generate_claude_md()` template for downstream projects.
 
 ## v2 Requirements
@@ -74,7 +74,7 @@ Explicitly excluded for this milestone.
 | CAG-03 | Phase 4 | Complete |
 | KICK-01 | Phase 5 | Complete |
 | KICK-02 | Phase 5 | Complete |
-| DX-01 | Phase 5 | Pending |
+| DX-01 | Phase 5 | Complete |
 
 **Coverage:**
 - v1 requirements: 13 total

@@ -21,7 +21,7 @@ Full detail: [`milestones/v0.3.0-ROADMAP.md`](./milestones/v0.3.0-ROADMAP.md)
 
 - [ ] **Phase 3: Ingredients** — Pack, Canon, and Fixtures exist as independently-testable artifacts before anything composes them
 - [x] **Phase 4: Integration** — Layered CAG assembly with cache-optimized prefix built once per run; repomix-MCP overflow path (completed 2026-06-06)
-- [ ] **Phase 5: UX** — Scaffold-only `flowstate kickoff` command + SUMMARY `status:` frontmatter standardization
+- [x] **Phase 5: UX** — Scaffold-only `flowstate kickoff` command + SUMMARY `status:` frontmatter standardization (completed 2026-06-06)
 
 ## Phase Details
 
@@ -66,7 +66,7 @@ Plans:
 **Plans**: 2 plans
 Plans:
 - [x] 05-01-PLAN.md — `flowstate kickoff` scaffold-only command + enhanced shared interview (KICK-01/02)
-- [ ] 05-02-PLAN.md — `status:` SUMMARY frontmatter convention + backfill 2 quick tasks so audit-open clears (DX-01)
+- [x] 05-02-PLAN.md — `status:` SUMMARY frontmatter convention + backfill 2 quick tasks so audit-open clears (DX-01)
 **UI hint**: no
 
 ## Progress
@@ -77,4 +77,4 @@ Plans:
 | 2. Operate Safely                               | v0.3.0    | 4/4            | Complete    | 2026-05-25 |
 | 3. Ingredients — Pack, Canon, Fixtures          | v0.4.0    | 3/3 | Complete   | 2026-06-06 |
 | 4. Integration — Layered CAG Assembly           | v0.4.0    | 1/1 | Complete   | 2026-06-06 |
-| 5. UX — Guided Kickoff + Hygiene                | v0.4.0    | 1/2 | In Progress|  |
+| 5. UX — Guided Kickoff + Hygiene                | v0.4.0    | 2/2 | Complete   | 2026-06-06 |
