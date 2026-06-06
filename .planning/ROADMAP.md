@@ -43,14 +43,16 @@ Plans:
 **UI hint**: no
 
 ### Phase 4: Integration — Layered CAG Assembly + Cache Lean-In
-**Goal**: The orchestrator composes canon → fixtures → pack (if it fits) → memory into one ordered, cache-optimized prefix built once per run, with repomix-MCP retrieval as the overflow path; the m9v byte-identical-prefix cache behavior is preserved.
+**Goal**: The orchestrator composes fixtures → pack (if it fits) → memory into one ordered, cache-optimized user-prompt prefix built once per run (canon already ships in the bridge system prompt from Phase 3), with repomix-MCP retrieval as the overflow path; the m9v byte-identical-prefix cache behavior is preserved.
 **Depends on**: Phase 3
 **Requirements**: CAG-01, CAG-02, CAG-03
 **Success Criteria** (what must be TRUE):
-  1. A single `build_context_prefix()` call returns an ordered string (canon → fixtures → pack or omit → memory) that is threaded into all adapters via the existing `prior_knowledge` seam — no adapter calls `build_context_prefix()` independently
+  1. A single `build_context_prefix()` call returns an ordered string (fixtures → pack if it fits → memory) that is threaded into all adapters via the existing `prior_knowledge` seam — no adapter calls `build_context_prefix()` independently (canon ships in the bridge system prompt, NOT in this user-prompt prefix, per the CAG-01 locked decision — re-emitting it would double-inject)
   2. When the pack pushes the prefix over budget, `build_context_prefix()` retries with `repomix --compress`; if still over, it omits the pack entirely and logs the decision — no content is silently dropped
   3. Consecutive runs against the same codebase produce an identical prefix byte-for-byte up to the memory section, confirming the stable-prefix cache property; bridge docs describe the cache behavior and `ENABLE_PROMPT_CACHING_1H` opt-in
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 04-01-PLAN.md — build_context_prefix() assembler (fixtures→pack→memory) + fit/compress/omit ladder + orchestrator seam threading + ENABLE_PROMPT_CACHING_1H opt-in (CAG-01/02/03)
 **UI hint**: no
 
 ### Phase 5: UX — Guided Kickoff + Hygiene
@@ -71,5 +73,5 @@ Plans:
 | 1. Land the v2 Pivot                            | v0.3.0    | direct         | Complete    | 2026-05-25 (b38bbd6) |
 | 2. Operate Safely                               | v0.3.0    | 4/4            | Complete    | 2026-05-25 |
 | 3. Ingredients — Pack, Canon, Fixtures          | v0.4.0    | 3/3 | Complete   | 2026-06-06 |
-| 4. Integration — Layered CAG Assembly           | v0.4.0    | 0/?            | Not started | - |
+| 4. Integration — Layered CAG Assembly           | v0.4.0    | 0/1            | Not started | - |
 | 5. UX — Guided Kickoff + Hygiene                | v0.4.0    | 0/?            | Not started | - |
