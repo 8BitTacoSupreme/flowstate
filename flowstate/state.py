@@ -48,7 +48,7 @@ class InstallEntry(BaseModel):
 
     path: str
     owner: str
-    kind: Literal["config", "context", "memory", "research", "artifact"]
+    kind: Literal["config", "context", "memory", "research", "artifact", "pack", "fixture"]
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     checksum: str | None = None
 
@@ -63,7 +63,7 @@ _CURRENT_TOOL_KEYS = ["research", "strategy", "gsd", "discipline"]
 
 
 class FlowStateModel(BaseModel):
-    version: str = "0.3.0"
+    version: str = "0.4.0"
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     interview: InterviewAnswers = Field(default_factory=InterviewAnswers)
@@ -93,9 +93,10 @@ def _migrate_state(data: dict) -> dict:
 
     v0.1.0 → v0.2.0: rename old tool keys (autoresearch/gstack/superpowers).
     v0.2.0 → v0.3.0: add empty install_manifest (filled in by backfill on first load).
+    v0.3.0 → v0.4.0: extend InstallEntry.kind Literal with pack + fixture (backward-compatible).
     """
     version = data.get("version", "0.1.0")
-    if version >= "0.3.0":
+    if version >= "0.4.0":
         return data
 
     # v0.1.0 → v0.2.0 (tool key rename)
@@ -124,6 +125,11 @@ def _migrate_state(data: dict) -> dict:
         if "install_manifest" not in data:
             data["install_manifest"] = []
         data["version"] = "0.3.0"
+        version = "0.3.0"
+
+    # v0.3.0 → v0.4.0 (extend install_manifest kind literals: pack + fixture)
+    if version < "0.4.0":
+        data["version"] = "0.4.0"
 
     return data
 

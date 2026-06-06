@@ -38,7 +38,7 @@ class TestInstallEntry:
         assert entry.checksum is None
 
     def test_install_entry_accepts_all_valid_kinds(self):
-        for kind in ("config", "context", "memory", "research", "artifact"):
+        for kind in ("config", "context", "memory", "research", "artifact", "pack", "fixture"):
             entry = InstallEntry(path="x", owner="o", kind=kind)
             assert entry.kind == kind
 
@@ -49,9 +49,9 @@ class TestFlowStateModelManifest:
         state = FlowStateModel()
         assert state.install_manifest == []
 
-    def test_default_version_is_030(self):
+    def test_default_version_is_040(self):
         state = FlowStateModel()
-        assert state.version == "0.3.0"
+        assert state.version == "0.4.0"
 
     def test_save_load_roundtrip_preserves_manifest(self, tmp_path: Path):
         """Manifest survives save/load 1:1."""
@@ -95,7 +95,7 @@ class TestFlowStateModelManifest:
 
 class TestMigration:
     def test_migrate_v020_adds_empty_manifest(self):
-        """v0.2.0 data without install_manifest gets one (empty) and bumps to 0.3.0."""
+        """v0.2.0 data without install_manifest gets one (empty) and bumps to 0.4.0."""
         data = {
             "version": "0.2.0",
             "tools": {
@@ -106,11 +106,11 @@ class TestMigration:
             },
         }
         migrated = _migrate_state(data)
-        assert migrated["version"] == "0.3.0"
+        assert migrated["version"] == "0.4.0"
         assert migrated["install_manifest"] == []
 
     def test_migrate_v030_noop(self):
-        """v0.3.0 data is not modified."""
+        """v0.3.0 data is migrated to 0.4.0 (guard no longer short-circuits at 0.3.0)."""
         data = {
             "version": "0.3.0",
             "tools": {},
@@ -125,8 +125,23 @@ class TestMigration:
             ],
         }
         migrated = _migrate_state(data)
-        assert migrated["version"] == "0.3.0"
+        assert migrated["version"] == "0.4.0"
         assert len(migrated["install_manifest"]) == 1
+
+    def test_migrate_v030_to_v040(self):
+        """v0.3.0 state migrates to v0.4.0; existing entries are preserved unchanged."""
+        data = {
+            "version": "0.3.0",
+            "tools": {
+                "research": {"status": "ready"},
+                "strategy": {"status": "ready"},
+                "gsd": {"status": "ready"},
+                "discipline": {"status": "ready"},
+            },
+            "install_manifest": [],
+        }
+        migrated = _migrate_state(data)
+        assert migrated["version"] == "0.4.0"
 
     def test_load_backfills_manifest_from_disk(self, tmp_path: Path):
         """Loading a v0.2.0 flowstate.json on a project with existing files backfills manifest."""
@@ -155,8 +170,8 @@ class TestMigration:
         assert ".planning/PROJECT.md" in paths
         assert ".planning/ROADMAP.md" in paths
         assert ".planning/config.json" in paths
-        # version was migrated
-        assert state.version == "0.3.0"
+        # version was migrated (v0.2.0 → v0.3.0 → v0.4.0)
+        assert state.version == "0.4.0"
 
         # PROJECT.md entry kind
         project_entry = next(e for e in state.install_manifest if e.path == ".planning/PROJECT.md")

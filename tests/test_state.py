@@ -73,7 +73,7 @@ def test_context_files_field():
 
 
 def test_migrate_v010_state():
-    """Old v0.1.0 state with autoresearch/gstack/superpowers keys gets chain-migrated to v0.3.0."""
+    """Old v0.1.0 state with autoresearch/gstack/superpowers keys gets chain-migrated to v0.4.0."""
     old_data = {
         "version": "0.1.0",
         "tools": {
@@ -84,8 +84,8 @@ def test_migrate_v010_state():
         },
     }
     migrated = _migrate_state(old_data)
-    # Chained migration: v0.1.0 → v0.2.0 → v0.3.0
-    assert migrated["version"] == "0.3.0"
+    # Chained migration: v0.1.0 → v0.2.0 → v0.3.0 → v0.4.0
+    assert migrated["version"] == "0.4.0"
     assert "research" in migrated["tools"]
     assert "strategy" in migrated["tools"]
     assert "discipline" in migrated["tools"]
@@ -96,7 +96,7 @@ def test_migrate_v010_state():
     assert migrated["install_manifest"] == []
 
 
-def test_chained_migration_v010_to_v030():
+def test_chained_migration_v010_to_v040():
     """Explicit test of the full chained migration path."""
     old_data = {
         "version": "0.1.0",
@@ -108,13 +108,13 @@ def test_chained_migration_v010_to_v030():
         },
     }
     migrated = _migrate_state(old_data)
-    assert migrated["version"] == "0.3.0"
+    assert migrated["version"] == "0.4.0"
     assert "install_manifest" in migrated
     assert "context_files" in migrated  # added by v0.2.0 step
 
 
-def test_migrate_v030_noop():
-    """v0.3.0 state should not be modified."""
+def test_migrate_v030_to_v040():
+    """v0.3.0 state migrates to v0.4.0 (guard no longer short-circuits at 0.3.0)."""
     data = {
         "version": "0.3.0",
         "tools": {
@@ -126,7 +126,7 @@ def test_migrate_v030_noop():
         "install_manifest": [],
     }
     migrated = _migrate_state(data)
-    assert migrated["version"] == "0.3.0"
+    assert migrated["version"] == "0.4.0"
     assert "research" in migrated["tools"]
 
 
@@ -183,5 +183,5 @@ def test_load_v010_state_file(tmp_path: Path):
     loaded = load_state(tmp_path)
     assert "research" in loaded.tools
     assert loaded.tools["research"].status == ToolStatus.COMPLETED
-    # Chained migration brings v0.1.0 up to current v0.3.0
-    assert loaded.version == "0.3.0"
+    # Chained migration brings v0.1.0 up to current v0.4.0
+    assert loaded.version == "0.4.0"
