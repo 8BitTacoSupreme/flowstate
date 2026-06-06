@@ -38,7 +38,7 @@ Full detail: [`milestones/v0.3.0-ROADMAP.md`](./milestones/v0.3.0-ROADMAP.md)
 **Plans**: 3 plans
 Plans:
 - [x] 03-01-PLAN.md — Repomix pack: locator + run_pack + staleness + `flowstate pack` CLI + InstallEntry kind (PACK-01/02/03)
-- [ ] 03-02-PLAN.md — Karpathy CANON constant + `inject_canon` flag prepended to every claude --print system prompt (CANON-01)
+- [x] 03-02-PLAN.md — Karpathy CANON constant + `inject_canon` flag prepended to every claude --print system prompt (CANON-01)
 - [ ] 03-03-PLAN.md — ECC-modeled starter fixture + `.mcp.json` registration + repomix-pack CLAUDE.md guidance (FIX-01/02, DX-02)
 **UI hint**: no
 
@@ -70,6 +70,6 @@ Plans:
 | ----------------------------------------------- | --------- | -------------- | ----------- | --------- |
 | 1. Land the v2 Pivot                            | v0.3.0    | direct         | Complete    | 2026-05-25 (b38bbd6) |
 | 2. Operate Safely                               | v0.3.0    | 4/4            | Complete    | 2026-05-25 |
-| 3. Ingredients — Pack, Canon, Fixtures          | v0.4.0    | 1/3            | Executing   | - |
+| 3. Ingredients — Pack, Canon, Fixtures          | v0.4.0    | 2/3 | In Progress|  |
 | 4. Integration — Layered CAG Assembly           | v0.4.0    | 0/?            | Not started | - |
 | 5. UX — Guided Kickoff + Hygiene                | v0.4.0    | 0/?            | Not started | - |

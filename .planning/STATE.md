@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.4.0
 milestone_name: Context Compaction & Compounding
 status: executing
-stopped_at: "Phase 03 Plan 01 complete — repomix pack service + CLI + mcp__repomix passthrough"
-last_updated: "2026-06-06T17:51:30Z"
-last_activity: "2026-06-06 -- Phase 03 Plan 01 executed (3 tasks, 7 files)"
+stopped_at: "Phase 03 Plan 02 complete — CANON constant + inject_canon in BridgeConfig"
+last_updated: "2026-06-06T18:05:00Z"
+last_activity: 2026-06-06
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
-  percent: 11
+  completed_plans: 2
+  percent: 22
 ---
 
 # Project State
@@ -26,13 +26,13 @@ See: .planning/PROJECT.md (updated 2026-06-06)
 ## Current Position
 
 Phase: 03 (ingredients-pack-canon-fixtures) — EXECUTING
-Plan: 2 of 3
-Status: Plan 01 complete; Plan 02 (CANON-01) next
-Last activity: 2026-06-06 -- Phase 03 Plan 01 complete
+Plan: 3 of 3
+Status: Plan 02 complete; Plan 03 (FIX-01/02) next
+Last activity: 2026-06-06
 
 ```
-v0.4.0 Progress: [██░░░░░░░░░░░░░░░░░░] 11% (1/9 plans)
-Phase 3: 1/3 plans complete
+v0.4.0 Progress: [████░░░░░░░░░░░░░░░░] 22% (2/9 plans)
+Phase 3: 2/3 plans complete
 Phase 4: Not started
 Phase 5: Not started
 ```
@@ -61,6 +61,7 @@ Phase 5: Not started
 | Phase 02 P01 | 12min | 3 tasks | 8 files |
 | Phase 02 P03 | 4min | 2 tasks | 5 files |
 | Phase 02 P02 | 6min | 3 tasks | 6 files |
+| Phase 03 P02 | 5m | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,9 @@ Recent decisions affecting current work:
 - [Phase 03 P01]: is_pack_stale uses entry.created_at.timestamp() vs max(*.py mtime); no py files = not stale
 - [Phase 03 P01]: _make_bridge passes allowed_tools=['mcp__repomix'] as kwargs alongside project_root — single construction site, explicit override
 - [Phase 03 P01]: v0.3.0->v0.4.0 migration guard fixed from '>= 0.3.0' to '>= 0.4.0' so 0.3.0 state flows into migration ladder
+- [Phase 03 P02]: CANON constant placed before _SENTINEL at module level; inject_canon=True default covers all callers without opt-in
+- [Phase 03 P02]: final_system.strip() guard ensures --system-prompt omitted when inject_canon=False and no system_prompt
+- [Phase 03 P02]: CANON text lifted verbatim from /Users/jhogan/CLAUDE.md §1-4; no paraphrase
 
 ### Pending Todos
 
@@ -111,10 +115,10 @@ None at roadmap start. PACK-01 (repomix CLI locator) should mirror bridge._find_
 ## Session Continuity
 
 Last session: 2026-06-06
-Stopped at: Phase 03 Plan 01 complete — repomix pack service + CLI + mcp__repomix passthrough
+Stopped at: Phase 03 Plan 02 complete — CANON constant + inject_canon in BridgeConfig
 Resume file: None
-Next step: Execute 03-02-PLAN.md (CANON-01: Karpathy CANON constant + inject_canon flag)
+Next step: Execute 03-03-PLAN.md (FIX-01/02: ECC-modeled eval fixtures)
 
 ## Operator Next Steps
 
-- Execute 03-02-PLAN.md (CANON-01: Karpathy CANON constant + inject_canon in BridgeConfig)
+- Execute 03-03-PLAN.md (FIX-01/02: eval fixtures scaffolding)

@@ -15,7 +15,7 @@ Requirements for this milestone. Each maps to a roadmap phase (Phases 3–5, con
 
 ### Canon (CANON)
 
-- [ ] **CANON-01**: The four Karpathy guidelines ship as a `CANON` constant in `flowstate/bridge.py`, prepended to every `claude --print` system prompt as the first (most stable) CAG layer. Suppressible via a `BridgeConfig.inject_canon` flag (default `True`).
+- [x] **CANON-01**: The four Karpathy guidelines ship as a `CANON` constant in `flowstate/bridge.py`, prepended to every `claude --print` system prompt as the first (most stable) CAG layer. Suppressible via a `BridgeConfig.inject_canon` flag (default `True`).
 
 ### Eval Fixtures (FIX)
 
@@ -65,7 +65,7 @@ Explicitly excluded for this milestone.
 | PACK-01 | Phase 3 | Pending |
 | PACK-02 | Phase 3 | Pending |
 | PACK-03 | Phase 3 | Pending |
-| CANON-01 | Phase 3 | Pending |
+| CANON-01 | Phase 3 | Complete |
 | FIX-01 | Phase 3 | Pending |
 | FIX-02 | Phase 3 | Pending |
 | DX-02 | Phase 3 | Pending |
