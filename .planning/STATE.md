@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v0.3.0
 milestone_name: milestone
-status: verifying
+status: Awaiting next milestone
 stopped_at: "Completed 02-02-PLAN.md (DOCT-01/02): doctor + repair with safe vs destructive split, Pydantic model_copy for checksum drift"
-last_updated: "2026-05-25T19:36:08.744Z"
-last_activity: 2026-05-25
+last_updated: "2026-06-06T16:44:51.729Z"
+last_activity: 2026-06-06 — Milestone v0.3.0 completed and archived
 progress:
   total_phases: 2
   completed_phases: 1
@@ -25,12 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-25)
 
 ## Current Position
 
-Phase: 02
-Plan: Not started
-Status: Milestone v0.3 complete — quick task 260525-o6h landed (claude --print cache spike confirmed)
-Last activity: 2026-05-25 - Completed quick task 260525-o6h: Spike claude --print prompt cache behavior
-
-Progress: [█████░░░░░] 50% (1/2 phases complete)
+Phase: Milestone v0.3.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-06 — Milestone v0.3.0 completed and archived
 
 ## Performance Metrics
 
@@ -103,3 +101,7 @@ Last session: 2026-05-25T19:28:01.453Z
 Stopped at: Completed 02-02-PLAN.md (DOCT-01/02): doctor + repair with safe vs destructive split, Pydantic model_copy for checksum drift
 Resume file: None
 Next step: `/gsd:plan-phase 2` to plan the install-manifest + doctor/repair + status --markdown + hook env-gating work.
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

@@ -53,7 +53,7 @@ _None — see `/gsd:new-milestone` to plan the next cycle._
 
 ## Context
 
-- **Brownfield, mid-pivot:** v2 work is unstaged on `main` — git status shows `cli.py`, `discipline.py`, `launcher.py`, `memory.py`, plus new `flowstate/config.py` and `tests/test_config.py`, plus deleted `.planning/PROJECT.md` / `.planning/config.json` / `CONTEXT.md`. ~370 lines changed across 7 files. Phase 1 closes this loop.
+- **v2 pivot landed (v0.3.0):** the formerly-unstaged v2 work committed cleanly in Phase 1 (b38bbd6) — `config.py` default-root resolution wired across the CLI, FTS5 sanitization, built-in tool markers, version at 0.3.0. Working tree is clean on `main`.
 - **Codebase map fresh:** `.planning/codebase/` was just regenerated (2026-05-25) — STACK, ARCHITECTURE, STRUCTURE, CONVENTIONS, TESTING, INTEGRATIONS, CONCERNS. Use these as canonical reference during planning.
 - **ECC comparison done:** Researched `affaan-m/ECC` (192K-star agent-harness performance system, 7-harness packaging, 60 agents, 232 skills, Rust rewrite in flight). Stole 4 patterns into this milestone (Active); explicitly rejected the surface-area-explosion patterns (Out of Scope).
 - **Single maintainer.** Granularity choices favor "few broad phases" over many small ones to avoid coordination overhead.
@@ -93,4 +93,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-25 after Phase 2 (operate-safely) completion — milestone v0.3 complete*
+*Last updated: 2026-06-06 after v0.3.0 milestone completion (v2 Pivot + Operate-Safely) — archived, tagged*
