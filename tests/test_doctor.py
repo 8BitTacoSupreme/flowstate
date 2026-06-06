@@ -26,7 +26,7 @@ from flowstate.state import FlowStateModel, InstallEntry, ToolStatus
 class TestDiagnosis:
     def test_is_frozen(self):
         d = Diagnosis(name="x", severity="info", message="m")
-        with pytest.raises(Exception):
+        with pytest.raises(AttributeError):  # frozen dataclass raises FrozenInstanceError
             d.name = "y"  # type: ignore[misc]
 
     def test_default_fix_hint_none(self):
