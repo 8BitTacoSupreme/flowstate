@@ -79,9 +79,7 @@ def _render_active_phase(root: Path) -> str:
     # Look for `- [ ] **Phase N: name**` markers first (in-progress phases)
     unchecked = re.search(r"- \[ \] \*\*(Phase \d+:[^*]+)\*\*", text)
     if unchecked:
-        return (
-            f"## Active Phase\n\n**{unchecked.group(1).strip()}** (from .planning/ROADMAP.md)"
-        )
+        return f"## Active Phase\n\n**{unchecked.group(1).strip()}** (from .planning/ROADMAP.md)"
     # Fall back to first `### Phase N:` heading
     any_phase = re.search(r"###\s+(Phase \d+:[^\n]+)", text)
     if any_phase:

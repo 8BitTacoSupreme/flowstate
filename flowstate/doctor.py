@@ -120,8 +120,7 @@ def check_root_resolution(root: Path) -> list[Diagnosis]:
                 severity="error",
                 message=f"Resolved root is not a directory: {root}",
                 fix_hint=(
-                    "Run `flowstate config clear-root` to reset, "
-                    "then re-run with explicit --root."
+                    "Run `flowstate config clear-root` to reset, then re-run with explicit --root."
                 ),
             )
         ]

@@ -42,9 +42,7 @@ def handler(
         def on_started(event: Event) -> None: ...
     """
     if profile not in VALID_PROFILES:
-        raise ValueError(
-            f"Invalid profile {profile!r}. Must be one of {VALID_PROFILES}."
-        )
+        raise ValueError(f"Invalid profile {profile!r}. Must be one of {VALID_PROFILES}.")
 
     def decorator(fn: Callable) -> Callable:
         fn.event_types = list(event_types)  # type: ignore[attr-defined]

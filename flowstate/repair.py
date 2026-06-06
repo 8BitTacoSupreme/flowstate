@@ -80,9 +80,7 @@ def apply_safe_fixes(
     # models. Use model_copy(update=...) to produce a new entry and rebuild
     # the manifest list.
     drift = [
-        d
-        for d in diagnoses
-        if d.name == "manifest_integrity" and "drift" in d.message.lower()
+        d for d in diagnoses if d.name == "manifest_integrity" and "drift" in d.message.lower()
     ]
     updated_paths: list[str] = []
     if drift:
@@ -130,9 +128,7 @@ def apply_destructive_fixes(
 
     # 2. Recreate memory.db when unreadable
     unreadable = [
-        d
-        for d in diagnoses
-        if d.name == "memory_schema" and "unreadable" in d.message.lower()
+        d for d in diagnoses if d.name == "memory_schema" and "unreadable" in d.message.lower()
     ]
     if unreadable:
         db_path = root / "memory.db"

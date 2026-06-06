@@ -8,7 +8,6 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from flowstate.doctor import Diagnosis
-from flowstate.memory import MemoryStore
 from flowstate.repair import (
     KNOWN_CONTEXT_FILES,
     apply_destructive_fixes,
@@ -56,9 +55,10 @@ class TestApplySafeFixes:
         assert any("recreated memory.db schema" in line for line in applied)
         assert (tmp_path / "memory.db").exists()
         conn = sqlite3.connect(str(tmp_path / "memory.db"))
-        tables = {r[0] for r in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()}
+        tables = {
+            r[0]
+            for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        }
         conn.close()
         assert "memories" in tables
 
@@ -140,9 +140,10 @@ class TestApplyDestructiveFixes:
         )
         applied = apply_destructive_fixes(state, tmp_path, [d])
         conn = sqlite3.connect(str(tmp_path / "memory.db"))
-        tables = {r[0] for r in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()}
+        tables = {
+            r[0]
+            for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        }
         conn.close()
         assert "memories" in tables
         assert any("recreated memory.db" in line for line in applied)
