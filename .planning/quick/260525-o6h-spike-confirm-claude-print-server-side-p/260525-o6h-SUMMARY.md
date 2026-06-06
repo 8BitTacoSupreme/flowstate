@@ -1,3 +1,9 @@
+---
+status: complete
+phase: quick-260525-o6h
+plan: "01"
+---
+
 # 260525-o6h — SUMMARY
 
 **Task:** Spike: confirm `claude --print` server-side prompt-cache behavior + document/wire findings.
