@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.4.0
 milestone_name: Context Compaction & Compounding
 status: executing
-stopped_at: "Phase 03 Plan 02 complete — CANON constant + inject_canon in BridgeConfig"
-last_updated: "2026-06-06T18:05:00Z"
+stopped_at: "Phase 03 Plan 03 complete — ECC fixtures + .mcp.json + DX-02 repomix guidance"
+last_updated: "2026-06-06T18:10:00Z"
 last_activity: 2026-06-06
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
-  percent: 22
+  completed_plans: 3
+  percent: 33
 ---
 
 # Project State
@@ -25,14 +25,14 @@ See: .planning/PROJECT.md (updated 2026-06-06)
 
 ## Current Position
 
-Phase: 03 (ingredients-pack-canon-fixtures) — EXECUTING
-Plan: 3 of 3
-Status: Plan 02 complete; Plan 03 (FIX-01/02) next
+Phase: 03 (ingredients-pack-canon-fixtures) — COMPLETE
+Plan: 3 of 3 (all complete)
+Status: Phase 03 complete; Phase 04 (Integration — Layered CAG Assembly) next
 Last activity: 2026-06-06
 
 ```
-v0.4.0 Progress: [████░░░░░░░░░░░░░░░░] 22% (2/9 plans)
-Phase 3: 2/3 plans complete
+v0.4.0 Progress: [██████░░░░░░░░░░░░░░] 33% (3/9 plans)
+Phase 3: 3/3 plans complete (DONE)
 Phase 4: Not started
 Phase 5: Not started
 ```
@@ -62,6 +62,7 @@ Phase 5: Not started
 | Phase 02 P03 | 4min | 2 tasks | 5 files |
 | Phase 02 P02 | 6min | 3 tasks | 6 files |
 | Phase 03 P02 | 5m | 1 tasks | 2 files |
+| Phase 03 P03 | 7m | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -96,6 +97,9 @@ Recent decisions affecting current work:
 - [Phase 03 P02]: CANON constant placed before _SENTINEL at module level; inject_canon=True default covers all callers without opt-in
 - [Phase 03 P02]: final_system.strip() guard ensures --system-prompt omitted when inject_canon=False and no system_prompt
 - [Phase 03 P02]: CANON text lifted verbatim from /Users/jhogan/CLAUDE.md §1-4; no paraphrase
+- [Phase 03 P03]: generate_starter_fixture is a pure function (no I/O) matching existing generate_* style
+- [Phase 03 P03]: write_context_files count grows 5→7; .mcp.json included in state.context_files via shared created-list assignment
+- [Phase 03 P03]: DX-02 guidance appended to generate_claude_md dedent template as ## Repomix Pack section
 
 ### Pending Todos
 
@@ -115,10 +119,10 @@ None at roadmap start. PACK-01 (repomix CLI locator) should mirror bridge._find_
 ## Session Continuity
 
 Last session: 2026-06-06
-Stopped at: Phase 03 Plan 02 complete — CANON constant + inject_canon in BridgeConfig
+Stopped at: Phase 03 Plan 03 complete — ECC fixtures + .mcp.json + DX-02 repomix guidance
 Resume file: None
-Next step: Execute 03-03-PLAN.md (FIX-01/02: ECC-modeled eval fixtures)
+Next step: Execute Phase 04 (Integration — Layered CAG Assembly + Cache Lean-In)
 
 ## Operator Next Steps
 
-- Execute 03-03-PLAN.md (FIX-01/02: eval fixtures scaffolding)
+- Begin Phase 04 planning: build_context_prefix() + fit/compress/omit logic + cache lean-in
