@@ -100,7 +100,7 @@ def _register_tool_artifact(
 
 
 def _make_bridge(root: Path, dry_run: bool, preferences=None) -> ClaudeBridge:
-    kwargs = {"project_root": root}
+    kwargs: dict = {"project_root": root, "allowed_tools": ["mcp__repomix"]}
     if preferences:
         if preferences.model:
             kwargs["model"] = preferences.model

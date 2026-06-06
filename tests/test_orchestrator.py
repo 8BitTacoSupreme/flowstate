@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from flowstate.orchestrator import run_pipeline
+from flowstate.orchestrator import _make_bridge, run_pipeline
 from flowstate.state import FlowStateModel, ToolStatus
 
 
@@ -151,6 +151,23 @@ def test_pipeline_builds_prior_knowledge_once_and_threads_it(tmp_path: Path, mon
         == init_records["strategy"]["prior_knowledge"]
         == init_records["gsd"]["prior_knowledge"]
     )
+
+
+class TestMakeBridgeAllowedTools:
+    def test_mcp_repomix_in_allowed_tools(self, tmp_path: Path):
+        """_make_bridge always grants mcp__repomix to spawned agents (PACK-03)."""
+        bridge = _make_bridge(tmp_path, dry_run=True)
+        assert "mcp__repomix" in bridge.config.allowed_tools
+
+    def test_mcp_repomix_with_preferences(self, tmp_path: Path):
+        """mcp__repomix is granted even when preferences override model/budget/effort."""
+        state = FlowStateModel()
+        state.preferences.model = "claude-3-sonnet"
+        state.preferences.max_budget_usd = 1.0
+        state.preferences.effort = "low"
+
+        bridge = _make_bridge(tmp_path, dry_run=True, preferences=state.preferences)
+        assert "mcp__repomix" in bridge.config.allowed_tools
 
 
 def test_pipeline_empty_interview_skips_memory_lookup(tmp_path: Path, monkeypatch):

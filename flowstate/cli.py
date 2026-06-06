@@ -497,6 +497,48 @@ def fresh(root: Path | None, yes: bool, force: bool):
     console.print(f"\n[green]Removed {removed} items. Ready for flowstate init.[/green]")
 
 
+@main.command("pack")
+@click.option(
+    "--root",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Project root directory.",
+)
+@click.option("--compress", is_flag=True, help="Pass --compress to repomix (reduces token count).")
+@click.option("--force", is_flag=True, help="Repack even when the existing pack is up to date.")
+def pack(root: Path | None, compress: bool, force: bool):
+    """Generate the repomix codebase pack at .planning/codebase/repomix-pack.xml.
+
+    Skips regeneration when the pack is up to date (no source file is newer than
+    the pack's install_manifest entry). Use --force to repack unconditionally.
+
+    Exits non-zero with a clear message when repomix is not found on PATH and
+    FLOWSTATE_REPOMIX_BIN is not set.
+    """
+    import sys
+
+    from flowstate.pack import is_pack_stale, run_pack
+    from flowstate.state import load_state
+
+    root = resolve_root(root, option_was_explicit=_root_was_explicit())
+    state = load_state(root)
+
+    has_pack_entry = any(
+        e.path == ".planning/codebase/repomix-pack.xml" for e in state.install_manifest
+    )
+    if not force and has_pack_entry and not is_pack_stale(root, state):
+        console.print("[dim]Pack up to date; skipping (use --force to repack).[/dim]")
+        return
+
+    result = run_pack(root, compress=compress)
+    if result.success:
+        rel = result.output_path.relative_to(root)
+        console.print(f"[green]Pack written:[/green] {rel}")
+    else:
+        console.print(f"[red]{result.error}[/red]")
+        sys.exit(1)
+
+
 @main.command("check")
 @click.option(
     "--root",
@@ -619,9 +661,7 @@ def repair(root: Path | None, apply_destructive: bool):
             console.print("[dim]No destructive fixes applied.[/dim]")
     else:
         destructive_pending = [
-            d
-            for d in findings
-            if d.name == "orphan_files" or "unreadable" in d.message.lower()
+            d for d in findings if d.name == "orphan_files" or "unreadable" in d.message.lower()
         ]
         if destructive_pending:
             console.print(
