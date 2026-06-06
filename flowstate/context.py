@@ -49,11 +49,7 @@ def _register(
 
 def generate_project_md(answers: InterviewAnswers, project_name: str = "") -> str:
     """Generate GSD-format PROJECT.md from interview answers."""
-    milestones = (
-        "\n".join(f"- {m}" for m in answers.milestones)
-        if answers.milestones
-        else "- TBD"
-    )
+    milestones = "\n".join(f"- {m}" for m in answers.milestones) if answers.milestones else "- TBD"
     return dedent(f"""\
         # {project_name or "Project"}
 
@@ -138,6 +134,99 @@ def generate_claude_md(state: FlowStateModel) -> str:
         ## Current Phase
         See `.planning/ROADMAP.md` for phase details.
     """)
+
+
+def generate_starter_fixture(answers: InterviewAnswers, project_name: str = "") -> dict:
+    """Generate a starter ECC-modeled fixture dict from interview answers.
+
+    Returns a dict with all five required keys:
+      retrieval_questions, acceptance_gates, forbidden_actions,
+      system_contract, few_shot_exemplars (≥1 exemplar).
+
+    Content is derived from interview answers — no LLM, no I/O.
+    """
+    name = project_name or "this project"
+
+    # system_contract — derived from core_problem
+    if answers.core_problem:
+        system_contract = (
+            f"The agent operates on {name}. "
+            f"Core problem: {answers.core_problem}. "
+            f"The agent must address this problem faithfully without inventing requirements "
+            f"or scope not established in PROJECT.md."
+        )
+    else:
+        system_contract = (
+            f"The agent operates on {name}. "
+            f"It must address the project's stated problem faithfully, "
+            f"without inventing requirements or scope not established in PROJECT.md."
+        )
+
+    # retrieval_questions — seeded from ten_x_vision + architecture_pattern
+    retrieval_questions: list[str] = []
+    if answers.ten_x_vision:
+        retrieval_questions.append(
+            f"How does this change advance the vision: '{answers.ten_x_vision}'?"
+        )
+    if answers.architecture_pattern:
+        retrieval_questions.append(
+            f"Does this approach align with the '{answers.architecture_pattern}' architecture pattern?"
+        )
+    if not retrieval_questions:
+        retrieval_questions.append(
+            "Does this change advance the project's stated vision and goals?"
+        )
+
+    # acceptance_gates — seeded from milestones + coverage target
+    acceptance_gates: list[str] = []
+    for milestone in answers.milestones:
+        acceptance_gates.append(f"Milestone satisfied: {milestone}")
+    acceptance_gates.append(f"Test coverage meets or exceeds {answers.test_coverage}% as required.")
+    if len(acceptance_gates) == 1:
+        # Only the coverage gate — add a generic functional gate
+        acceptance_gates.insert(0, "All described functionality works as specified in PROJECT.md.")
+
+    # forbidden_actions — sensible defaults
+    forbidden_actions = [
+        "Do not invent requirements not established in PROJECT.md.",
+        "Do not modify files outside the stated task scope.",
+        "Do not skip or disable tests to reach coverage targets.",
+        "Do not introduce new runtime dependencies without explicit approval.",
+    ]
+
+    # few_shot_exemplars — at least one exemplar
+    few_shot_exemplars = [
+        {
+            "input": f"Implement the first milestone for {name}.",
+            "expected_output": (
+                "A focused implementation that satisfies the acceptance gates, "
+                "passes all tests, and does not introduce scope beyond what was described."
+            ),
+            "rationale": (
+                "The agent should address the stated problem directly, "
+                "verify against acceptance gates, and avoid scope creep."
+            ),
+        }
+    ]
+
+    return {
+        "retrieval_questions": retrieval_questions,
+        "acceptance_gates": acceptance_gates,
+        "forbidden_actions": forbidden_actions,
+        "system_contract": system_contract,
+        "few_shot_exemplars": few_shot_exemplars,
+    }
+
+
+def scaffold_mcp_json(root: Path) -> dict:
+    """Return .mcp.json content registering the repomix MCP server.
+
+    Returns the exact dict shape required by MEDIUM-3:
+      {"mcpServers": {"repomix": {"command": "npx", "args": ["repomix", "--mcp"]}}}
+
+    Pure function — no file I/O.
+    """
+    return {"mcpServers": {"repomix": {"command": "npx", "args": ["repomix", "--mcp"]}}}
 
 
 def generate_research_brief(answers: InterviewAnswers) -> str:
