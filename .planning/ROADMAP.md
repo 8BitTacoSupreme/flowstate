@@ -35,7 +35,11 @@ Full detail: [`milestones/v0.3.0-ROADMAP.md`](./milestones/v0.3.0-ROADMAP.md)
   3. `.mcp.json` contains a repomix-MCP entry, and `ClaudeBridge` passes it through `--allowed-tools` when spawning agents
   4. Every `claude --print` invocation has the Karpathy canon block prepended to its system prompt; setting `BridgeConfig.inject_canon = False` suppresses it
   5. `flowstate init` (and later `kickoff`) writes a starter fixture under `.planning/fixtures/` registered on `install_manifest`; the fixture file includes `retrieval_questions`, `acceptance_gates`, `forbidden_actions`, a system contract, and at least one few-shot exemplar
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 03-01-PLAN.md — Repomix pack: locator + run_pack + staleness + `flowstate pack` CLI + InstallEntry kind (PACK-01/02/03)
+- [ ] 03-02-PLAN.md — Karpathy CANON constant + `inject_canon` flag prepended to every claude --print system prompt (CANON-01)
+- [ ] 03-03-PLAN.md — ECC-modeled starter fixture + `.mcp.json` registration + repomix-pack CLAUDE.md guidance (FIX-01/02, DX-02)
 **UI hint**: no
 
 ### Phase 4: Integration — Layered CAG Assembly + Cache Lean-In
