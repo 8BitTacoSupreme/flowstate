@@ -12,6 +12,19 @@ Lives at `/Users/jhogan/frameworx`, package `flowstate`, Python 3.12+, Flox-mana
 
 If everything else fails, that compounding loop is what FlowState exists to deliver.
 
+## Current Milestone: v0.4.0 Context Compaction & Compounding
+
+**Goal:** Make the context FlowState feeds `claude --print` denser, cheaper, and more reusable — formalize the implicit prompt-cache prefix (proven by the m9v + o6h spikes) into named, ordered CAG layers and add two new context sources: a Repomix pack of the codebase and ECC-modeled eval fixtures.
+
+**Target features:**
+- Repomix pack: `flowstate pack` CLI integration + staleness tracking + repomix-MCP registration for retrieval-on-top
+- Karpathy guidelines as an always-on bridge system-prompt canon layer
+- ECC-modeled eval fixtures (rubric + system contract + few-shot exemplars) as a pack-able artifact
+- Layered CAG context assembly (canon → fixtures → pack-if-fits → memory) with compress→omit→retrieval fallback
+- Prompt-cache lean-in (most-stable-first ordering, 1h TTL env)
+- Decoupled `flowstate kickoff` scaffold-only command
+- Hygiene: `status:` SUMMARY frontmatter standardization + "use the pack" CLAUDE.md guidance
+
 ## Requirements
 
 ### Validated
@@ -35,9 +48,14 @@ If everything else fails, that compounding loop is what FlowState exists to deli
 
 ### Active
 
-<!-- Milestone v0.3 complete (Phases 1 + 2). Next milestone TBD. -->
+<!-- Milestone v0.4.0 — Context Compaction & Compounding (Phases 3–5). -->
 
-_None — see `/gsd:new-milestone` to plan the next cycle._
+- [ ] **PACK-01..03**: `flowstate pack` (repomix CLI) + staleness repack + repomix-MCP registration for retrieval-on-top
+- [ ] **CANON-01**: Karpathy guidelines injected as the always-on bridge system-prompt canon layer
+- [ ] **FIX-01..02**: ECC-modeled eval fixtures (rubric + system contract + few-shot exemplars) scaffolded + manifest-tracked
+- [ ] **CAG-01..03**: layered context prefix (canon → fixtures → pack-if-fits → memory) with compress→omit→retrieval fallback + cache lean-in
+- [ ] **KICK-01..02**: decoupled `flowstate kickoff` scaffold-only command + enhanced guided interview
+- [ ] **DX-01..02**: `status:` SUMMARY frontmatter standardization + "use the pack" CLAUDE.md guidance
 
 ### Out of Scope
 
