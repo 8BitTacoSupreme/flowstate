@@ -9,9 +9,9 @@ Requirements for this milestone. Each maps to a roadmap phase (Phases 3–5, con
 
 ### Repomix Pack (PACK)
 
-- [ ] **PACK-01**: `flowstate pack` command shells out to the `repomix` CLI, writes a pack artifact to `.planning/codebase/repomix-pack.xml` (or `.md`), and registers it on `install_manifest` with a checksum. Locates `repomix` via PATH / `FLOWSTATE_REPOMIX_BIN` (mirroring `bridge._find_claude()`); degrades gracefully with a clear message and non-zero exit when absent.
-- [ ] **PACK-02**: The pipeline repacks only when stale — the pack regenerates if any tracked source file is newer than the pack's `created_at` in the manifest; otherwise the existing pack is reused.
-- [ ] **PACK-03**: repomix-MCP is registered in the project (`.mcp.json`) and exposed to spawned `claude --print` agents via `--allowed-tools` so they can grep the pack as retrieval-on-top.
+- [x] **PACK-01**: `flowstate pack` command shells out to the `repomix` CLI, writes a pack artifact to `.planning/codebase/repomix-pack.xml` (or `.md`), and registers it on `install_manifest` with a checksum. Locates `repomix` via PATH / `FLOWSTATE_REPOMIX_BIN` (mirroring `bridge._find_claude()`); degrades gracefully with a clear message and non-zero exit when absent.
+- [x] **PACK-02**: The pipeline repacks only when stale — the pack regenerates if any tracked source file is newer than the pack's `created_at` in the manifest; otherwise the existing pack is reused.
+- [x] **PACK-03**: repomix-MCP is registered in the project (`.mcp.json`) and exposed to spawned `claude --print` agents via `--allowed-tools` so they can grep the pack as retrieval-on-top.
 
 ### Canon (CANON)
 
@@ -19,8 +19,8 @@ Requirements for this milestone. Each maps to a roadmap phase (Phases 3–5, con
 
 ### Eval Fixtures (FIX)
 
-- [ ] **FIX-01**: A fixture format modeled on ECC's `scenario.json` (`retrieval_questions`, `acceptance_gates`, `forbidden_actions`) plus a system-contract and few-shot exemplars, stored under `.planning/fixtures/` as a pack-able artifact.
-- [ ] **FIX-02**: `flowstate init` / `kickoff` scaffolds a starter fixture from interview answers; the fixture is registered on `install_manifest`.
+- [x] **FIX-01**: A fixture format modeled on ECC's `scenario.json` (`retrieval_questions`, `acceptance_gates`, `forbidden_actions`) plus a system-contract and few-shot exemplars, stored under `.planning/fixtures/` as a pack-able artifact.
+- [x] **FIX-02**: `flowstate init` / `kickoff` scaffolds a starter fixture from interview answers; the fixture is registered on `install_manifest`.
 
 ### Layered CAG Assembly (CAG)
 
@@ -36,7 +36,7 @@ Requirements for this milestone. Each maps to a roadmap phase (Phases 3–5, con
 ### Developer Experience (DX)
 
 - [ ] **DX-01**: Standardize a `status:` field (`complete` / `verified` / `blocked` / `paused` / `drafted`) in quick-task and phase SUMMARY frontmatter; backfill the two existing quick tasks so `audit-open` stops false-flagging shipped work.
-- [ ] **DX-02**: Add "use the Repomix pack instead of crawling source every wave" guidance to FlowState's own `.claude/CLAUDE.md` AND the `generate_claude_md()` template for downstream projects.
+- [x] **DX-02**: Add "use the Repomix pack instead of crawling source every wave" guidance to FlowState's own `.claude/CLAUDE.md` AND the `generate_claude_md()` template for downstream projects.
 
 ## v2 Requirements
 
@@ -62,13 +62,13 @@ Explicitly excluded for this milestone.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PACK-01 | Phase 3 | Pending |
-| PACK-02 | Phase 3 | Pending |
-| PACK-03 | Phase 3 | Pending |
+| PACK-01 | Phase 3 | Complete |
+| PACK-02 | Phase 3 | Complete |
+| PACK-03 | Phase 3 | Complete |
 | CANON-01 | Phase 3 | Complete |
-| FIX-01 | Phase 3 | Pending |
-| FIX-02 | Phase 3 | Pending |
-| DX-02 | Phase 3 | Pending |
+| FIX-01 | Phase 3 | Complete |
+| FIX-02 | Phase 3 | Complete |
+| DX-02 | Phase 3 | Complete |
 | CAG-01 | Phase 4 | Pending |
 | CAG-02 | Phase 4 | Pending |
 | CAG-03 | Phase 4 | Pending |
