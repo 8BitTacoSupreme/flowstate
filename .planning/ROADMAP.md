@@ -65,7 +65,7 @@ Plans:
   3. The two existing quick-task SUMMARY files carry a `status:` field (`complete`, `verified`, `blocked`, `paused`, or `drafted`); `audit-open` no longer false-flags them as in-flight
 **Plans**: 2 plans
 Plans:
-- [ ] 05-01-PLAN.md — `flowstate kickoff` scaffold-only command + enhanced shared interview (KICK-01/02)
+- [x] 05-01-PLAN.md — `flowstate kickoff` scaffold-only command + enhanced shared interview (KICK-01/02)
 - [ ] 05-02-PLAN.md — `status:` SUMMARY frontmatter convention + backfill 2 quick tasks so audit-open clears (DX-01)
 **UI hint**: no
 
@@ -77,4 +77,4 @@ Plans:
 | 2. Operate Safely                               | v0.3.0    | 4/4            | Complete    | 2026-05-25 |
 | 3. Ingredients — Pack, Canon, Fixtures          | v0.4.0    | 3/3 | Complete   | 2026-06-06 |
 | 4. Integration — Layered CAG Assembly           | v0.4.0    | 1/1 | Complete   | 2026-06-06 |
-| 5. UX — Guided Kickoff + Hygiene                | v0.4.0    | 0/2            | Planned     | - |
+| 5. UX — Guided Kickoff + Hygiene                | v0.4.0    | 1/2 | In Progress|  |

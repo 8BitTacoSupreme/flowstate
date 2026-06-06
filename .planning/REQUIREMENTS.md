@@ -30,8 +30,8 @@ Requirements for this milestone. Each maps to a roadmap phase (Phases 3–5, con
 
 ### Guided Kickoff (KICK)
 
-- [ ] **KICK-01**: A new scaffold-only command (`flowstate kickoff`, name TBD) runs an enhanced guided interview and writes scaffold artifacts (context files, pack, starter fixture) WITHOUT invoking the LLM pipeline.
-- [ ] **KICK-02**: The interview gains the kickoff questions (branching / validation) and persists them to `state.interview`; full `flowstate init` reuses the same enhanced questions.
+- [x] **KICK-01**: A new scaffold-only command (`flowstate kickoff`, name TBD) runs an enhanced guided interview and writes scaffold artifacts (context files, pack, starter fixture) WITHOUT invoking the LLM pipeline.
+- [x] **KICK-02**: The interview gains the kickoff questions (branching / validation) and persists them to `state.interview`; full `flowstate init` reuses the same enhanced questions.
 
 ### Developer Experience (DX)
 
@@ -72,8 +72,8 @@ Explicitly excluded for this milestone.
 | CAG-01 | Phase 4 | Complete |
 | CAG-02 | Phase 4 | Complete |
 | CAG-03 | Phase 4 | Complete |
-| KICK-01 | Phase 5 | Pending |
-| KICK-02 | Phase 5 | Pending |
+| KICK-01 | Phase 5 | Complete |
+| KICK-02 | Phase 5 | Complete |
 | DX-01 | Phase 5 | Pending |
 
 **Coverage:**
