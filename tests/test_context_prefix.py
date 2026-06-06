@@ -131,11 +131,13 @@ class TestCanonAbsent:
         import inspect
 
         src = inspect.getsource(cp_mod)
-        assert "from flowstate.bridge" not in src, (
-            "context_prefix must not import from flowstate.bridge"
-        )
-        assert "import flowstate.bridge" not in src, (
-            "context_prefix must not import flowstate.bridge"
+        # Check only non-comment, non-docstring lines for bridge imports
+        import_lines = [
+            line for line in src.splitlines() if line.strip().startswith(("from ", "import "))
+        ]
+        bridge_imports = [ln for ln in import_lines if "flowstate.bridge" in ln]
+        assert not bridge_imports, (
+            f"context_prefix must not import from flowstate.bridge; found: {bridge_imports}"
         )
         _ = sys  # suppress unused import warning
 
