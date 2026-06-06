@@ -40,6 +40,46 @@
 
 ---
 
+## Milestone: v0.4.0 — Context Compaction & Compounding
+
+**Shipped:** 2026-06-06
+**Phases:** 3 (Ingredients → Integration → UX) | **Plans:** 6 | **Tasks:** 13
+
+### What Was Built
+- Repomix pack ingredient: `flowstate pack` (CLI locator + staleness repack), `.mcp.json` + `mcp__repomix` retrieval-on-top.
+- Karpathy `CANON` as the always-on, suppressible bridge system-prompt layer.
+- ECC-modeled eval fixtures scaffolded + manifest-tracked.
+- `build_context_prefix()` — fixtures → pack(if-fits) → memory, one build per run, fit→compress→omit ladder, `ENABLE_PROMPT_CACHING_1H` lean-in.
+- Scaffold-only `flowstate kickoff` (no LLM) + enhanced shared interview (validation + branching).
+- `status:` SUMMARY frontmatter standardization + backfill.
+
+### What Worked
+- **Closing v0.3 at the start of the session** (the lesson from last retro) meant v0.4 began from clean, trustworthy state — no stale-frontmatter drift this time.
+- **Rich CONTEXT.md per phase, authored from the milestone plan + exploration**, gave planners high-signal input without a research pass (research was disabled) — plans came back implementation-ready.
+- **The plan-checker earned its cost three times:** caught a real `_migrate_state` v0.3→v0.4 early-exit guard bug, a ROADMAP success-criterion that would have falsely failed Phase 4 verification (canon-in-prefix), and committed repo pollution (`scripts/_dx01_verify.py`) — all before execution.
+- **Sequential-on-main execution** (over parallel worktrees) was the right call for an unattended autonomous chain on `main` — zero merge hazards, every commit gated by pre-commit pytest.
+
+### What Was Inefficient
+- The SDK `milestone.complete` accomplishment-extraction produced empty `One-liner:` placeholders and a wrong task count — required a manual MILESTONES.md rewrite (same gap as v0.3, now a known quantity).
+- DX-01 hit a real SDK quirk: `audit-open` only reads bare `SUMMARY.md`, not `{id}-SUMMARY.md`, forcing dual anchor files in the quick-task dirs — functional but slightly awkward; worth a future SDK fix or convention change.
+
+### Patterns Established
+- **CAG = prefix-cache-optimized layering**, not literal KV preload — the honest framing for `claude --print`.
+- **Two canon channels kept separate:** system-prompt canon (bridge) vs. user-prompt context prefix — never duplicate.
+- **External tools (repomix) located like `claude`** (PATH / env var), graceful when absent — keeps the no-new-Python-deps rule intact.
+- **One `run_interview` shared by `init` and `kickoff`** — single source of truth for the intake flow.
+
+### Key Lessons
+1. Author per-phase CONTEXT.md from the milestone plan when running research-disabled autonomy — it's the planner's whole world.
+2. When a ROADMAP success criterion and a locked CONTEXT decision disagree, fix the ROADMAP before execution — the post-hoc verifier treats SC text as ground truth.
+3. The SDK accomplishment extractor is unreliable; plan to rewrite the MILESTONES entry by hand.
+
+### Cost Observations
+- Model mix: opus for planning/orchestration, sonnet for executors/checkers/verifiers.
+- Full autonomous chain (close v0.3 → new-milestone → plan+execute+verify 3 phases → close v0.4) ran in one session; 381 tests at 92.85% throughout.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -47,14 +87,18 @@
 | Milestone | Phases | Key Change |
 |-----------|--------|------------|
 | v0.3.0 | 2 | Adopted GSD for Phase 2; coarse granularity for solo maintainer |
+| v0.4.0 | 3 | Full autonomous chain (new-milestone → plan → execute → verify → complete); plan-checker as a load-bearing gate |
 
 ### Cumulative Quality
 
 | Milestone | Coverage | Zero-Dep Additions |
 |-----------|----------|-------------------|
 | v0.3.0 | ≥80% (enforced) | doctor, repair, status --markdown, hook gating — all pure-Python, no new runtime deps |
+| v0.4.0 | 92.85% | pack, CANON, fixtures, build_context_prefix, kickoff — repomix is external (Node CLI/MCP), still zero new Python deps |
 
 ### Top Lessons (Verified Across Milestones)
 
-1. Close milestones at ship time to keep state and audits trustworthy.
+1. Close milestones at ship time to keep state and audits trustworthy. (v0.3 missed it; v0.4 confirmed the payoff.)
 2. Safe-by-default for any destructive CLI operation.
+3. The plan-checker pays for itself — adversarial pre-execution review catches real bugs (migration guards, success-criteria errors, repo pollution).
+4. The SDK accomplishment extractor needs a manual pass at milestone close.
