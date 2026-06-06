@@ -198,3 +198,56 @@ class TestCanonInjection:
         assert "Simplicity First" in CANON
         assert "Surgical Changes" in CANON
         assert "Goal-Driven Execution" in CANON
+
+
+class TestPromptCaching1h:
+    """Tests for the ENABLE_PROMPT_CACHING_1H opt-in env var (CAG-03)."""
+
+    def _make_env_capture_bridge(self, tmp_path, enable_caching: bool) -> ClaudeBridge:
+        """Bridge backed by a fake claude that prints its env vars to stdout."""
+        fake_claude = tmp_path / "claude"
+        # Print ENABLE_PROMPT_CACHING_1H env var value (empty string if unset)
+        fake_claude.write_text('#!/bin/sh\necho "CACHE_VAR=${ENABLE_PROMPT_CACHING_1H}"')
+        fake_claude.chmod(0o755)
+        config = BridgeConfig(
+            claude_bin=str(fake_claude),
+            project_root=tmp_path,
+            enable_prompt_caching_1h=enable_caching,
+        )
+        return ClaudeBridge(config=config)
+
+    def test_flag_false_does_not_set_env_var(self, tmp_path):
+        """enable_prompt_caching_1h=False (default) → ENABLE_PROMPT_CACHING_1H not set."""
+        bridge = self._make_env_capture_bridge(tmp_path, enable_caching=False)
+        result = bridge.run("Hello")
+        assert result.success
+        # When env var is unset, the shell expands it to empty string
+        assert "CACHE_VAR=1" not in result.output
+
+    def test_flag_true_sets_env_var_to_1(self, tmp_path):
+        """enable_prompt_caching_1h=True → ENABLE_PROMPT_CACHING_1H=1 in subprocess env."""
+        bridge = self._make_env_capture_bridge(tmp_path, enable_caching=True)
+        result = bridge.run("Hello")
+        assert result.success
+        assert "CACHE_VAR=1" in result.output
+
+    def test_default_config_has_caching_disabled(self):
+        """BridgeConfig.enable_prompt_caching_1h defaults to False."""
+        config = BridgeConfig(claude_bin="")
+        assert config.enable_prompt_caching_1h is False
+
+    def test_bridge_docstring_mentions_cache_layer_order(self):
+        """ClaudeBridge docstring documents the most-stable-first cache layer ordering."""
+        from flowstate.bridge import ClaudeBridge
+
+        doc = ClaudeBridge.__doc__ or ""
+        # Docstring must describe the cache layer hierarchy
+        assert "most-stable-first" in doc.lower() or "most stable" in doc.lower(), (
+            "ClaudeBridge docstring must mention most-stable-first layer ordering"
+        )
+        # Must mention the CAG layers
+        assert "canon" in doc.lower() or "system prompt" in doc.lower(), (
+            "ClaudeBridge docstring must mention system-prompt canon layer"
+        )
+        assert "fixture" in doc.lower(), "ClaudeBridge docstring must mention fixtures layer"
+        assert "memory" in doc.lower(), "ClaudeBridge docstring must mention memory layer"

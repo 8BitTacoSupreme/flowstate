@@ -14,12 +14,12 @@ Prompt cache behavior:
     per-call CLI flag exists or is needed. Empirically confirmed in spike
     260525-o6h (see .planning/quick/260525-o6h-spike-confirm-claude-print-
     server-side-p/260525-o6h-SPIKE.md) via `usage.cache_read_input_tokens`
-    in `--output-format json` responses. Default TTL is 5 minutes; subscribers
-    and `ENABLE_PROMPT_CACHING_1H` API-key users get 1 hour. FlowState's
-    unified memory injection (quick task 260525-m9v) produces the byte-
-    identical `## Prior Knowledge` prefix across one pipeline run, so
-    Strategy/GSD/discipline steps benefit from this caching for free —
-    document only, no BridgeConfig field required.
+    in `--output-format json` responses. Default TTL is 5 minutes; set
+    `BridgeConfig.enable_prompt_caching_1h = True` to raise it to 1 hour
+    for eligible API-key accounts (injects ENABLE_PROMPT_CACHING_1H=1 env).
+    FlowState's layered CAG prefix (Phase 4, build_context_prefix()) produces
+    a byte-identical user-prompt prefix across pipeline steps — see the
+    ClaudeBridge class docstring for the full most-stable-first layer ordering.
 """
 
 from __future__ import annotations
@@ -120,6 +120,7 @@ class BridgeConfig:
     max_budget_usd: float | None = None
     effort: str | None = None
     inject_canon: bool = True
+    enable_prompt_caching_1h: bool = False
 
     def __post_init__(self):
         if self.claude_bin is None:
@@ -151,7 +152,33 @@ def _find_claude() -> str:
 
 
 class ClaudeBridge:
-    """Executes prompts through the claude CLI in non-interactive (print) mode."""
+    """Executes prompts through the claude CLI in non-interactive (print) mode.
+
+    Prompt cache — most-stable-first layer ordering
+    ───────────────────────────────────────────────
+    Anthropic's server-side prompt cache fires for back-to-back subprocesses that
+    share a ≥1024-token prefix. FlowState assembles the full CAG stack in this order
+    (most-stable-first) so that as many layers as possible cache across pipeline steps:
+
+      1. System prompt — CANON (Phase 3, ``inject_canon=True``). Most stable; changes
+         only when the user updates their CLAUDE.md. Outer-most layer, first to cache.
+      2. User prompt prefix (Phase 4, assembled by ``build_context_prefix()``):
+           a. Fixtures — ``.planning/fixtures/starter.json``. Static within a run.
+           b. Pack    — ``.planning/codebase/repomix-pack.xml``. Semi-stable.
+           c. Memory  — FTS5 search results. Most dynamic; placed last.
+      3. Step prompt — per-adapter research/strategy/GSD instructions. Most volatile.
+
+    The byte-identical prefix produced by ``build_context_prefix()`` across the three
+    Research → Strategy → GSD calls is what makes the implicit server-side cache hit
+    (confirmed in spike 260525-o6h: -32% wall time, -37% API cost on call 2).
+
+    Opt-in 1-hour cache TTL
+    ───────────────────────
+    Set ``BridgeConfig.enable_prompt_caching_1h = True`` to inject
+    ``ENABLE_PROMPT_CACHING_1H=1`` into the subprocess environment. This raises the
+    cache TTL from 5 minutes to 1 hour for API-key accounts that have the feature
+    enabled. Default is ``False`` (standard 5-min TTL, no env change).
+    """
 
     def __init__(self, config: BridgeConfig | None = None, dry_run: bool = False):
         self.config = config or BridgeConfig()
@@ -236,6 +263,9 @@ class ClaudeBridge:
         # Unset CLAUDECODE env var to allow nested invocation
         env = {**os.environ}
         env.pop("CLAUDECODE", None)
+        # Opt-in: raise cache TTL from 5 min to 1 h for eligible API-key accounts
+        if self.config.enable_prompt_caching_1h:
+            env["ENABLE_PROMPT_CACHING_1H"] = "1"
 
         try:
             result = subprocess.run(
