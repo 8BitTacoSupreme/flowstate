@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v0.4.0
 milestone_name: Context Compaction & Compounding
-status: completed
+status: Awaiting next milestone
 stopped_at: Phase 04 Plan 01 complete — layered CAG prefix + orchestrator seam + bridge caching
-last_updated: "2026-06-06T19:10:19.677Z"
-last_activity: 2026-06-06 -- Phase 05 marked complete
+last_updated: "2026-06-06T19:29:47.967Z"
+last_activity: 2026-06-06 — Milestone v0.4.0 completed and archived
 progress:
   total_phases: 3
   completed_phases: 3
@@ -25,17 +25,10 @@ See: .planning/PROJECT.md (updated 2026-06-06)
 
 ## Current Position
 
-Phase: 05 — COMPLETE
-Plan: 1 of 1 (all complete)
-Status: Phase 05 complete
-Last activity: 2026-06-06 -- Phase 05 marked complete
-
-```
-v0.4.0 Progress: [████████████░░░░░░░░] 44% (4/9 plans)
-Phase 3: 3/3 plans complete (DONE)
-Phase 4: 1/1 plans complete (DONE)
-Phase 5: Not started
-```
+Phase: Milestone v0.4.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-06 — Milestone v0.4.0 completed and archived
 
 ## Performance Metrics
 
@@ -130,4 +123,4 @@ Next step: Execute Phase 05 (UX/DX — kickoff + SUMMARY frontmatter)
 
 ## Operator Next Steps
 
-- Begin Phase 05: flowstate kickoff + status frontmatter (DX-01/KICK-01)
+- Start the next milestone with /gsd-new-milestone
