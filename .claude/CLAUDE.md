@@ -37,3 +37,14 @@ See `.planning/ROADMAP.md` for phase details. Codebase reference docs live in `.
 When analyzing the FlowState codebase, consult `.planning/codebase/repomix-pack.xml`
 instead of crawling source files each wave. The pack is updated by `flowstate pack`.
 Use the repomix MCP server (`mcp__repomix`) for targeted retrieval from the pack.
+
+## SUMMARY Frontmatter Convention
+
+Every quick-task and phase SUMMARY file should carry a `status:` field in its YAML
+frontmatter. Allowed values: `complete`, `verified`, `blocked`, `paused`, `drafted`.
+
+`gsd-sdk query audit-open` treats only `complete` (and `resolved`) as terminal — shipped
+work must be marked `complete` to avoid false-positive in-flight flags at milestone close.
+
+Quick-task directories also need a bare `SUMMARY.md` (in addition to `{id}-SUMMARY.md`)
+because the SDK audit scanner only resolves `SUMMARY.md`, not the per-task named form.
