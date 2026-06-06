@@ -170,6 +170,78 @@ class TestMakeBridgeAllowedTools:
         assert "mcp__repomix" in bridge.config.allowed_tools
 
 
+def test_build_context_prefix_called_once_and_byte_identical_across_adapters(
+    tmp_path: Path, monkeypatch
+):
+    """build_context_prefix() is called exactly once; all 3 adapters receive the same string.
+
+    Verifies CAG-01 / CAG-03: the orchestrator builds the layered prefix once and
+    threads the byte-identical result into ResearchAdapter, StrategyAdapter, and
+    GSDAdapter via the prior_knowledge seam.
+    """
+    from flowstate.context_prefix import build_context_prefix
+    from flowstate.tools.gsd_adapter import GSDAdapter
+    from flowstate.tools.research import ResearchAdapter
+    from flowstate.tools.strategy import StrategyAdapter
+
+    # Spy on build_context_prefix — count calls, capture return value
+    build_calls = {"n": 0, "last_result": None}
+    original_bcp = build_context_prefix
+
+    def spy_build_context_prefix(root, memory, query, **kwargs):
+        build_calls["n"] += 1
+        result = original_bcp(root, memory, query, **kwargs)
+        build_calls["last_result"] = result
+        return result
+
+    monkeypatch.setattr("flowstate.orchestrator.build_context_prefix", spy_build_context_prefix)
+
+    # Record prior_knowledge value each adapter receives
+    init_records: dict[str, str | None] = {}
+
+    def make_recording_init(cls, name):
+        original_init = cls.__init__
+
+        def recording_init(self, *args, **kwargs):
+            init_records[name] = kwargs.get("prior_knowledge")
+            original_init(self, *args, **kwargs)
+
+        return recording_init
+
+    monkeypatch.setattr(
+        ResearchAdapter, "__init__", make_recording_init(ResearchAdapter, "research")
+    )
+    monkeypatch.setattr(
+        StrategyAdapter, "__init__", make_recording_init(StrategyAdapter, "strategy")
+    )
+    monkeypatch.setattr(GSDAdapter, "__init__", make_recording_init(GSDAdapter, "gsd"))
+
+    state = FlowStateModel()
+    state.preferences.dry_run = True
+    state.interview.core_problem = "A"
+    state.interview.ten_x_vision = "B"
+    state.interview.research_focus = "C"
+
+    run_pipeline(state, tmp_path)
+
+    # build_context_prefix called exactly once
+    assert build_calls["n"] == 1, f"Expected 1 call to build_context_prefix, got {build_calls['n']}"
+
+    # All three adapters received prior_knowledge
+    for adapter in ("research", "strategy", "gsd"):
+        assert adapter in init_records, f"{adapter} adapter not recorded"
+        assert (
+            "prior_knowledge" in (str(type(init_records[adapter])))
+            or init_records[adapter] is not None
+            or init_records[adapter] == ""
+        ), f"{adapter} must receive prior_knowledge kwarg"
+
+    # All three received the SAME byte-identical string
+    assert init_records["research"] == init_records["strategy"] == init_records["gsd"], (
+        "All adapters must receive byte-identical prior_knowledge string"
+    )
+
+
 def test_pipeline_empty_interview_skips_memory_lookup(tmp_path: Path, monkeypatch):
     """When interview is empty, no _pk_query is built, so get_context is never called.
 

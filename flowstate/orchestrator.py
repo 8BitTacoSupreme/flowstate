@@ -12,6 +12,7 @@ from rich.table import Table
 
 from flowstate.bridge import BridgeConfig, ClaudeBridge
 from flowstate.context import write_context_files
+from flowstate.context_prefix import build_context_prefix
 from flowstate.discipline import check_setup
 from flowstate.events.bus import EventBus
 from flowstate.events.event import StepCompleted, StepFailed
@@ -217,14 +218,18 @@ def run_pipeline(state: FlowStateModel, root: Path) -> FlowStateModel:
 
     save_state(state, root)
 
-    # Unified prior_knowledge block: built ONCE after memory is seeded with
-    # interview answers, threaded into every tool adapter so the same prefix
-    # is reused across Research / Strategy / GSD. This eliminates N+1 redundant
-    # FTS5 searches and enables Anthropic's server-side prompt cache to hit
-    # across pipeline steps (5-min TTL). The query is intentionally broad —
-    # core_problem + ten_x_vision + research_focus — so one block covers all
-    # downstream tools. Adapters needing a tighter slice can still call
-    # self.get_memory_context() directly (escape hatch, intentionally preserved).
+    # Layered CAG prefix: built ONCE after memory is seeded with interview answers,
+    # threaded byte-identically into ResearchAdapter / StrategyAdapter / GSDAdapter
+    # via the prior_knowledge seam. Layer order (most-stable-first):
+    #   fixtures (.planning/fixtures/starter.json)
+    #   → pack (.planning/codebase/repomix-pack.xml, if it fits the budget)
+    #   → memory (FTS5 get_context results, most dynamic — always last)
+    # Byte-identical prefix across all three adapter calls enables Anthropic's
+    # implicit server-side prompt cache to hit across pipeline steps (5-min TTL,
+    # 1h with ENABLE_PROMPT_CACHING_1H — see BridgeConfig.enable_prompt_caching_1h).
+    # The query is intentionally broad (core_problem + ten_x_vision + research_focus)
+    # so one block covers all downstream tools. Adapters needing a tighter slice can
+    # still call self.get_memory_context() directly (escape hatch, preserved).
     _pk_query = " ".join(
         filter(
             None,
@@ -235,7 +240,7 @@ def run_pipeline(state: FlowStateModel, root: Path) -> FlowStateModel:
             ],
         )
     ).strip()
-    prior_knowledge = memory.get_context(_pk_query) if _pk_query else ""
+    prior_knowledge = build_context_prefix(root, memory, _pk_query, console=console)
 
     # Step 2: Research — split-topic bridge calls
     research = ResearchAdapter(
