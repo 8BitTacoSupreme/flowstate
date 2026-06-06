@@ -20,7 +20,7 @@ Full detail: [`milestones/v0.3.0-ROADMAP.md`](./milestones/v0.3.0-ROADMAP.md)
 ### v0.4.0 Context Compaction & Compounding
 
 - [ ] **Phase 3: Ingredients** — Pack, Canon, and Fixtures exist as independently-testable artifacts before anything composes them
-- [ ] **Phase 4: Integration** — Layered CAG assembly with cache-optimized prefix built once per run; repomix-MCP overflow path
+- [x] **Phase 4: Integration** — Layered CAG assembly with cache-optimized prefix built once per run; repomix-MCP overflow path (completed 2026-06-06)
 - [ ] **Phase 5: UX** — Scaffold-only `flowstate kickoff` command + SUMMARY `status:` frontmatter standardization
 
 ## Phase Details
@@ -52,7 +52,7 @@ Plans:
   3. Consecutive runs against the same codebase produce an identical prefix byte-for-byte up to the memory section, confirming the stable-prefix cache property; bridge docs describe the cache behavior and `ENABLE_PROMPT_CACHING_1H` opt-in
 **Plans**: 1 plan
 Plans:
-- [ ] 04-01-PLAN.md — build_context_prefix() assembler (fixtures→pack→memory) + fit/compress/omit ladder + orchestrator seam threading + ENABLE_PROMPT_CACHING_1H opt-in (CAG-01/02/03)
+- [x] 04-01-PLAN.md — build_context_prefix() assembler (fixtures→pack→memory) + fit/compress/omit ladder + orchestrator seam threading + ENABLE_PROMPT_CACHING_1H opt-in (CAG-01/02/03)
 **UI hint**: no
 
 ### Phase 5: UX — Guided Kickoff + Hygiene
@@ -73,5 +73,5 @@ Plans:
 | 1. Land the v2 Pivot                            | v0.3.0    | direct         | Complete    | 2026-05-25 (b38bbd6) |
 | 2. Operate Safely                               | v0.3.0    | 4/4            | Complete    | 2026-05-25 |
 | 3. Ingredients — Pack, Canon, Fixtures          | v0.4.0    | 3/3 | Complete   | 2026-06-06 |
-| 4. Integration — Layered CAG Assembly           | v0.4.0    | 0/1            | Not started | - |
+| 4. Integration — Layered CAG Assembly           | v0.4.0    | 1/1 | Complete   | 2026-06-06 |
 | 5. UX — Guided Kickoff + Hygiene                | v0.4.0    | 0/?            | Not started | - |

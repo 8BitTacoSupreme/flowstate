@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.4.0
 milestone_name: Context Compaction & Compounding
-status: executing
+status: verifying
 stopped_at: Phase 03 Plan 03 complete — ECC fixtures + .mcp.json + DX-02 repomix guidance
-last_updated: "2026-06-06T18:21:59.874Z"
-last_activity: 2026-06-06 -- Phase 4 planning complete
+last_updated: "2026-06-06T18:34:41.890Z"
+last_activity: 2026-06-06
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 3
-  percent: 33
+  completed_plans: 4
+  percent: 67
 ---
 
 # Project State
@@ -21,19 +21,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-06)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Phase 03 — ingredients-pack-canon-fixtures
+**Current focus:** Phase 04 — integration-layered-cag-assembly-cache-lean-in
 
 ## Current Position
 
-Phase: 03 — COMPLETE
-Plan: 3 of 3 (all complete)
-Status: Ready to execute
-Last activity: 2026-06-06 -- Phase 4 planning complete
+Phase: 04 — COMPLETE
+Plan: 1 of 1 (all complete)
+Status: Phase complete — ready for Phase 5
+Last activity: 2026-06-06
 
 ```
-v0.4.0 Progress: [██████░░░░░░░░░░░░░░] 33% (3/9 plans)
+v0.4.0 Progress: [████████████░░░░░░░░] 44% (4/9 plans)
 Phase 3: 3/3 plans complete (DONE)
-Phase 4: Not started
+Phase 4: 1/1 plans complete (DONE)
 Phase 5: Not started
 ```
 
@@ -50,6 +50,7 @@ Phase 5: Not started
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | Phase 03 P01 | 9m | 3 tasks | 7 files |
+| Phase 04 P01 | 11m | 3 tasks | 6 files |
 
 **Recent Trend:**
 
@@ -100,6 +101,10 @@ Recent decisions affecting current work:
 - [Phase 03 P03]: generate_starter_fixture is a pure function (no I/O) matching existing generate_* style
 - [Phase 03 P03]: write_context_files count grows 5→7; .mcp.json included in state.context_files via shared created-list assignment
 - [Phase 03 P03]: DX-02 guidance appended to generate_claude_md dedent template as ## Repomix Pack section
+- [Phase 04 P01]: build_context_prefix() assembles fixtures → pack(fit-ladder) → memory; built once in orchestrator, threaded via prior_knowledge seam (CAG-01)
+- [Phase 04 P01]: _estimate_tokens replicates len(text)//4 from memory.py — no cross-module import of private helper
+- [Phase 04 P01]: context_prefix.py imports from flowstate.pack but NEVER from flowstate.bridge — canon exclusion is a hard module boundary
+- [Phase 04 P01]: ENABLE_PROMPT_CACHING_1H is default-False BridgeConfig flag; no unconditional injection (API-key-tier feature)
 
 ### Pending Todos
 
@@ -119,10 +124,10 @@ None at roadmap start. PACK-01 (repomix CLI locator) should mirror bridge._find_
 ## Session Continuity
 
 Last session: 2026-06-06
-Stopped at: Phase 03 Plan 03 complete — ECC fixtures + .mcp.json + DX-02 repomix guidance
+Stopped at: Phase 04 Plan 01 complete — layered CAG prefix + orchestrator seam + bridge caching
 Resume file: None
-Next step: Execute Phase 04 (Integration — Layered CAG Assembly + Cache Lean-In)
+Next step: Execute Phase 05 (UX/DX — kickoff + SUMMARY frontmatter)
 
 ## Operator Next Steps
 
-- Begin Phase 04 planning: build_context_prefix() + fit/compress/omit logic + cache lean-in
+- Begin Phase 05: flowstate kickoff + status frontmatter (DX-01/KICK-01)

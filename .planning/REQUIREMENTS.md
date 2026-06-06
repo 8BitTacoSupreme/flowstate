@@ -24,9 +24,9 @@ Requirements for this milestone. Each maps to a roadmap phase (Phases 3–5, con
 
 ### Layered CAG Assembly (CAG)
 
-- [ ] **CAG-01**: A single `build_context_prefix()` assembles ordered layers — canon → fixtures → pack (if it fits) → project memory — built once per run and threaded via the existing `prior_knowledge` seam into all adapters.
-- [ ] **CAG-02**: Fit logic measures pack tokens; inlines the full pack when `prefix_total < budget`; else runs `repomix --compress` (~70% smaller); else omits the pack and relies on repomix-MCP retrieval-on-top. Budget is configurable and any dropped content is logged (no silent truncation).
-- [ ] **CAG-03**: Layer ordering is most-stable-first to maximize cross-run cache hits; the bridge optionally sets `ENABLE_PROMPT_CACHING_1H`; cache behavior is documented on `ClaudeBridge`.
+- [x] **CAG-01**: A single `build_context_prefix()` assembles ordered layers — canon → fixtures → pack (if it fits) → project memory — built once per run and threaded via the existing `prior_knowledge` seam into all adapters.
+- [x] **CAG-02**: Fit logic measures pack tokens; inlines the full pack when `prefix_total < budget`; else runs `repomix --compress` (~70% smaller); else omits the pack and relies on repomix-MCP retrieval-on-top. Budget is configurable and any dropped content is logged (no silent truncation).
+- [x] **CAG-03**: Layer ordering is most-stable-first to maximize cross-run cache hits; the bridge optionally sets `ENABLE_PROMPT_CACHING_1H`; cache behavior is documented on `ClaudeBridge`.
 
 ### Guided Kickoff (KICK)
 
@@ -69,9 +69,9 @@ Explicitly excluded for this milestone.
 | FIX-01 | Phase 3 | Complete |
 | FIX-02 | Phase 3 | Complete |
 | DX-02 | Phase 3 | Complete |
-| CAG-01 | Phase 4 | Pending |
-| CAG-02 | Phase 4 | Pending |
-| CAG-03 | Phase 4 | Pending |
+| CAG-01 | Phase 4 | Complete |
+| CAG-02 | Phase 4 | Complete |
+| CAG-03 | Phase 4 | Complete |
 | KICK-01 | Phase 5 | Pending |
 | KICK-02 | Phase 5 | Pending |
 | DX-01 | Phase 5 | Pending |
