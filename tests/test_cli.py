@@ -496,3 +496,91 @@ def test_config_clear_root_idempotent():
     result = runner.invoke(main, ["config", "clear-root"])
     assert result.exit_code == 0
     assert "No default root" in result.output
+
+
+# ── kickoff command tests (KICK-01) ──────────────────────────────────
+
+
+class TestKickoffCommand:
+    def test_kickoff_skip_interview_exits_zero(self, tmp_path: Path):
+        """kickoff --skip-interview exits 0."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["kickoff", "--skip-interview", "--root", str(tmp_path)])
+        assert result.exit_code == 0, result.output
+
+    def test_kickoff_never_calls_run_pipeline(self, tmp_path: Path, monkeypatch):
+        """KICK-01: kickoff must NOT invoke run_pipeline under any circumstances."""
+        import flowstate.orchestrator as orch_mod
+
+        pipeline_calls: list = []
+
+        def sentinel(*args, **kwargs):
+            pipeline_calls.append(args)
+
+        monkeypatch.setattr(orch_mod, "run_pipeline", sentinel)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["kickoff", "--skip-interview", "--root", str(tmp_path)])
+        assert result.exit_code == 0, result.output
+        assert pipeline_calls == [], "kickoff must NOT call run_pipeline"
+
+    def test_kickoff_scaffold_artifacts_exist(self, tmp_path: Path):
+        """After kickoff --skip-interview, context files are written."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["kickoff", "--skip-interview", "--root", str(tmp_path)])
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / ".planning" / "PROJECT.md").exists()
+        assert (tmp_path / ".planning" / "ROADMAP.md").exists()
+        assert (tmp_path / ".planning" / "config.json").exists()
+        assert (tmp_path / ".planning" / "fixtures" / "starter.json").exists()
+        assert (tmp_path / ".mcp.json").exists()
+
+    def test_kickoff_calls_run_pack_once(self, tmp_path: Path, monkeypatch):
+        """kickoff calls run_pack exactly once."""
+        import flowstate.pack as pack_mod
+        from flowstate.pack import PackResult
+
+        pack_calls: list = []
+
+        def fake_pack(root, *, compress=False):
+            pack_calls.append(root)
+            return PackResult(
+                success=True,
+                output_path=root / ".planning" / "codebase" / "repomix-pack.xml",
+            )
+
+        monkeypatch.setattr(pack_mod, "run_pack", fake_pack)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["kickoff", "--skip-interview", "--root", str(tmp_path)])
+        assert result.exit_code == 0, result.output
+        assert len(pack_calls) == 1
+
+    def test_kickoff_exits_zero_when_pack_fails(self, tmp_path: Path, monkeypatch):
+        """kickoff exits 0 (graceful degradation) when run_pack returns success=False."""
+        import flowstate.pack as pack_mod
+        from flowstate.pack import PackResult
+
+        monkeypatch.setattr(
+            pack_mod,
+            "run_pack",
+            lambda root, **kw: PackResult(
+                success=False, exit_code=1, error="repomix CLI not found."
+            ),
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["kickoff", "--skip-interview", "--root", str(tmp_path)])
+        assert result.exit_code == 0, result.output
+
+    def test_kickoff_has_no_pipeline_options(self):
+        """kickoff help must NOT include --model, --budget, --effort (pipeline flags)."""
+        runner = CliRunner()
+        kickoff_help = runner.invoke(main, ["kickoff", "--help"]).output
+        init_help = runner.invoke(main, ["init", "--help"]).output
+        # pipeline flags present in init
+        assert "--model" in init_help
+        # pipeline flags absent in kickoff
+        assert "--model" not in kickoff_help
+        assert "--budget" not in kickoff_help
+        assert "--effort" not in kickoff_help

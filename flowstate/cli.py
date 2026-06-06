@@ -104,6 +104,56 @@ def init(
     save_state(state, root)
 
 
+@main.command("kickoff")
+@click.option(
+    "--root",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Project root directory.",
+)
+@click.option("--skip-interview", is_flag=True, help="Skip the interview and use existing state.")
+def kickoff(root: Path | None, skip_interview: bool):
+    """Scaffold a new project without running the LLM pipeline.
+
+    Runs the interview (unless --skip-interview), writes deterministic context files,
+    generates the repomix pack, and saves state. No bridge or LLM calls are made.
+    """
+    from flowstate.context import write_context_files
+    from flowstate.interview import run_interview
+    from flowstate.pack import run_pack
+    from flowstate.state import load_state, save_state
+
+    explicit = _root_was_explicit()
+    root = resolve_root(root, option_was_explicit=explicit)
+
+    if explicit:
+        save_default_root(root)
+
+    console.print(Panel(BANNER, title="v" + __version__, border_style="blue", expand=False))
+
+    state = load_state(root)
+
+    if not skip_interview:
+        run_interview(state)
+        save_state(state, root)
+
+    created = write_context_files(state, root)
+
+    pack_result = run_pack(root)
+    if pack_result.success:
+        rel = pack_result.output_path.relative_to(root)
+        console.print(f"[green]Pack written:[/green] {rel}")
+    else:
+        console.print(f"[yellow]Pack skipped:[/yellow] {pack_result.error}")
+
+    save_state(state, root)
+
+    console.print(f"\n[green]{len(created)} context files scaffolded:[/green]")
+    for p in created:
+        console.print(f"  {p.relative_to(root)}")
+    console.print()
+
+
 @main.command()
 @click.option(
     "--root",
