@@ -52,6 +52,7 @@ SECTIONS = [
                 "architecture_pattern",
                 "Architectural pattern to follow? (e.g., hexagonal, event-driven, layered)",
             ),
+            ("deployment_target", "Where will this run/deploy?"),
         ],
     },
 ]
@@ -75,27 +76,30 @@ def run_interview(state: FlowStateModel) -> InterviewAnswers:
         console.rule(f"[bold {section['color']}]{section['title']}[/]")
 
         for field, question in section["questions"]:
+            # KICK-02 branching: skip deployment_target when architecture_pattern is empty
+            if field == "deployment_target" and not answers.architecture_pattern:
+                continue
+
             current = getattr(answers, field, "")
             default_display = current if current else None
 
             if field == "milestones":
                 default_str = ", ".join(current) if current else None
-                raw = Prompt.ask(
-                    f"  {question}", default=default_str or "", console=console
-                )
+                raw = Prompt.ask(f"  {question}", default=default_str or "", console=console)
                 raw = raw.replace("\r", "").strip()
-                setattr(
-                    answers, field, [m.strip() for m in raw.split(",") if m.strip()]
-                )
+                setattr(answers, field, [m.strip() for m in raw.split(",") if m.strip()])
             elif field == "test_coverage":
-                val = IntPrompt.ask(
-                    f"  {question}", default=current or 80, console=console
-                )
-                setattr(answers, field, val)
+                # KICK-02 validation: re-prompt until value is in 0-100
+                while True:
+                    val = IntPrompt.ask(f"  {question}", default=current or 80, console=console)
+                    if 0 <= val <= 100:
+                        setattr(answers, field, val)
+                        break
+                    console.print(
+                        "  [yellow]Coverage must be between 0 and 100. Try again.[/yellow]"
+                    )
             else:
-                val = Prompt.ask(
-                    f"  {question}", default=default_display or "", console=console
-                )
+                val = Prompt.ask(f"  {question}", default=default_display or "", console=console)
                 setattr(answers, field, val.replace("\r", "").strip())
 
     # Project name

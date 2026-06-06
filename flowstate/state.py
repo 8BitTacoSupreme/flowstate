@@ -32,6 +32,7 @@ class InterviewAnswers(BaseModel):
     milestones: list[str] = Field(default_factory=list)
     test_coverage: int = 80
     architecture_pattern: str = ""
+    deployment_target: str = ""
 
 
 class ProjectPreferences(BaseModel):
