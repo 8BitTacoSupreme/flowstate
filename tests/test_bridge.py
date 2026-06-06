@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from flowstate.bridge import BridgeConfig, ClaudeBridge, _find_claude
+from flowstate.bridge import CANON, BridgeConfig, ClaudeBridge, _find_claude
 
 
 def test_dry_run_returns_success():
@@ -138,3 +138,63 @@ def test_no_model_flag_when_unset(tmp_path: Path):
     bridge = ClaudeBridge(config=config)
     result = bridge.run("Hello")
     assert "--model" not in result.output
+
+
+class TestCanonInjection:
+    """Tests for CANON prepend behavior in ClaudeBridge.run()."""
+
+    def _make_echo_bridge(self, tmp_path: Path, inject_canon: bool = True) -> ClaudeBridge:
+        """Create a bridge backed by a fake claude that prints its args to stdout."""
+        fake_claude = tmp_path / "claude"
+        # Print all args on separate lines so we can find --system-prompt and its value
+        fake_claude.write_text('#!/bin/sh\nfor arg in "$@"; do echo "$arg"; done')
+        fake_claude.chmod(0o755)
+        config = BridgeConfig(
+            claude_bin=str(fake_claude),
+            project_root=tmp_path,
+            inject_canon=inject_canon,
+        )
+        return ClaudeBridge(config=config)
+
+    def test_inject_canon_true_prepends_canon_before_system_prompt(self, tmp_path: Path):
+        """inject_canon=True: CANON text appears before caller system_prompt."""
+        bridge = self._make_echo_bridge(tmp_path, inject_canon=True)
+        result = bridge.run("Hello", system_prompt="Be helpful")
+        assert result.success
+        canon_start = result.output.find("# CLAUDE.md")
+        caller_start = result.output.find("Be helpful")
+        assert canon_start != -1, "CANON text not found in output"
+        assert caller_start != -1, "caller system_prompt not found in output"
+        assert canon_start < caller_start, "CANON must precede caller system_prompt"
+
+    def test_inject_canon_true_no_system_prompt_emits_canon(self, tmp_path: Path):
+        """inject_canon=True with no system_prompt: --system-prompt is still emitted with CANON."""
+        bridge = self._make_echo_bridge(tmp_path, inject_canon=True)
+        result = bridge.run("Hello")
+        assert result.success
+        assert "--system-prompt" in result.output
+        assert "# CLAUDE.md" in result.output
+
+    def test_inject_canon_false_omits_canon(self, tmp_path: Path):
+        """inject_canon=False: CANON text does not appear in the emitted command."""
+        bridge = self._make_echo_bridge(tmp_path, inject_canon=False)
+        result = bridge.run("Hello", system_prompt="Be helpful")
+        assert result.success
+        assert "# CLAUDE.md" not in result.output
+        assert CANON[:20] not in result.output
+
+    def test_inject_canon_false_no_system_prompt_no_flag(self, tmp_path: Path):
+        """inject_canon=False with no system_prompt: --system-prompt flag is not emitted."""
+        bridge = self._make_echo_bridge(tmp_path, inject_canon=False)
+        result = bridge.run("Hello")
+        assert result.success
+        assert "--system-prompt" not in result.output
+
+    def test_canon_constant_is_nonempty(self):
+        """CANON module constant is a non-empty string."""
+        assert isinstance(CANON, str)
+        assert len(CANON) > 0
+        assert "Think Before Coding" in CANON
+        assert "Simplicity First" in CANON
+        assert "Surgical Changes" in CANON
+        assert "Goal-Driven Execution" in CANON
