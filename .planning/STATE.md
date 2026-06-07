@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.4.0
-milestone_name: Context Compaction & Compounding
-status: Awaiting next milestone
-stopped_at: Phase 04 Plan 01 complete — layered CAG prefix + orchestrator seam + bridge caching
-last_updated: "2026-06-06T19:29:47.967Z"
-last_activity: 2026-06-06 — Milestone v0.4.0 completed and archived
+milestone: v0.5.0
+milestone_name: Compounding Loop
+status: planning
+last_updated: "2026-06-07T17:05:48.775Z"
+last_activity: 2026-06-07
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-06)
 
 ## Current Position
 
-Phase: Milestone v0.4.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-06 — Milestone v0.4.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-07 — Milestone v0.5.0 started
 
 ## Performance Metrics
 

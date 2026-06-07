@@ -12,6 +12,15 @@ Lives at `/Users/jhogan/frameworx`, package `flowstate`, Python 3.12+, Flox-mana
 
 If everything else fails, that compounding loop is what FlowState exists to deliver.
 
+## Current Milestone: v0.5.0 Compounding Loop
+
+**Goal:** Turn the core value from an implicit property into a concrete, inspectable mechanism — runs leave a delta trail the next run reads first, failures (verifier/checker/doctor/executor) become durable injected context, and eval fixtures become runnable checks that feed both. Builds directly on the v0.4 `build_context_prefix()` CAG architecture.
+
+**Target features:**
+- Run journal: append-only, delta-only per-run log persisted to memory + `.planning/RUNLOG.md`, surfaced as a `## Since Last Run` prefix layer (most-dynamic slot, cache-safe)
+- Gotchas accumulator: auto-promote verifier gaps / plan-checker findings / doctor diagnoses / executor deviations into a persistent, deduped, capped gotchas store injected as a `## Gotchas` prefix layer
+- Runnable verification: `flowstate verify` turns fixture acceptance-gates/forbidden-actions into real checks against produced artifacts (non-zero exit, CI-composable); failures feed the gotchas accumulator and the run journal
+
 ## Requirements
 
 ### Validated
@@ -41,9 +50,11 @@ If everything else fails, that compounding loop is what FlowState exists to deli
 
 ### Active
 
-<!-- Milestone v0.4.0 complete (Phases 3–5). Next milestone TBD. -->
+<!-- Milestone v0.5.0 — Compounding Loop (Phases 6–8). -->
 
-_None — see `/gsd-new-milestone` to plan the next cycle._
+- [ ] **RUN-01..03**: append-only delta run journal (memory `kind=run` + `.planning/RUNLOG.md`) + `## Since Last Run` prefix layer + `flowstate journal` viewer
+- [ ] **GOT-01..03**: gotchas accumulator from verifier/checker/doctor/executor outputs + `## Gotchas` prefix layer + dedup/cap
+- [ ] **VER-01..02**: `flowstate verify` runs fixture gates against artifacts (CI-composable) + failures feed gotchas/journal
 
 ### Out of Scope
 
