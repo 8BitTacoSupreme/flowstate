@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-06-07T17:05:48.775Z"
 last_activity: 2026-06-07
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-06)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Phase 04 — integration-layered-cag-assembly-cache-lean-in
+**Current focus:** Phase 6 — Run Journal
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: Phase 6 — Run Journal (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-07 — Milestone v0.5.0 started
+Status: Roadmap defined; ready to plan Phase 6
+Last activity: 2026-06-07 — Milestone v0.5.0 roadmap created (Phases 6-8)
+
+```
+v0.5.0 progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/3 phases)
+```
 
 ## Performance Metrics
 
@@ -97,6 +101,11 @@ Recent decisions affecting current work:
 - [Phase 04 P01]: _estimate_tokens replicates len(text)//4 from memory.py — no cross-module import of private helper
 - [Phase 04 P01]: context_prefix.py imports from flowstate.pack but NEVER from flowstate.bridge — canon exclusion is a hard module boundary
 - [Phase 04 P01]: ENABLE_PROMPT_CACHING_1H is default-False BridgeConfig flag; no unconditional injection (API-key-tier feature)
+- [v0.5.0 roadmap]: Coarse granularity (3 phases) — single maintainer; phases 6/7/8 follow natural dependency boundary (journal → gotchas → verify closes the loop)
+- [v0.5.0 roadmap]: Phase 7 depends on Phase 6 — both add a new MemoryKind and a new build_context_prefix layer; sharing the layering pattern makes Phase 6 the natural prerequisite
+- [v0.5.0 roadmap]: Phase 8 depends on both 6 and 7 — verify failures must feed GOT-01 (Phase 7) and RUN-01 (Phase 6) to close the compounding loop
+- [v0.5.0 roadmap]: `## Gotchas` layer placed BEFORE memory (cache-friendlier, near fixtures); `## Since Last Run` placed AFTER memory (most-dynamic, must stay outside cache window)
+- [v0.5.0 roadmap]: Journal + gotchas are pure-Python derivations of run state — no bridge calls; keeps them cheap, reproducible, and cache-neutral
 
 ### Pending Todos
 
@@ -104,7 +113,7 @@ None yet.
 
 ### Blockers/Concerns
 
-None at roadmap start. PACK-01 (repomix CLI locator) should mirror bridge._find_claude() pattern — check that pattern is stable before Phase 3 planning.
+None at roadmap start. Implementation order matters: MemoryKind.RUN must be added before Phase 6 plans can write journal entries; MemoryKind.INSIGHT (tagged `gotcha`) already exists but the capture hooks do not — confirm existing MemoryKind values before Phase 7 planning.
 
 ### Quick Tasks Completed
 
@@ -115,11 +124,11 @@ None at roadmap start. PACK-01 (repomix CLI locator) should mirror bridge._find_
 
 ## Session Continuity
 
-Last session: 2026-06-06T19:05:52.606Z
-Stopped at: Phase 04 Plan 01 complete — layered CAG prefix + orchestrator seam + bridge caching
+Last session: 2026-06-07
+Stopped at: v0.5.0 roadmap defined (Phases 6-8); requirements mapped; ready for Phase 6 planning
 Resume file: None
-Next step: Execute Phase 05 (UX/DX — kickoff + SUMMARY frontmatter)
+Next step: `/gsd:plan-phase 6`
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Run `/gsd:plan-phase 6` to begin Phase 6 — Run Journal
