@@ -1,7 +1,7 @@
-"""Layered CAG context prefix assembler — Phase 4, CAG-01/02.
+"""Layered CAG context prefix assembler — Phase 4, CAG-01/02 / Phase 7, GOT-02.
 
 Composes the most-stable-first ordered prefix for all adapter user-prompts:
-  fixtures → pack (if it fits) → memory → since-last-run
+  fixtures → pack (if it fits) → gotchas → memory → since-last-run
 
 The result is built ONCE per pipeline run in orchestrator.run_pipeline() and
 threaded via the existing ``prior_knowledge`` seam into ResearchAdapter,
@@ -12,9 +12,11 @@ Layer ordering rationale (most-stable-first for implicit prompt-cache hits):
                       Never changes within a run; stabilises the cache prefix.
   2. Pack           — repomix XML pack at .planning/codebase/repomix-pack.xml.
                       Regenerated only when source files change; semi-stable.
-  3. Memory         — FTS5 search results from MemoryStore.get_context(query).
-                      Most dynamic of the stable layers; placed third.
-  4. Since Last Run — last N MemoryKind.RUN journal deltas (newest-first).
+  3. Gotchas        — accumulated failure signals from memory.db (INSIGHT+gotcha).
+                      Semi-stable (grows slowly); placed before memory for cache.
+  4. Memory         — FTS5 search results from MemoryStore.get_context(query).
+                      Most dynamic of the stable layers; placed fourth.
+  5. Since Last Run — last N MemoryKind.RUN journal deltas (newest-first).
                       Most dynamic; placed last so it stays outside cache window.
 
 CRITICAL — canon exclusion:
@@ -50,6 +52,8 @@ _FIXTURE_PATH = ".planning/fixtures/starter.json"
 _CONFIG_PATH = ".planning/config.json"
 _DEFAULT_BUDGET_TOKENS = 12_000
 _DEFAULT_JOURNAL_PREFIX_N = 3
+_DEFAULT_GOTCHAS_MAX_ENTRIES = 10
+_DEFAULT_GOTCHAS_BUDGET_TOKENS = 1500
 _CHARS_PER_TOKEN = 4  # consistent with memory.py::get_context approximation
 
 # Module-level console — callers can inject their own via the ``console`` param
@@ -102,6 +106,123 @@ def _load_journal_prefix_n(root: Path) -> int:
     except Exception:
         pass
     return _DEFAULT_JOURNAL_PREFIX_N
+
+
+def _load_gotchas_max_entries(root: Path) -> int:
+    """Read gotchas_max_entries from .planning/config.json.
+
+    Falls back to ``_DEFAULT_GOTCHAS_MAX_ENTRIES`` (10) when the file is absent,
+    the key is missing, or the value is not a positive integer (booleans excluded).
+    """
+    config_path = root / _CONFIG_PATH
+    if not config_path.exists():
+        return _DEFAULT_GOTCHAS_MAX_ENTRIES
+    try:
+        data: dict[str, Any] = json.loads(config_path.read_text())
+        value = data.get("gotchas_max_entries")
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+            return value
+    except Exception:
+        pass
+    return _DEFAULT_GOTCHAS_MAX_ENTRIES
+
+
+def _load_gotchas_budget_tokens(root: Path) -> int:
+    """Read gotchas_budget_tokens from .planning/config.json.
+
+    Falls back to ``_DEFAULT_GOTCHAS_BUDGET_TOKENS`` (1500) when the file is absent,
+    the key is missing, or the value is not a positive integer (booleans excluded).
+    """
+    config_path = root / _CONFIG_PATH
+    if not config_path.exists():
+        return _DEFAULT_GOTCHAS_BUDGET_TOKENS
+    try:
+        data: dict[str, Any] = json.loads(config_path.read_text())
+        value = data.get("gotchas_budget_tokens")
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+            return value
+    except Exception:
+        pass
+    return _DEFAULT_GOTCHAS_BUDGET_TOKENS
+
+
+def _load_gotchas_enabled(root: Path) -> bool:
+    """Read gotchas_enabled from .planning/config.json.
+
+    Returns True (default) unless the key is literally the JSON boolean false.
+    Non-bool values (strings, ints) fall back to the True default.
+    """
+    config_path = root / _CONFIG_PATH
+    if not config_path.exists():
+        return True
+    try:
+        data: dict[str, Any] = json.loads(config_path.read_text())
+        value = data.get("gotchas_enabled")
+        if isinstance(value, bool):
+            return value
+    except Exception:
+        pass
+    return True
+
+
+def _read_gotchas_layer(root: Path, memory: Any) -> str:
+    """Read accumulated gotchas from memory and format as '## Gotchas'.
+
+    Fetches MemoryKind.INSIGHT entries tagged "gotcha", ranks them by
+    (count desc, last_seen desc), caps to gotchas_max_entries, then trims
+    trailing blocks until the layer fits within gotchas_budget_tokens.
+
+    Returns empty string when disabled, empty, or on any exception.
+    Never raises.
+    """
+    try:
+        if not _load_gotchas_enabled(root):
+            return ""
+
+        max_entries = _load_gotchas_max_entries(root)
+        budget = _load_gotchas_budget_tokens(root)
+
+        # Fetch a wider set to account for tag-filtering; sort after
+        raw_entries = memory.get_by_kind(MemoryKind.INSIGHT, limit=max_entries * 5)
+        gotchas = [e for e in raw_entries if "gotcha" in e.tags]
+        if not gotchas:
+            return ""
+
+        # Two-pass stable sort: first by last_seen desc, then by count desc.
+        # ISO-8601 strings sort lexicographically so reverse=True is correct.
+        gotchas.sort(key=lambda e: e.metadata.get("last_seen", ""), reverse=True)
+        gotchas.sort(key=lambda e: -int(e.metadata.get("count", 1)))
+
+        # Cap to max_entries
+        gotchas = gotchas[:max_entries]
+
+        # Build the section — one block per gotcha
+        blocks: list[str] = []
+        for entry in gotchas:
+            meta = entry.metadata
+            block_lines = [
+                f"### {entry.summary}",
+                f"- source: {meta.get('source', entry.source)}",
+                f"- severity: {meta.get('severity', 'warning')}",
+                f"- count: {meta.get('count', 1)}",
+                f"- last seen: {meta.get('last_seen', '')}",
+                "",
+                entry.content.strip(),
+            ]
+            blocks.append("\n".join(block_lines))
+
+        # Trim trailing blocks until layer fits within token budget
+        header = "## Gotchas"
+        while blocks:
+            layer = header + "\n\n" + "\n\n".join(blocks)
+            if _estimate_tokens(layer) <= budget:
+                return layer
+            blocks.pop()
+
+        # Even the header alone exceeds budget — return empty (no partial heading)
+        return ""
+    except Exception:
+        return ""
 
 
 def _read_since_last_run_layer(root: Path, memory: Any) -> str:
