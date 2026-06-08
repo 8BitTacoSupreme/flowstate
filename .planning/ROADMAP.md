@@ -31,7 +31,7 @@ Full detail: [`milestones/v0.4.0-ROADMAP.md`](./milestones/v0.4.0-ROADMAP.md)
 
 ### v0.5.0 Compounding Loop (Phases 6-8)
 
-- [ ] **Phase 6: Run Journal** — Append-only, delta-only per-run trail persisted to memory + RUNLOG.md; surfaced as `## Since Last Run` prefix layer
+- [x] **Phase 6: Run Journal** — Append-only, delta-only per-run trail persisted to memory + RUNLOG.md; surfaced as `## Since Last Run` prefix layer (completed 2026-06-08)
 - [ ] **Phase 7: Gotchas Accumulator** — Structured failures promoted to a deduped, capped persistent gotchas layer injected into every run's context prefix
 - [ ] **Phase 8: Runnable Verification** — `flowstate verify` turns fixture gates into real checks; failures close the loop back into gotchas + journal
 
@@ -50,7 +50,7 @@ Full detail: [`milestones/v0.4.0-ROADMAP.md`](./milestones/v0.4.0-ROADMAP.md)
 Plans:
 - [x] 06-01-PLAN.md — MemoryKind.RUN + journal.py append_run_entry + orchestrator wiring (RUN-01)
 - [x] 06-02-PLAN.md — `## Since Last Run` prefix layer + run_journal_prefix_entries config (RUN-02)
-- [ ] 06-03-PLAN.md — `flowstate journal` read command (RUN-03)
+- [x] 06-03-PLAN.md — `flowstate journal` read command (RUN-03)
 **UI hint**: no
 
 ### Phase 7: Gotchas Accumulator
@@ -86,6 +86,6 @@ Plans:
 | 3. Ingredients — Pack, Canon, Fixtures | v0.4.0    | 3/3            | Complete    | 2026-06-06           |
 | 4. Integration — Layered CAG Assembly  | v0.4.0    | 1/1            | Complete    | 2026-06-06           |
 | 5. UX — Guided Kickoff + Hygiene       | v0.4.0    | 2/2            | Complete    | 2026-06-06           |
-| 6. Run Journal                         | v0.5.0    | 2/3 | In Progress|  |
+| 6. Run Journal                         | v0.5.0    | 3/3 | Complete   | 2026-06-08 |
 | 7. Gotchas Accumulator                 | v0.5.0    | 0/?            | Not started | -                    |
 | 8. Runnable Verification               | v0.5.0    | 0/?            | Not started | -                    |
