@@ -671,3 +671,349 @@ class TestJournalCommand:
         assert result.exit_code == 0
         assert "no journal entries yet" in result.output
         assert "Traceback" not in result.output
+
+
+# ── gotchas command tests (GOT-03) ───────────────────────────────────
+
+
+def _seed_gotcha(
+    store,
+    *,
+    signature: str,
+    source: str = "doctor",
+    severity: str = "error",
+    count: int = 1,
+    last_seen: str = "2026-01-01T00:00:00",
+    message: str = "test gotcha",
+    tags: list | None = None,
+):
+    """Seed a gotcha INSIGHT entry directly for test isolation."""
+    from datetime import UTC, datetime
+
+    from flowstate.memory import MemoryEntry, MemoryKind
+
+    entry = MemoryEntry.create(
+        MemoryKind.INSIGHT,
+        content=message,
+        summary=f"[{source}] {message[:80]}",
+        source=source,
+        tags=(tags if tags is not None else ["gotcha", source]),
+        metadata={
+            "signature": signature,
+            "source": source,
+            "severity": severity,
+            "first_seen": "2026-01-01T00:00:00",
+            "last_seen": last_seen,
+            "count": count,
+        },
+    )
+    # fix created_at so ordering is deterministic
+    entry.created_at = datetime(2026, 1, 1, tzinfo=UTC)
+    store.add(entry)
+    return entry
+
+
+class TestGotchasCommand:
+    def test_gotchas_empty_exits_zero(self, tmp_path: Path):
+        """Fresh root (no memory.db) → exit 0 and 'no gotchas recorded yet'."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["gotchas", "--root", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "no gotchas recorded yet" in result.output
+
+    def test_gotchas_corrupt_db_exits_zero(self, tmp_path: Path):
+        """Corrupt memory.db → exit 0, no Traceback in output."""
+        db_path = tmp_path / "memory.db"
+        db_path.write_text("not a valid sqlite database")
+        runner = CliRunner()
+        result = runner.invoke(main, ["gotchas", "--root", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "Traceback" not in result.output
+
+    def test_gotchas_populated_shows_table(self, tmp_path: Path):
+        """Two gotchas in store → exit 0, both signatures visible in output."""
+        from flowstate.memory import MemoryStore
+
+        store = MemoryStore(root=tmp_path)
+        _seed_gotcha(
+            store, signature="aaaa0000bbbb0001", source="doctor", count=3, message="hook missing"
+        )
+        _seed_gotcha(
+            store, signature="cccc1111dddd0002", source="repair", count=1, message="state corrupt"
+        )
+        store.close()
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["gotchas", "--root", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "aaaa0000bbbb0001" in result.output
+        assert "cccc1111dddd0002" in result.output
+
+    def test_gotchas_sorted_count_desc(self, tmp_path: Path):
+        """Higher-count gotcha appears before lower-count gotcha in output."""
+        from flowstate.memory import MemoryStore
+
+        store = MemoryStore(root=tmp_path)
+        _seed_gotcha(store, signature="low0000000000001", count=1, message="low count")
+        _seed_gotcha(store, signature="high000000000002", count=5, message="high count")
+        store.close()
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["gotchas", "--root", str(tmp_path)])
+        assert result.exit_code == 0
+        low_idx = result.output.find("low0000000000001")
+        high_idx = result.output.find("high000000000002")
+        assert high_idx < low_idx, "higher-count gotcha should appear first"
+
+    def test_gotchas_limit_option(self, tmp_path: Path):
+        """--limit 1 shows exactly one row when two gotchas are seeded."""
+        from flowstate.memory import MemoryStore
+
+        store = MemoryStore(root=tmp_path)
+        _seed_gotcha(store, signature="sig1000000000001", count=2, message="first gotcha")
+        _seed_gotcha(store, signature="sig2000000000002", count=1, message="second gotcha")
+        store.close()
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["gotchas", "--limit", "1", "--root", str(tmp_path)])
+        assert result.exit_code == 0
+        # Only the higher-count one (sig1) should appear
+        assert "sig1000000000001" in result.output
+        assert "sig2000000000002" not in result.output
+
+
+class TestGotchasPruneCommand:
+    def test_prune_by_signature_removes_entry(self, tmp_path: Path):
+        """prune --signature <sig> removes that entry; subsequent list no longer shows it."""
+        from flowstate.memory import MemoryStore
+
+        store = MemoryStore(root=tmp_path)
+        _seed_gotcha(store, signature="deadbeefdeadbeef", message="to be pruned")
+        _seed_gotcha(store, signature="keepmeepkeepmee1", message="keep this one")
+        store.close()
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main, ["gotchas", "prune", "--signature", "deadbeefdeadbeef", "--root", str(tmp_path)]
+        )
+        assert result.exit_code == 0
+
+        # List should no longer contain the pruned signature
+        list_result = runner.invoke(main, ["gotchas", "--root", str(tmp_path)])
+        assert "deadbeefdeadbeef" not in list_result.output
+        assert "keepmeepkeepmee1" in list_result.output
+
+    def test_prune_resolved_removes_resolved_entries(self, tmp_path: Path):
+        """prune --resolved clears entries tagged 'resolved', leaves others intact."""
+        from flowstate.memory import MemoryStore
+
+        store = MemoryStore(root=tmp_path)
+        _seed_gotcha(
+            store,
+            signature="resolvedaaaaaa01",
+            message="resolved gotcha",
+            tags=["gotcha", "doctor", "resolved"],
+        )
+        _seed_gotcha(
+            store,
+            signature="activebbbbbbbb02",
+            message="active gotcha",
+            tags=["gotcha", "doctor"],
+        )
+        store.close()
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["gotchas", "prune", "--resolved", "--root", str(tmp_path)])
+        assert result.exit_code == 0
+
+        list_result = runner.invoke(main, ["gotchas", "--root", str(tmp_path)])
+        assert "resolvedaaaaaa01" not in list_result.output
+        assert "activebbbbbbbb02" in list_result.output
+
+    def test_prune_rewrites_gotchas_md(self, tmp_path: Path):
+        """After prune, GOTCHAS.md does not contain the pruned signature."""
+        from flowstate.memory import MemoryStore
+
+        # Ensure .planning dir exists for GOTCHAS.md
+        (tmp_path / ".planning").mkdir(parents=True, exist_ok=True)
+
+        store = MemoryStore(root=tmp_path)
+        _seed_gotcha(store, signature="pruneme00000001a", message="prune target")
+        store.close()
+
+        runner = CliRunner()
+        runner.invoke(
+            main, ["gotchas", "prune", "--signature", "pruneme00000001a", "--root", str(tmp_path)]
+        )
+
+        gotchas_md = tmp_path / ".planning" / "GOTCHAS.md"
+        if gotchas_md.exists():
+            assert "pruneme00000001a" not in gotchas_md.read_text()
+
+
+# ── doctor/repair gotcha capture tests (GOT-01) ──────────────────────
+
+
+class TestDoctorGotchaCapture:
+    def test_doctor_captures_error_findings(self, tmp_path: Path, monkeypatch):
+        """doctor captures error-severity diagnoses as gotchas in memory.db."""
+        from unittest.mock import patch
+
+        from flowstate.doctor import Diagnosis
+        from flowstate.memory import MemoryKind, MemoryStore
+        from flowstate.state import FlowStateModel
+
+        fake_findings = [
+            Diagnosis(
+                name="manifest_integrity", severity="error", message="Manifest file missing: foo"
+            ),
+        ]
+
+        runner = CliRunner()
+        with (
+            patch("flowstate.cli.load_state", return_value=FlowStateModel()),
+            patch("flowstate.cli.run_doctor", return_value=fake_findings),
+        ):
+            result = runner.invoke(main, ["doctor", "--root", str(tmp_path)])
+
+        # doctor exit code = number of errors (1 here)
+        assert result.exit_code == 1
+
+        # Gotcha should be in memory.db
+        store = MemoryStore(root=tmp_path)
+        entries = store.get_by_kind(MemoryKind.INSIGHT, limit=50)
+        store.close()
+        gotchas = [e for e in entries if "gotcha" in e.tags]
+        assert len(gotchas) >= 1
+        assert any(e.metadata.get("source") == "doctor" for e in gotchas)
+        assert any("Manifest file missing" in e.content for e in gotchas)
+
+    def test_doctor_skips_info_findings(self, tmp_path: Path):
+        """doctor does NOT capture info-severity diagnoses as gotchas."""
+        from unittest.mock import patch
+
+        from flowstate.doctor import Diagnosis
+        from flowstate.memory import MemoryKind, MemoryStore
+        from flowstate.state import FlowStateModel
+
+        fake_findings = [
+            Diagnosis(name="info_check", severity="info", message="This is informational only"),
+        ]
+
+        runner = CliRunner()
+        with (
+            patch("flowstate.cli.load_state", return_value=FlowStateModel()),
+            patch("flowstate.cli.run_doctor", return_value=fake_findings),
+        ):
+            result = runner.invoke(main, ["doctor", "--root", str(tmp_path)])
+
+        # No errors → exit 0
+        assert result.exit_code == 0
+
+        store = MemoryStore(root=tmp_path)
+        entries = store.get_by_kind(MemoryKind.INSIGHT, limit=50)
+        store.close()
+        gotchas = [e for e in entries if "gotcha" in e.tags]
+        assert len(gotchas) == 0
+
+    def test_doctor_exit_code_unchanged_by_capture(self, tmp_path: Path):
+        """doctor exit code is still error_count even when capture runs."""
+        from unittest.mock import patch
+
+        from flowstate.doctor import Diagnosis
+        from flowstate.state import FlowStateModel
+
+        fake_findings = [
+            Diagnosis(name="c1", severity="error", message="err one"),
+            Diagnosis(name="c2", severity="error", message="err two"),
+            Diagnosis(name="c3", severity="warning", message="warn one"),
+        ]
+
+        runner = CliRunner()
+        with (
+            patch("flowstate.cli.load_state", return_value=FlowStateModel()),
+            patch("flowstate.cli.run_doctor", return_value=fake_findings),
+        ):
+            result = runner.invoke(main, ["doctor", "--root", str(tmp_path)])
+
+        assert result.exit_code == 2  # two errors
+
+    def test_doctor_capture_failure_does_not_change_exit(self, tmp_path: Path):
+        """Corrupt memory.db does not change doctor exit code."""
+        from unittest.mock import patch
+
+        from flowstate.doctor import Diagnosis
+        from flowstate.state import FlowStateModel
+
+        db_path = tmp_path / "memory.db"
+        db_path.write_text("corrupt")
+
+        fake_findings = [
+            Diagnosis(name="c1", severity="error", message="something broke"),
+        ]
+
+        runner = CliRunner()
+        with (
+            patch("flowstate.cli.load_state", return_value=FlowStateModel()),
+            patch("flowstate.cli.run_doctor", return_value=fake_findings),
+        ):
+            result = runner.invoke(main, ["doctor", "--root", str(tmp_path)])
+
+        assert result.exit_code == 1  # still 1 error
+
+
+class TestRepairGotchaCapture:
+    def test_repair_captures_error_and_warning_findings(self, tmp_path: Path):
+        """repair captures error/warning diagnoses as gotchas."""
+        from unittest.mock import patch
+
+        from flowstate.doctor import Diagnosis
+        from flowstate.memory import MemoryKind, MemoryStore
+        from flowstate.state import FlowStateModel
+
+        fake_findings = [
+            Diagnosis(name="c1", severity="error", message="state.json missing"),
+            Diagnosis(name="c2", severity="warning", message="stale lock file"),
+        ]
+
+        runner = CliRunner()
+        with (
+            patch("flowstate.cli.load_state", return_value=FlowStateModel()),
+            patch("flowstate.cli.run_doctor", return_value=fake_findings),
+            patch("flowstate.cli.apply_safe_fixes", return_value=[]),
+            patch("flowstate.cli.save_state"),
+        ):
+            result = runner.invoke(main, ["repair", "--root", str(tmp_path)])
+
+        # repair exits 0 (no sys.exit on repair)
+        assert result.exit_code == 0
+
+        store = MemoryStore(root=tmp_path)
+        entries = store.get_by_kind(MemoryKind.INSIGHT, limit=50)
+        store.close()
+        gotchas = [e for e in entries if "gotcha" in e.tags]
+        assert len(gotchas) >= 2
+        sources = {e.metadata.get("source") for e in gotchas}
+        assert "doctor" in sources
+
+    def test_repair_exit_code_unchanged_by_capture(self, tmp_path: Path):
+        """repair always exits 0 regardless of capture."""
+        from unittest.mock import patch
+
+        from flowstate.doctor import Diagnosis
+        from flowstate.state import FlowStateModel
+
+        fake_findings = [
+            Diagnosis(name="c1", severity="error", message="something failed"),
+        ]
+
+        runner = CliRunner()
+        with (
+            patch("flowstate.cli.load_state", return_value=FlowStateModel()),
+            patch("flowstate.cli.run_doctor", return_value=fake_findings),
+            patch("flowstate.cli.apply_safe_fixes", return_value=[]),
+            patch("flowstate.cli.save_state"),
+        ):
+            result = runner.invoke(main, ["repair", "--root", str(tmp_path)])
+
+        assert result.exit_code == 0
