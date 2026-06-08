@@ -163,14 +163,10 @@ def _rewrite_gotchas_md(root: Path, memory: MemoryStore) -> None:
         all_entries = memory.get_by_kind(MemoryKind.INSIGHT, limit=1000)
         gotchas = [e for e in all_entries if "gotcha" in e.tags]
 
-        # Sort: count desc, then last_seen desc
-        gotchas.sort(
-            key=lambda e: (
-                -int(e.metadata.get("count", 1)),
-                e.metadata.get("last_seen", "") or "",
-            ),
-            reverse=False,
-        )
+        # Two-pass stable sort: last_seen desc, then count desc.
+        # Matches _read_gotchas_layer in context_prefix.py for consistent ranking.
+        gotchas.sort(key=lambda e: e.metadata.get("last_seen", "") or "", reverse=True)
+        gotchas.sort(key=lambda e: -int(e.metadata.get("count", 1)))
 
         lines: list[str] = [
             "# GOTCHAS\n\n",
