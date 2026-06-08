@@ -562,3 +562,379 @@ class TestSinceLastRunLayer:
         config_bool.parent.mkdir(parents=True, exist_ok=True)
         config_bool.write_text('{"context_prefix_budget_tokens": true}')
         assert _load_budget(tmp_path / "bool_budget") == _DEFAULT_BUDGET_TOKENS
+
+
+# ---------------------------------------------------------------------------
+# Gotchas config helpers
+# ---------------------------------------------------------------------------
+
+
+class TestGotchasConfigHelpers:
+    def test_load_gotchas_max_entries_default(self, tmp_path: Path):
+        """Returns 10 when config absent or key missing."""
+        from flowstate.context_prefix import _load_gotchas_max_entries
+
+        assert _load_gotchas_max_entries(tmp_path) == 10
+
+        config_path = tmp_path / ".planning" / "config.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text("{}")
+        assert _load_gotchas_max_entries(tmp_path) == 10
+
+    def test_load_gotchas_max_entries_honors_valid_int(self, tmp_path: Path):
+        from flowstate.context_prefix import _load_gotchas_max_entries
+
+        config_path = tmp_path / ".planning" / "config.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text('{"gotchas_max_entries": 5}')
+        assert _load_gotchas_max_entries(tmp_path) == 5
+
+    def test_load_gotchas_max_entries_rejects_bool(self, tmp_path: Path):
+        from flowstate.context_prefix import _load_gotchas_max_entries
+
+        config_path = tmp_path / ".planning" / "config.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text('{"gotchas_max_entries": true}')
+        assert _load_gotchas_max_entries(tmp_path) == 10
+
+    def test_load_gotchas_max_entries_rejects_negative_and_zero(self, tmp_path: Path):
+        from flowstate.context_prefix import _load_gotchas_max_entries
+
+        for bad_value in [-1, 0]:
+            config_path = tmp_path / f"bad{bad_value}" / ".planning" / "config.json"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(f'{{"gotchas_max_entries": {bad_value}}}')
+            assert _load_gotchas_max_entries(tmp_path / f"bad{bad_value}") == 10
+
+    def test_load_gotchas_budget_tokens_default(self, tmp_path: Path):
+        """Returns 1500 when config absent or key missing."""
+        from flowstate.context_prefix import _load_gotchas_budget_tokens
+
+        assert _load_gotchas_budget_tokens(tmp_path) == 1500
+
+    def test_load_gotchas_budget_tokens_honors_valid_int(self, tmp_path: Path):
+        from flowstate.context_prefix import _load_gotchas_budget_tokens
+
+        config_path = tmp_path / ".planning" / "config.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text('{"gotchas_budget_tokens": 800}')
+        assert _load_gotchas_budget_tokens(tmp_path) == 800
+
+    def test_load_gotchas_budget_tokens_rejects_bool(self, tmp_path: Path):
+        from flowstate.context_prefix import _load_gotchas_budget_tokens
+
+        config_path = tmp_path / ".planning" / "config.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text('{"gotchas_budget_tokens": false}')
+        assert _load_gotchas_budget_tokens(tmp_path) == 1500
+
+    def test_load_gotchas_enabled_default_true(self, tmp_path: Path):
+        """Returns True when config absent or key missing."""
+        from flowstate.context_prefix import _load_gotchas_enabled
+
+        assert _load_gotchas_enabled(tmp_path) is True
+
+    def test_load_gotchas_enabled_returns_false_for_bool_false(self, tmp_path: Path):
+        from flowstate.context_prefix import _load_gotchas_enabled
+
+        config_path = tmp_path / ".planning" / "config.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text('{"gotchas_enabled": false}')
+        assert _load_gotchas_enabled(tmp_path) is False
+
+    def test_load_gotchas_enabled_ignores_int(self, tmp_path: Path):
+        """Non-bool value falls back to True default."""
+        from flowstate.context_prefix import _load_gotchas_enabled
+
+        config_path = tmp_path / ".planning" / "config.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text('{"gotchas_enabled": 0}')
+        assert _load_gotchas_enabled(tmp_path) is True
+
+    def test_load_gotchas_enabled_returns_true_for_bool_true(self, tmp_path: Path):
+        from flowstate.context_prefix import _load_gotchas_enabled
+
+        config_path = tmp_path / ".planning" / "config.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text('{"gotchas_enabled": true}')
+        assert _load_gotchas_enabled(tmp_path) is True
+
+
+# ---------------------------------------------------------------------------
+# _read_gotchas_layer
+# ---------------------------------------------------------------------------
+
+
+def _make_gotcha_entry(
+    summary: str = "[test] some gotcha",
+    content: str = "the gotcha message",
+    count: int = 1,
+    last_seen: str = "2026-06-08T00:00:00+00:00",
+    source: str = "test",
+    severity: str = "warning",
+    tags: list | None = None,
+) -> MagicMock:
+    """Return a minimal fake MemoryEntry for gotcha tests."""
+    entry = MagicMock()
+    entry.summary = summary
+    entry.content = content
+    entry.source = source
+    entry.tags = tags if tags is not None else ["gotcha", source]
+    entry.metadata = {
+        "signature": "abc123",
+        "source": source,
+        "severity": severity,
+        "first_seen": "2026-06-01T00:00:00+00:00",
+        "last_seen": last_seen,
+        "count": count,
+    }
+    return entry
+
+
+class TestReadGotchasLayer:
+    def test_emits_gotchas_heading_with_entries(self, tmp_path: Path):
+        """With gotcha entries present, result starts with '## Gotchas'."""
+        from flowstate.context_prefix import _read_gotchas_layer
+
+        entry = _make_gotcha_entry()
+        mem = MagicMock()
+        mem.get_by_kind.return_value = [entry]
+
+        result = _read_gotchas_layer(tmp_path, mem)
+
+        assert "## Gotchas" in result
+
+    def test_ranked_by_count_desc_then_last_seen_desc(self, tmp_path: Path):
+        """Entries are emitted count desc, then last_seen desc."""
+        from flowstate.context_prefix import _read_gotchas_layer
+
+        high_count = _make_gotcha_entry("high", count=5, last_seen="2026-06-01T00:00:00+00:00")
+        low_count = _make_gotcha_entry("low", count=1, last_seen="2026-06-08T00:00:00+00:00")
+        mem = MagicMock()
+        mem.get_by_kind.return_value = [low_count, high_count]  # wrong order
+
+        result = _read_gotchas_layer(tmp_path, mem)
+
+        assert result.index("high") < result.index("low"), "high-count entry must appear first"
+
+    def test_capped_to_max_entries(self, tmp_path: Path):
+        """With max_entries=2 in config, only 2 gotchas appear even if more exist."""
+        from flowstate.context_prefix import _read_gotchas_layer
+
+        config_path = tmp_path / ".planning" / "config.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text('{"gotchas_max_entries": 2}')
+
+        entries = [_make_gotcha_entry(f"gotcha {i}", count=i) for i in range(5, 0, -1)]
+        mem = MagicMock()
+        mem.get_by_kind.return_value = entries
+
+        result = _read_gotchas_layer(tmp_path, mem)
+
+        # Only the top 2 by count should appear (count 5 and 4)
+        assert "gotcha 5" in result
+        assert "gotcha 4" in result
+        assert "gotcha 1" not in result
+
+    def test_trimmed_to_budget_tokens(self, tmp_path: Path):
+        """Layer is trimmed so _estimate_tokens(result) <= gotchas_budget_tokens."""
+        from flowstate.context_prefix import _estimate_tokens, _read_gotchas_layer
+
+        config_path = tmp_path / ".planning" / "config.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        # Very tight token budget — forces trim
+        config_path.write_text('{"gotchas_budget_tokens": 30}')
+
+        entries = [_make_gotcha_entry(f"gotcha {i}", content="X" * 200, count=i) for i in range(5)]
+        mem = MagicMock()
+        mem.get_by_kind.return_value = entries
+
+        result = _read_gotchas_layer(tmp_path, mem)
+
+        if result:  # may be empty if even header exceeds budget
+            assert _estimate_tokens(result) <= 30, (
+                f"Layer exceeds budget: {_estimate_tokens(result)} tokens"
+            )
+
+    def test_returns_empty_when_no_gotchas(self, tmp_path: Path):
+        """Empty gotcha list → returns ''."""
+        from flowstate.context_prefix import _read_gotchas_layer
+
+        mem = MagicMock()
+        mem.get_by_kind.return_value = []
+
+        result = _read_gotchas_layer(tmp_path, mem)
+
+        assert result == ""
+
+    def test_returns_empty_when_disabled(self, tmp_path: Path):
+        """gotchas_enabled=false → returns ''."""
+        from flowstate.context_prefix import _read_gotchas_layer
+
+        config_path = tmp_path / ".planning" / "config.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text('{"gotchas_enabled": false}')
+
+        entry = _make_gotcha_entry()
+        mem = MagicMock()
+        mem.get_by_kind.return_value = [entry]
+
+        result = _read_gotchas_layer(tmp_path, mem)
+
+        assert result == ""
+
+    def test_never_raises_on_memory_exception(self, tmp_path: Path):
+        """If memory.get_by_kind raises, returns '' without propagating."""
+        from flowstate.context_prefix import _read_gotchas_layer
+
+        mem = MagicMock()
+        mem.get_by_kind.side_effect = RuntimeError("db gone")
+
+        result = _read_gotchas_layer(tmp_path, mem)  # must not raise
+
+        assert result == ""
+
+    def test_filters_to_gotcha_tagged_entries_only(self, tmp_path: Path):
+        """Entries without 'gotcha' tag are excluded."""
+        from flowstate.context_prefix import _read_gotchas_layer
+
+        gotcha_entry = _make_gotcha_entry("real gotcha", tags=["gotcha", "doctor"])
+        non_gotcha = _make_gotcha_entry("not a gotcha", tags=["insight"])
+        mem = MagicMock()
+        mem.get_by_kind.return_value = [gotcha_entry, non_gotcha]
+
+        result = _read_gotchas_layer(tmp_path, mem)
+
+        assert "real gotcha" in result
+        assert "not a gotcha" not in result
+
+    def test_no_bridge_import(self):
+        """context_prefix must not import from flowstate.bridge (after gotchas added)."""
+        import inspect
+
+        import flowstate.context_prefix as cp_mod
+
+        src = inspect.getsource(cp_mod)
+        import_lines = [
+            line for line in src.splitlines() if line.strip().startswith(("from ", "import "))
+        ]
+        bridge_imports = [ln for ln in import_lines if "flowstate.bridge" in ln]
+        assert not bridge_imports, f"bridge imports found: {bridge_imports}"
+
+
+# ---------------------------------------------------------------------------
+# Gotchas layer integration (order + budget participation)
+# ---------------------------------------------------------------------------
+
+
+class TestGotchasLayerIntegration:
+    def _make_memory_with_gotchas(self, gotcha_entries=None, run_entries=None, context=""):
+        """Return a mock MemoryStore that returns gotchas for INSIGHT, runs for RUN."""
+        from flowstate.memory import MemoryKind
+
+        mem = MagicMock()
+        mem.get_context.return_value = context
+
+        def _get_by_kind(kind, limit=None):
+            if kind == MemoryKind.INSIGHT:
+                return gotcha_entries or []
+            if kind == MemoryKind.RUN:
+                return run_entries or []
+            return []
+
+        mem.get_by_kind.side_effect = _get_by_kind
+        return mem
+
+    def test_gotchas_before_memory_after_pack(self, tmp_path: Path):
+        """Layer order: pack < gotchas < memory (## Gotchas before ## Prior Knowledge)."""
+        _make_fixture_file(tmp_path)
+        _make_pack_file(tmp_path, "<pack>body</pack>")
+
+        gotcha = _make_gotcha_entry("a gotcha", content="something failed")
+        mem = self._make_memory_with_gotchas(
+            gotcha_entries=[gotcha],
+            context="## Prior Knowledge\n\nsome fact\n",
+        )
+
+        result = build_context_prefix(tmp_path, mem, "q", budget_tokens=50000)
+
+        pack_idx = result.find("<pack>body</pack>")
+        gotchas_idx = result.find("## Gotchas")
+        memory_idx = result.find("## Prior Knowledge")
+
+        assert pack_idx != -1, "pack not found"
+        assert gotchas_idx != -1, "## Gotchas not found"
+        assert memory_idx != -1, "## Prior Knowledge not found"
+        assert pack_idx < gotchas_idx, "pack must precede gotchas"
+        assert gotchas_idx < memory_idx, "gotchas must precede memory"
+
+    def test_gotchas_omitted_when_empty(self, tmp_path: Path):
+        """No gotchas → '## Gotchas' heading absent from result."""
+        mem = self._make_memory_with_gotchas(
+            gotcha_entries=[],
+            context="## Prior Knowledge\n\nfact\n",
+        )
+
+        result = build_context_prefix(tmp_path, mem, "q", budget_tokens=50000)
+
+        assert "## Gotchas" not in result
+
+    def test_gotchas_layer_dropped_and_logged_when_over_budget(self, tmp_path: Path):
+        """Fat gotchas set with tiny budget → gotchas dropped and logged."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        # Large gotcha content → forces budget breach
+        fat_content = "G" * 600  # ~150 tokens per entry
+        entries = [
+            _make_gotcha_entry(f"gotcha {i}", content=fat_content, count=i) for i in range(5)
+        ]
+
+        mem = self._make_memory_with_gotchas(gotcha_entries=entries)
+
+        buf = StringIO()
+        test_console = Console(file=buf, highlight=False, markup=False)
+
+        result = build_context_prefix(tmp_path, mem, "q", budget_tokens=50, console=test_console)
+
+        log_output = buf.getvalue()
+        over_budget = _estimate_tokens(result) >= 50
+        gotchas_present = "## Gotchas" in result
+
+        if gotchas_present:
+            assert not over_budget, "gotchas kept but prefix exceeds budget"
+        else:
+            assert (
+                "gotcha" in log_output.lower()
+                or "drop" in log_output.lower()
+                or "omit" in log_output.lower()
+            ), f"gotchas dropped but no log emitted; log: {log_output!r}"
+
+    def test_existing_layer_order_regression(self, tmp_path: Path):
+        """pack < memory < since-last-run order not broken by gotchas insertion."""
+        _make_fixture_file(tmp_path)
+        _make_pack_file(tmp_path, "<pack>data</pack>")
+
+        run_entry = _make_run_entry("run delta", "some run content")
+        mem = self._make_memory_with_gotchas(
+            gotcha_entries=[],  # no gotchas
+            run_entries=[run_entry],
+            context="## Prior Knowledge\n\nfact\n",
+        )
+
+        result = build_context_prefix(tmp_path, mem, "q", budget_tokens=50000)
+
+        pack_idx = result.find("<pack>data</pack>")
+        memory_idx = result.find("## Prior Knowledge")
+        since_idx = result.find("## Since Last Run")
+
+        assert pack_idx != -1
+        assert memory_idx != -1
+        assert since_idx != -1
+        assert pack_idx < memory_idx < since_idx
+
+
+def _estimate_tokens(text: str) -> int:
+    """Replicate the module helper for use in tests."""
+    return len(text) // 4
