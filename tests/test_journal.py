@@ -214,3 +214,47 @@ class TestNeverRaises:
 
         # Memory entry still landed
         assert store.count(MemoryKind.RUN) == 1
+
+    def test_memory_add_failure_does_not_propagate(
+        self, state_with_manifest, tmp_path, monkeypatch
+    ):
+        """If memory.add raises, append_run_entry must not propagate the exception."""
+        from unittest.mock import MagicMock
+
+        # Build a fake memory store whose count() returns 0 (not seen) but add() raises
+        fake_memory = MagicMock(spec=MemoryStore)
+        fake_memory.count.return_value = 0
+        fake_memory.get_by_kind.return_value = []
+        fake_memory.add.side_effect = RuntimeError("simulated storage failure")
+
+        # Must not raise
+        append_run_entry(
+            fake_memory, state_with_manifest, "fail001", root=tmp_path, timestamp=FIXED_TS
+        )
+
+        # add() was attempted
+        fake_memory.add.assert_called_once()
+
+
+class TestRemovedPathDelta:
+    def test_removed_path_appears_in_artifacts_changed(
+        self, store: MemoryStore, state_with_manifest, tmp_path
+    ):
+        """A manifest entry present in run001 but absent in run002 is in artifacts_changed."""
+        # run001 — both research/report.md and .planning/ROADMAP.md present
+        append_run_entry(store, state_with_manifest, "run001", root=tmp_path, timestamp=FIXED_TS)
+
+        # run002 — remove .planning/ROADMAP.md from manifest entirely
+        state_with_manifest.install_manifest = [
+            entry
+            for entry in state_with_manifest.install_manifest
+            if entry.path != ".planning/ROADMAP.md"
+        ]
+
+        ts2 = datetime(2026, 6, 8, 13, 0, 0, tzinfo=UTC)
+        append_run_entry(store, state_with_manifest, "run002", root=tmp_path, timestamp=ts2)
+
+        entries = store.get_by_kind(MemoryKind.RUN, limit=2)
+        # Newest-first — run002 at index 0
+        second_entry = entries[0]
+        assert ".planning/ROADMAP.md" in second_entry.metadata["artifacts_changed"]
