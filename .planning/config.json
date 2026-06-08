@@ -2,6 +2,7 @@
   "model_profile": "balanced",
   "commit_docs": true,
   "parallelization": true,
+  "run_journal_prefix_entries": 3,
   "search_gitignored": false,
   "brave_search": false,
   "firecrawl": false,

@@ -1,19 +1,21 @@
 """Layered CAG context prefix assembler — Phase 4, CAG-01/02.
 
 Composes the most-stable-first ordered prefix for all adapter user-prompts:
-  fixtures → pack (if it fits) → memory
+  fixtures → pack (if it fits) → memory → since-last-run
 
 The result is built ONCE per pipeline run in orchestrator.run_pipeline() and
 threaded via the existing ``prior_knowledge`` seam into ResearchAdapter,
 StrategyAdapter, and GSDAdapter — no adapter calls this function directly.
 
 Layer ordering rationale (most-stable-first for implicit prompt-cache hits):
-  1. Fixtures  — static ECC fixture from .planning/fixtures/starter.json.
-                 Never changes within a run; stabilises the cache prefix.
-  2. Pack      — repomix XML pack at .planning/codebase/repomix-pack.xml.
-                 Regenerated only when source files change; semi-stable.
-  3. Memory    — FTS5 search results from MemoryStore.get_context(query).
-                 Most dynamic; placed last so earlier layers cache-hit freely.
+  1. Fixtures       — static ECC fixture from .planning/fixtures/starter.json.
+                      Never changes within a run; stabilises the cache prefix.
+  2. Pack           — repomix XML pack at .planning/codebase/repomix-pack.xml.
+                      Regenerated only when source files change; semi-stable.
+  3. Memory         — FTS5 search results from MemoryStore.get_context(query).
+                      Most dynamic of the stable layers; placed third.
+  4. Since Last Run — last N MemoryKind.RUN journal deltas (newest-first).
+                      Most dynamic; placed last so it stays outside cache window.
 
 CRITICAL — canon exclusion:
   The Karpathy coding-guidelines CANON lives in the bridge SYSTEM prompt
@@ -35,6 +37,7 @@ from typing import Any
 
 from rich.console import Console
 
+from flowstate.memory import MemoryKind
 from flowstate.pack import PackResult, run_pack
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -46,6 +49,7 @@ _PACK_PATH = ".planning/codebase/repomix-pack.xml"
 _FIXTURE_PATH = ".planning/fixtures/starter.json"
 _CONFIG_PATH = ".planning/config.json"
 _DEFAULT_BUDGET_TOKENS = 12_000
+_DEFAULT_JOURNAL_PREFIX_N = 3
 _CHARS_PER_TOKEN = 4  # consistent with memory.py::get_context approximation
 
 # Module-level console — callers can inject their own via the ``console`` param
@@ -79,6 +83,45 @@ def _load_budget(root: Path) -> int:
     except Exception:
         pass
     return _DEFAULT_BUDGET_TOKENS
+
+
+def _load_journal_prefix_n(root: Path) -> int:
+    """Read run_journal_prefix_entries from .planning/config.json.
+
+    Falls back to ``_DEFAULT_JOURNAL_PREFIX_N`` (3) when the file is absent,
+    the key is missing, or the value is not a positive integer.
+    """
+    config_path = root / _CONFIG_PATH
+    if not config_path.exists():
+        return _DEFAULT_JOURNAL_PREFIX_N
+    try:
+        data: dict[str, Any] = json.loads(config_path.read_text())
+        value = data.get("run_journal_prefix_entries")
+        if isinstance(value, int) and value > 0:
+            return value
+    except Exception:
+        pass
+    return _DEFAULT_JOURNAL_PREFIX_N
+
+
+def _read_since_last_run_layer(root: Path, memory: Any) -> str:
+    """Read last N run-journal entries and format as '## Since Last Run'.
+
+    Returns empty string when the journal is empty (layer omitted silently).
+    Never raises.
+    """
+    try:
+        n = _load_journal_prefix_n(root)
+        entries = memory.get_by_kind(MemoryKind.RUN, limit=n)
+        if not entries:
+            return ""
+        lines = ["## Since Last Run\n"]
+        for entry in entries:
+            lines.append(f"### {entry.summary}\n")
+            lines.append(entry.content.strip() + "\n\n")
+        return "".join(lines).rstrip()
+    except Exception:
+        return ""
 
 
 def _read_fixtures_layer(root: Path) -> str:
@@ -128,8 +171,8 @@ def build_context_prefix(
 ) -> str:
     """Assemble the ordered CAG context prefix for the current pipeline run.
 
-    Composes three layers in most-stable-first order:
-      fixtures → pack (if it fits) → memory
+    Composes four layers in most-stable-first order:
+      fixtures → pack (if it fits) → memory → since-last-run
 
     The fit ladder for the PACK layer:
       1. ``total_tokens < budget`` → inline full pack.
@@ -211,7 +254,10 @@ def build_context_prefix(
                 )
                 pack_layer = ""
 
+    # ── Layer 4: since-last-run (most dynamic — always last) ─────────────────
+    since_last_run_layer = _read_since_last_run_layer(root, memory)
+
     # ── Assemble final string ─────────────────────────────────────────────────
-    layers = [fixtures_layer, pack_layer, memory_layer]
+    layers = [fixtures_layer, pack_layer, memory_layer, since_last_run_layer]
     non_empty = [layer for layer in layers if layer]
     return _SEPARATOR.join(non_empty)
