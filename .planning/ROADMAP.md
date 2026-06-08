@@ -46,7 +46,11 @@ Full detail: [`milestones/v0.4.0-ROADMAP.md`](./milestones/v0.4.0-ROADMAP.md)
   2. The context prefix passed to every bridge call includes a `## Since Last Run` section drawn from the last N run-journal entries, positioned after the `## Prior Knowledge` memory layer, and the section is absent (not an empty heading) when no journal entries exist.
   3. `flowstate journal` prints recent run entries newest-first in a readable format and exits 0 even when RUNLOG.md or memory.db is absent or empty.
   4. N (entries shown) is configurable; the default is documented and the layer never causes silent truncation of other prefix layers.
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 06-01-PLAN.md — MemoryKind.RUN + journal.py append_run_entry + orchestrator wiring (RUN-01)
+- [ ] 06-02-PLAN.md — `## Since Last Run` prefix layer + run_journal_prefix_entries config (RUN-02)
+- [ ] 06-03-PLAN.md — `flowstate journal` read command (RUN-03)
 **UI hint**: no
 
 ### Phase 7: Gotchas Accumulator
@@ -82,6 +86,6 @@ Full detail: [`milestones/v0.4.0-ROADMAP.md`](./milestones/v0.4.0-ROADMAP.md)
 | 3. Ingredients — Pack, Canon, Fixtures | v0.4.0    | 3/3            | Complete    | 2026-06-06           |
 | 4. Integration — Layered CAG Assembly  | v0.4.0    | 1/1            | Complete    | 2026-06-06           |
 | 5. UX — Guided Kickoff + Hygiene       | v0.4.0    | 2/2            | Complete    | 2026-06-06           |
-| 6. Run Journal                         | v0.5.0    | 0/?            | Not started | -                    |
+| 6. Run Journal                         | v0.5.0    | 0/3            | Not started | -                    |
 | 7. Gotchas Accumulator                 | v0.5.0    | 0/?            | Not started | -                    |
 | 8. Runnable Verification               | v0.5.0    | 0/?            | Not started | -                    |
