@@ -16,7 +16,7 @@ Requirements for this milestone. Each maps to a roadmap phase (Phases 6–8, con
 ### Gotchas Accumulator (GOT)
 
 - [x] **GOT-01**: Structured failure signals — verifier gaps (VERIFICATION.md), plan-checker findings, `doctor`/`repair` diagnoses, and executor deviations — are captured into a persistent gotchas store (`MemoryKind.INSIGHT` tagged `gotcha`, mirrored to `.planning/GOTCHAS.md`) with source, first-seen, last-seen. Bounded to these structured outputs — NO raw session-transcript mining.
-- [ ] **GOT-02**: `build_context_prefix()` gains a `## Gotchas` layer injecting the accumulated gotchas, placed before the memory layer (stable-ish, near fixtures) so it benefits from the prompt cache.
+- [x] **GOT-02**: `build_context_prefix()` gains a `## Gotchas` layer injecting the accumulated gotchas, placed before the memory layer (stable-ish, near fixtures) so it benefits from the prompt cache.
 - [x] **GOT-03**: Gotchas are deduped (by normalized signature) and capped (most-recent / most-frequent N, configurable token budget) so the layer never grows unbounded; resolved/superseded gotchas can be pruned.
 
 ### Runnable Verification (VER)
@@ -52,7 +52,7 @@ Explicitly excluded for this milestone.
 | RUN-02 | Phase 6 | Complete |
 | RUN-03 | Phase 6 | Complete |
 | GOT-01 | Phase 7 | Complete |
-| GOT-02 | Phase 7 | Pending |
+| GOT-02 | Phase 7 | Complete |
 | GOT-03 | Phase 7 | Complete |
 | VER-01 | Phase 8 | Pending |
 | VER-02 | Phase 8 | Pending |
