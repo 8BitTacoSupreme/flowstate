@@ -593,6 +593,137 @@ def journal(limit: int, root: Path | None):
     console.print(table)
 
 
+@main.group("gotchas", invoke_without_command=True)
+@click.option("--limit", type=int, default=10, help="Max entries to show (default: 10).")
+@click.option(
+    "--root",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Project root directory.",
+)
+@click.pass_context
+def gotchas_group(ctx: click.Context, limit: int, root: Path | None):
+    """List accumulated gotchas most-frequent/most-recent first.
+
+    With no subcommand, lists gotchas in a Rich table.
+    Use 'gotchas prune' to remove entries.
+    """
+    if ctx.invoked_subcommand is not None:
+        return
+
+    from rich.table import Table
+
+    from flowstate.memory import MemoryKind, MemoryStore
+
+    root = resolve_root(root, option_was_explicit=_root_was_explicit())
+
+    try:
+        store = MemoryStore(root=root)
+        all_entries = store.get_by_kind(MemoryKind.INSIGHT, limit=limit * 5)
+        store.close()
+    except Exception:
+        console.print("[dim]no gotchas recorded yet[/dim]")
+        return
+
+    entries = [e for e in all_entries if "gotcha" in e.tags]
+
+    if not entries:
+        console.print("[dim]no gotchas recorded yet[/dim]")
+        return
+
+    # Sort: count desc, then last_seen desc (client-side)
+    entries.sort(
+        key=lambda e: (
+            -int(e.metadata.get("count", 1)),
+            e.metadata.get("last_seen", "") or "",
+        ),
+        reverse=False,
+    )
+
+    # Truncate to --limit after sort
+    entries = entries[:limit]
+
+    table = Table(title="Gotchas", border_style="red")
+    table.add_column("Signature", style="dim", min_width=16)
+    table.add_column("Source", width=12)
+    table.add_column("Severity", width=10)
+    table.add_column("Count", justify="right", width=7)
+    table.add_column("Last Seen", width=20)
+    table.add_column("Message", min_width=40)
+
+    sev_style = {"error": "red", "warning": "yellow", "info": "dim"}
+    for entry in entries:
+        meta = entry.metadata
+        sev = meta.get("severity", "warning")
+        style = sev_style.get(sev, "white")
+        table.add_row(
+            meta.get("signature", "")[:12],
+            meta.get("source", entry.source),
+            f"[{style}]{sev}[/{style}]",
+            str(meta.get("count", 1)),
+            (meta.get("last_seen", "") or "")[:19],
+            entry.content[:120],
+        )
+
+    console.print(table)
+
+
+@gotchas_group.command("prune")
+@click.option("--signature", "sig", default=None, help="Signature of the gotcha to remove.")
+@click.option("--resolved", is_flag=True, help="Remove all gotchas tagged 'resolved'.")
+@click.option(
+    "--root",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Project root directory.",
+)
+def gotchas_prune(sig: str | None, resolved: bool, root: Path | None):
+    """Delete a specific gotcha (--signature) or all resolved ones (--resolved).
+
+    After deletion, rewrites .planning/GOTCHAS.md from the remaining entries.
+    Exits 0 even when the DB is absent or corrupt.
+    """
+    from flowstate.gotchas import _rewrite_gotchas_md
+    from flowstate.memory import MemoryKind, MemoryStore
+
+    root = resolve_root(root, option_was_explicit=_root_was_explicit())
+
+    if not sig and not resolved:
+        console.print("[yellow]Specify --signature <sig> or --resolved.[/yellow]")
+        return
+
+    try:
+        store = MemoryStore(root=root)
+        all_entries = store.get_by_kind(MemoryKind.INSIGHT, limit=1000)
+        gotchas = [e for e in all_entries if "gotcha" in e.tags]
+
+        pruned = 0
+        if sig:
+            targets = [e for e in gotchas if e.metadata.get("signature") == sig]
+            for entry in targets:
+                store._conn.execute("DELETE FROM memories WHERE id = ?", (entry.id,))
+                pruned += 1
+            store._conn.commit()
+
+        if resolved:
+            targets = [e for e in gotchas if "resolved" in e.tags]
+            for entry in targets:
+                store._conn.execute("DELETE FROM memories WHERE id = ?", (entry.id,))
+                pruned += 1
+            store._conn.commit()
+
+        _rewrite_gotchas_md(root, store)
+        store.close()
+
+        if pruned:
+            console.print(f"[green]Pruned {pruned} gotcha(s).[/green]")
+        else:
+            console.print("[dim]No matching gotchas found.[/dim]")
+    except Exception:
+        console.print("[dim]no gotchas recorded yet[/dim]")
+        return
+
+
 @main.command("pack")
 @click.option(
     "--root",
@@ -687,6 +818,20 @@ def doctor(root: Path | None):
     state = load_state(root)
     findings = run_doctor(state, root)
 
+    # Capture error/warning findings as gotchas — best-effort, never raises
+    try:
+        from flowstate.gotchas import capture_gotcha
+        from flowstate.memory import MemoryStore as _MemoryStore
+
+        with _MemoryStore(root=root) as _store:
+            for d in findings:
+                if d.severity in {"error", "warning"}:
+                    capture_gotcha(
+                        _store, source="doctor", message=d.message, root=root, severity=d.severity
+                    )
+    except Exception:
+        pass
+
     if not findings:
         console.print("[green]All checks passed.[/green]")
         return
@@ -735,6 +880,21 @@ def repair(root: Path | None, apply_destructive: bool):
 
     state = load_state(root)
     findings = run_doctor(state, root)
+
+    # Capture error/warning findings as gotchas — best-effort, never raises
+    try:
+        from flowstate.gotchas import capture_gotcha
+        from flowstate.memory import MemoryStore as _MemoryStore
+
+        with _MemoryStore(root=root) as _store:
+            for d in findings:
+                if d.severity in {"error", "warning"}:
+                    capture_gotcha(
+                        _store, source="doctor", message=d.message, root=root, severity=d.severity
+                    )
+    except Exception:
+        pass
+
     if not findings:
         console.print("[green]Nothing to repair — all checks passed.[/green]")
         return

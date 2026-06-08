@@ -731,38 +731,48 @@ class TestGotchasCommand:
         assert "Traceback" not in result.output
 
     def test_gotchas_populated_shows_table(self, tmp_path: Path):
-        """Two gotchas in store → exit 0, both signatures visible in output."""
+        """Two gotchas in store → exit 0, both message texts visible in output."""
         from flowstate.memory import MemoryStore
 
         store = MemoryStore(root=tmp_path)
         _seed_gotcha(
-            store, signature="aaaa0000bbbb0001", source="doctor", count=3, message="hook missing"
+            store,
+            signature="aaaa0000bbbb0001",
+            source="doctor",
+            count=3,
+            message="hook missing alpha",
         )
         _seed_gotcha(
-            store, signature="cccc1111dddd0002", source="repair", count=1, message="state corrupt"
+            store,
+            signature="cccc1111dddd0002",
+            source="repair",
+            count=1,
+            message="state corrupt beta",
         )
         store.close()
 
         runner = CliRunner()
-        result = runner.invoke(main, ["gotchas", "--root", str(tmp_path)])
+        result = runner.invoke(main, ["gotchas", "--root", str(tmp_path)], env={"COLUMNS": "200"})
         assert result.exit_code == 0
-        assert "aaaa0000bbbb0001" in result.output
-        assert "cccc1111dddd0002" in result.output
+        # Check message content (wide column, not truncated by terminal width)
+        assert "hook missing alpha" in result.output
+        assert "state corrupt beta" in result.output
 
     def test_gotchas_sorted_count_desc(self, tmp_path: Path):
         """Higher-count gotcha appears before lower-count gotcha in output."""
         from flowstate.memory import MemoryStore
 
         store = MemoryStore(root=tmp_path)
-        _seed_gotcha(store, signature="low0000000000001", count=1, message="low count")
-        _seed_gotcha(store, signature="high000000000002", count=5, message="high count")
+        _seed_gotcha(store, signature="low0000000000001", count=1, message="msg LOW COUNT ENTRY")
+        _seed_gotcha(store, signature="high000000000002", count=5, message="msg HIGH COUNT ENTRY")
         store.close()
 
         runner = CliRunner()
-        result = runner.invoke(main, ["gotchas", "--root", str(tmp_path)])
+        result = runner.invoke(main, ["gotchas", "--root", str(tmp_path)], env={"COLUMNS": "200"})
         assert result.exit_code == 0
-        low_idx = result.output.find("low0000000000001")
-        high_idx = result.output.find("high000000000002")
+        low_idx = result.output.find("msg LOW COUNT ENTRY")
+        high_idx = result.output.find("msg HIGH COUNT ENTRY")
+        assert high_idx != -1 and low_idx != -1
         assert high_idx < low_idx, "higher-count gotcha should appear first"
 
     def test_gotchas_limit_option(self, tmp_path: Path):
@@ -770,16 +780,18 @@ class TestGotchasCommand:
         from flowstate.memory import MemoryStore
 
         store = MemoryStore(root=tmp_path)
-        _seed_gotcha(store, signature="sig1000000000001", count=2, message="first gotcha")
-        _seed_gotcha(store, signature="sig2000000000002", count=1, message="second gotcha")
+        _seed_gotcha(store, signature="sig1000000000001", count=2, message="FIRSTGOTCHAMSG unique")
+        _seed_gotcha(store, signature="sig2000000000002", count=1, message="SECONDGOTCHAMSG unique")
         store.close()
 
         runner = CliRunner()
-        result = runner.invoke(main, ["gotchas", "--limit", "1", "--root", str(tmp_path)])
+        result = runner.invoke(
+            main, ["gotchas", "--limit", "1", "--root", str(tmp_path)], env={"COLUMNS": "200"}
+        )
         assert result.exit_code == 0
         # Only the higher-count one (sig1) should appear
-        assert "sig1000000000001" in result.output
-        assert "sig2000000000002" not in result.output
+        assert "FIRSTGOTCHAMSG" in result.output
+        assert "SECONDGOTCHAMSG" not in result.output
 
 
 class TestGotchasPruneCommand:
@@ -788,8 +800,8 @@ class TestGotchasPruneCommand:
         from flowstate.memory import MemoryStore
 
         store = MemoryStore(root=tmp_path)
-        _seed_gotcha(store, signature="deadbeefdeadbeef", message="to be pruned")
-        _seed_gotcha(store, signature="keepmeepkeepmee1", message="keep this one")
+        _seed_gotcha(store, signature="deadbeefdeadbeef", message="PRUNETARGET unique msg")
+        _seed_gotcha(store, signature="keepmeepkeepmee1", message="KEEPTHISONE unique msg")
         store.close()
 
         runner = CliRunner()
@@ -798,10 +810,12 @@ class TestGotchasPruneCommand:
         )
         assert result.exit_code == 0
 
-        # List should no longer contain the pruned signature
-        list_result = runner.invoke(main, ["gotchas", "--root", str(tmp_path)])
-        assert "deadbeefdeadbeef" not in list_result.output
-        assert "keepmeepkeepmee1" in list_result.output
+        # List should no longer contain the pruned message; kept entry still present
+        list_result = runner.invoke(
+            main, ["gotchas", "--root", str(tmp_path)], env={"COLUMNS": "200"}
+        )
+        assert "PRUNETARGET" not in list_result.output
+        assert "KEEPTHISONE" in list_result.output
 
     def test_prune_resolved_removes_resolved_entries(self, tmp_path: Path):
         """prune --resolved clears entries tagged 'resolved', leaves others intact."""
@@ -811,13 +825,13 @@ class TestGotchasPruneCommand:
         _seed_gotcha(
             store,
             signature="resolvedaaaaaa01",
-            message="resolved gotcha",
+            message="RESOLVEDMSG unique gotcha",
             tags=["gotcha", "doctor", "resolved"],
         )
         _seed_gotcha(
             store,
             signature="activebbbbbbbb02",
-            message="active gotcha",
+            message="ACTIVEMSG unique gotcha",
             tags=["gotcha", "doctor"],
         )
         store.close()
@@ -826,9 +840,11 @@ class TestGotchasPruneCommand:
         result = runner.invoke(main, ["gotchas", "prune", "--resolved", "--root", str(tmp_path)])
         assert result.exit_code == 0
 
-        list_result = runner.invoke(main, ["gotchas", "--root", str(tmp_path)])
-        assert "resolvedaaaaaa01" not in list_result.output
-        assert "activebbbbbbbb02" in list_result.output
+        list_result = runner.invoke(
+            main, ["gotchas", "--root", str(tmp_path)], env={"COLUMNS": "200"}
+        )
+        assert "RESOLVEDMSG" not in list_result.output
+        assert "ACTIVEMSG" in list_result.output
 
     def test_prune_rewrites_gotchas_md(self, tmp_path: Path):
         """After prune, GOTCHAS.md does not contain the pruned signature."""
@@ -871,8 +887,8 @@ class TestDoctorGotchaCapture:
 
         runner = CliRunner()
         with (
-            patch("flowstate.cli.load_state", return_value=FlowStateModel()),
-            patch("flowstate.cli.run_doctor", return_value=fake_findings),
+            patch("flowstate.state.load_state", return_value=FlowStateModel()),
+            patch("flowstate.doctor.run_doctor", return_value=fake_findings),
         ):
             result = runner.invoke(main, ["doctor", "--root", str(tmp_path)])
 
@@ -902,8 +918,8 @@ class TestDoctorGotchaCapture:
 
         runner = CliRunner()
         with (
-            patch("flowstate.cli.load_state", return_value=FlowStateModel()),
-            patch("flowstate.cli.run_doctor", return_value=fake_findings),
+            patch("flowstate.state.load_state", return_value=FlowStateModel()),
+            patch("flowstate.doctor.run_doctor", return_value=fake_findings),
         ):
             result = runner.invoke(main, ["doctor", "--root", str(tmp_path)])
 
@@ -931,8 +947,8 @@ class TestDoctorGotchaCapture:
 
         runner = CliRunner()
         with (
-            patch("flowstate.cli.load_state", return_value=FlowStateModel()),
-            patch("flowstate.cli.run_doctor", return_value=fake_findings),
+            patch("flowstate.state.load_state", return_value=FlowStateModel()),
+            patch("flowstate.doctor.run_doctor", return_value=fake_findings),
         ):
             result = runner.invoke(main, ["doctor", "--root", str(tmp_path)])
 
@@ -954,8 +970,8 @@ class TestDoctorGotchaCapture:
 
         runner = CliRunner()
         with (
-            patch("flowstate.cli.load_state", return_value=FlowStateModel()),
-            patch("flowstate.cli.run_doctor", return_value=fake_findings),
+            patch("flowstate.state.load_state", return_value=FlowStateModel()),
+            patch("flowstate.doctor.run_doctor", return_value=fake_findings),
         ):
             result = runner.invoke(main, ["doctor", "--root", str(tmp_path)])
 
@@ -978,10 +994,10 @@ class TestRepairGotchaCapture:
 
         runner = CliRunner()
         with (
-            patch("flowstate.cli.load_state", return_value=FlowStateModel()),
-            patch("flowstate.cli.run_doctor", return_value=fake_findings),
-            patch("flowstate.cli.apply_safe_fixes", return_value=[]),
-            patch("flowstate.cli.save_state"),
+            patch("flowstate.state.load_state", return_value=FlowStateModel()),
+            patch("flowstate.doctor.run_doctor", return_value=fake_findings),
+            patch("flowstate.repair.apply_safe_fixes", return_value=[]),
+            patch("flowstate.state.save_state"),
         ):
             result = runner.invoke(main, ["repair", "--root", str(tmp_path)])
 
@@ -1009,10 +1025,10 @@ class TestRepairGotchaCapture:
 
         runner = CliRunner()
         with (
-            patch("flowstate.cli.load_state", return_value=FlowStateModel()),
-            patch("flowstate.cli.run_doctor", return_value=fake_findings),
-            patch("flowstate.cli.apply_safe_fixes", return_value=[]),
-            patch("flowstate.cli.save_state"),
+            patch("flowstate.state.load_state", return_value=FlowStateModel()),
+            patch("flowstate.doctor.run_doctor", return_value=fake_findings),
+            patch("flowstate.repair.apply_safe_fixes", return_value=[]),
+            patch("flowstate.state.save_state"),
         ):
             result = runner.invoke(main, ["repair", "--root", str(tmp_path)])
 
