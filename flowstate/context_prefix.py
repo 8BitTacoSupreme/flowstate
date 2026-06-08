@@ -331,10 +331,13 @@ def build_context_prefix(
     # ── Layer 1: fixtures (most stable) ─────────────────────────────────────
     fixtures_layer = _read_fixtures_layer(root)
 
-    # ── Layer 3: memory (most dynamic — built now so we know its size) ───────
+    # ── Layer 3: gotchas (semi-stable failure signals; built early for budget accounting)
+    gotchas_layer = _read_gotchas_layer(root, memory)
+
+    # ── Layer 4: memory (most dynamic — built now so we know its size) ───────
     memory_layer = memory.get_context(query) if query else ""
 
-    # ── Layer 4: since-last-run (built early so its cost is included in budget checks)
+    # ── Layer 5: since-last-run (built early so its cost is included in budget checks)
     since_last_run_layer = _read_since_last_run_layer(root, memory)
 
     # ── Layer 2: pack (semi-stable, fit-ladder applied) ──────────────────────
@@ -344,8 +347,12 @@ def build_context_prefix(
     pack_layer = ""
     if pack_exists:
         pack_raw = _read_pack_layer(root)
+        # Gotchas layer is included in the candidate estimate so the fit decision
+        # accounts for the gotchas cost (Phase-6 CR-01 lesson).
         candidate = _SEPARATOR.join(
-            filter(None, [fixtures_layer, pack_raw, memory_layer, since_last_run_layer])
+            filter(
+                None, [fixtures_layer, pack_raw, gotchas_layer, memory_layer, since_last_run_layer]
+            )
         )
         if _estimate_tokens(candidate) < budget:
             # Rung 1 — fits inline
@@ -363,7 +370,13 @@ def build_context_prefix(
                 candidate2 = _SEPARATOR.join(
                     filter(
                         None,
-                        [fixtures_layer, pack_compressed, memory_layer, since_last_run_layer],
+                        [
+                            fixtures_layer,
+                            pack_compressed,
+                            gotchas_layer,
+                            memory_layer,
+                            since_last_run_layer,
+                        ],
                     )
                 )
                 if _estimate_tokens(candidate2) < budget:
@@ -386,11 +399,13 @@ def build_context_prefix(
                 )
                 pack_layer = ""
 
-    # ── Final budget guard for since-last-run ────────────────────────────────
-    # since_last_run_layer is the most dynamic layer; drop it if the full
-    # assembled prefix would still exceed budget (its content also lives in memory.db).
+    # ── Final budget guard — drop most-dynamic layers first ──────────────────
+    # Order: since-last-run first (most dynamic), then gotchas. Each drop is
+    # logged explicitly — never silent (Phase-6 CR-01 lesson).
     full_assembly = _SEPARATOR.join(
-        filter(None, [fixtures_layer, pack_layer, memory_layer, since_last_run_layer])
+        filter(
+            None, [fixtures_layer, pack_layer, gotchas_layer, memory_layer, since_last_run_layer]
+        )
     )
     if since_last_run_layer and _estimate_tokens(full_assembly) >= budget:
         con.print(
@@ -398,8 +413,17 @@ def build_context_prefix(
             f"({budget} tokens); since-last-run dropped (content lives in memory.db)[/red]"
         )
         since_last_run_layer = ""
+        full_assembly = _SEPARATOR.join(
+            filter(None, [fixtures_layer, pack_layer, gotchas_layer, memory_layer])
+        )
+    if gotchas_layer and _estimate_tokens(full_assembly) >= budget:
+        con.print(
+            "[red]context_prefix: omit gotchas layer — full prefix still exceeds budget "
+            f"({budget} tokens); gotchas dropped (content lives in memory.db)[/red]"
+        )
+        gotchas_layer = ""
 
     # ── Assemble final string ─────────────────────────────────────────────────
-    layers = [fixtures_layer, pack_layer, memory_layer, since_last_run_layer]
+    layers = [fixtures_layer, pack_layer, gotchas_layer, memory_layer, since_last_run_layer]
     non_empty = [layer for layer in layers if layer]
     return _SEPARATOR.join(non_empty)

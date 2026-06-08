@@ -450,7 +450,7 @@ class TestSinceLastRunLayer:
         assert since_idx > memory_idx, "## Since Last Run must appear after ## Prior Knowledge"
 
     def test_since_last_run_respects_limit_from_config(self, tmp_path: Path):
-        """Config run_journal_prefix_entries=2 → get_by_kind called with limit=2."""
+        """Config run_journal_prefix_entries=2 → get_by_kind called with limit=2 for RUN kind."""
         config_path = tmp_path / ".planning" / "config.json"
         config_path.parent.mkdir(parents=True, exist_ok=True)
         config_path.write_text('{"run_journal_prefix_entries": 2}')
@@ -462,7 +462,8 @@ class TestSinceLastRunLayer:
 
         from flowstate.memory import MemoryKind
 
-        memory.get_by_kind.assert_called_once_with(MemoryKind.RUN, limit=2)
+        # get_by_kind is called at least once for RUN with limit=2 (gotchas also calls it for INSIGHT)
+        memory.get_by_kind.assert_any_call(MemoryKind.RUN, limit=2)
 
     def test_load_journal_prefix_n_rejects_bad_values(self, tmp_path: Path):
         """_load_journal_prefix_n falls back to 3 for missing key, non-int, negative."""
