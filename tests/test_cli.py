@@ -1010,7 +1010,9 @@ class TestRepairGotchaCapture:
         gotchas = [e for e in entries if "gotcha" in e.tags]
         assert len(gotchas) >= 2
         sources = {e.metadata.get("source") for e in gotchas}
-        assert "doctor" in sources
+        # repair command must label gotchas as source="repair", not source="doctor"
+        assert "repair" in sources
+        assert "doctor" not in sources
 
     def test_repair_exit_code_unchanged_by_capture(self, tmp_path: Path):
         """repair always exits 0 regardless of capture."""

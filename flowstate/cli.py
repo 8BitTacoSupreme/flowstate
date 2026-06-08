@@ -890,7 +890,7 @@ def repair(root: Path | None, apply_destructive: bool):
             for d in findings:
                 if d.severity in {"error", "warning"}:
                     capture_gotcha(
-                        _store, source="doctor", message=d.message, root=root, severity=d.severity
+                        _store, source="repair", message=d.message, root=root, severity=d.severity
                     )
     except Exception:
         pass
