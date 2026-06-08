@@ -584,3 +584,90 @@ class TestKickoffCommand:
         assert "--model" not in kickoff_help
         assert "--budget" not in kickoff_help
         assert "--effort" not in kickoff_help
+
+
+# ── journal command tests (RUN-03) ───────────────────────────────────
+
+
+class TestJournalCommand:
+    def test_journal_empty_exits_zero(self, tmp_path: Path):
+        """Fresh store (no RUN entries) → exit 0 and 'no journal entries yet'."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["journal", "--root", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "no journal entries yet" in result.output
+
+    def test_journal_populated_shows_table(self, tmp_path: Path):
+        """Two RUN entries in store → exit 0 and both run_ids appear in output."""
+        from flowstate.memory import MemoryEntry, MemoryKind, MemoryStore
+
+        store = MemoryStore(root=tmp_path)
+        store.add(
+            MemoryEntry.create(
+                MemoryKind.RUN,
+                content="run detail alpha",
+                summary="first run delta",
+                run_id="alpha001",
+                metadata={"delta_line": "research re-ran", "dry_run": False},
+            )
+        )
+        store.add(
+            MemoryEntry.create(
+                MemoryKind.RUN,
+                content="run detail beta",
+                summary="second run delta",
+                run_id="beta002",
+                metadata={"delta_line": "strategy changed", "dry_run": True},
+            )
+        )
+        store.close()
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["journal", "--root", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "alpha001" in result.output
+        assert "beta002" in result.output
+
+    def test_journal_limit_option(self, tmp_path: Path):
+        """--limit 2 with 5 seeded entries shows only 2 run_ids in output."""
+        from datetime import UTC, datetime, timedelta
+
+        from flowstate.memory import MemoryEntry, MemoryKind, MemoryStore
+
+        # Use distinct timestamps so ORDER BY created_at DESC is deterministic
+        base_ts = datetime(2026, 1, 1, tzinfo=UTC)
+        run_ids = [f"rid{i:03d}" for i in range(5)]
+        store = MemoryStore(root=tmp_path)
+        for i, rid in enumerate(run_ids):
+            entry = MemoryEntry.create(
+                MemoryKind.RUN,
+                content=f"detail {rid}",
+                summary=f"delta {rid}",
+                run_id=rid,
+                metadata={"delta_line": f"delta {rid}", "dry_run": False},
+            )
+            entry.created_at = base_ts + timedelta(seconds=i)
+            store.add(entry)
+        store.close()
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["journal", "--limit", "2", "--root", str(tmp_path)])
+        assert result.exit_code == 0
+
+        # Newest-first: last 2 inserted are rid003 and rid004
+        present = [rid for rid in run_ids if rid in result.output]
+        assert len(present) == 2
+        # The 3 oldest (rid000, rid001, rid002) must be absent
+        for old_id in run_ids[:3]:
+            assert old_id not in result.output
+
+    def test_journal_corrupt_db_exits_zero(self, tmp_path: Path):
+        """Corrupt memory.db → exit 0 and 'no journal entries yet' (no traceback)."""
+        db_path = tmp_path / "memory.db"
+        db_path.write_text("this is not a valid sqlite database")
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["journal", "--root", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "no journal entries yet" in result.output
+        assert "Traceback" not in result.output
