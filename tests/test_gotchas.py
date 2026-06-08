@@ -278,3 +278,184 @@ class TestNeverRaises:
             root=tmp_path,
             timestamp=datetime(2026, 1, 2, 0, 0, 0, tzinfo=UTC),
         )
+
+
+# ---------------------------------------------------------------------------
+# _parse_frontmatter
+# ---------------------------------------------------------------------------
+
+
+class TestParseFrontmatter:
+    def test_parses_simple_key_value(self):
+        from flowstate.gotchas import _parse_frontmatter
+
+        text = "---\nstatus: failed\nphase: 07\n---\nbody"
+        result = _parse_frontmatter(text)
+        assert result["status"] == "failed"
+        assert result["phase"] == "07"
+
+    def test_returns_empty_when_no_leading_dashes(self):
+        from flowstate.gotchas import _parse_frontmatter
+
+        result = _parse_frontmatter("# No frontmatter\n\ncontent here")
+        assert result == {}
+
+    def test_returns_empty_on_empty_string(self):
+        from flowstate.gotchas import _parse_frontmatter
+
+        assert _parse_frontmatter("") == {}
+
+    def test_handles_leading_blank_lines(self):
+        from flowstate.gotchas import _parse_frontmatter
+
+        text = "\n\n---\nstatus: complete\n---\n"
+        result = _parse_frontmatter(text)
+        assert result["status"] == "complete"
+
+    def test_value_with_colon(self):
+        from flowstate.gotchas import _parse_frontmatter
+
+        text = "---\nurl: http://example.com:8080/path\n---\n"
+        result = _parse_frontmatter(text)
+        # value is everything after first ':'
+        assert result["url"] == "http://example.com:8080/path"
+
+    def test_malformed_no_closing_dashes(self):
+        from flowstate.gotchas import _parse_frontmatter
+
+        # No closing --- — should still parse what it finds (or return partially)
+        text = "---\nstatus: failed\n"
+        result = _parse_frontmatter(text)
+        # May return partially or empty — must not raise
+        assert isinstance(result, dict)
+
+
+# ---------------------------------------------------------------------------
+# harvest_planning_gotchas
+# ---------------------------------------------------------------------------
+
+
+class TestHarvestPlanningGotchas:
+    def _make_phases(self, tmp_path: Path) -> Path:
+        """Create .planning/phases/ directory structure."""
+        phases = tmp_path / ".planning" / "phases"
+        phases.mkdir(parents=True, exist_ok=True)
+        return phases
+
+    def test_verification_failed_status_captures_gotcha(self, store: MemoryStore, tmp_path: Path):
+        """A VERIFICATION.md with status: failed yields >=1 gotcha tagged source='verifier'."""
+        from flowstate.gotchas import harvest_planning_gotchas
+
+        phases = self._make_phases(tmp_path)
+        phase_dir = phases / "07-test"
+        phase_dir.mkdir()
+        (phase_dir / "07-VERIFICATION.md").write_text(
+            "---\nstatus: failed\n---\n\n# Result\n\nFailed verification.\n"
+        )
+
+        harvest_planning_gotchas(store, tmp_path)
+
+        entries = [e for e in store.get_by_kind(MemoryKind.INSIGHT, limit=50) if "gotcha" in e.tags]
+        verifier_entries = [e for e in entries if "verifier" in e.tags]
+        assert len(verifier_entries) >= 1
+
+    def test_verification_with_gaps_section_captures_gotcha(
+        self, store: MemoryStore, tmp_path: Path
+    ):
+        """A VERIFICATION.md with a gaps section captures gap items."""
+        from flowstate.gotchas import harvest_planning_gotchas
+
+        phases = self._make_phases(tmp_path)
+        phase_dir = phases / "07-test"
+        phase_dir.mkdir()
+        (phase_dir / "07-VERIFICATION.md").write_text(
+            "---\nstatus: blocked\n---\n\n## Gaps\n\n- Missing test for X\n- Y not implemented\n"
+        )
+
+        harvest_planning_gotchas(store, tmp_path)
+
+        entries = [e for e in store.get_by_kind(MemoryKind.INSIGHT, limit=50) if "gotcha" in e.tags]
+        verifier_entries = [e for e in entries if "verifier" in e.tags]
+        assert len(verifier_entries) >= 1
+
+    def test_review_blocker_captures_gotcha(self, store: MemoryStore, tmp_path: Path):
+        """A REVIEW.md with BLOCKER findings yields gotchas tagged source='plan-checker'."""
+        from flowstate.gotchas import harvest_planning_gotchas
+
+        phases = self._make_phases(tmp_path)
+        phase_dir = phases / "07-test"
+        phase_dir.mkdir()
+        (phase_dir / "07-REVIEW.md").write_text(
+            "# Review\n\n## Findings\n\nBLOCKER: missing auth on endpoint\nHIGH: unvalidated input\n"
+        )
+
+        harvest_planning_gotchas(store, tmp_path)
+
+        entries = [e for e in store.get_by_kind(MemoryKind.INSIGHT, limit=50) if "gotcha" in e.tags]
+        checker_entries = [e for e in entries if "plan-checker" in e.tags]
+        assert len(checker_entries) >= 1
+
+    def test_review_medium_captures_warning_severity(self, store: MemoryStore, tmp_path: Path):
+        """MEDIUM findings in REVIEW.md are captured with severity='warning'."""
+        from flowstate.gotchas import harvest_planning_gotchas
+
+        phases = self._make_phases(tmp_path)
+        phase_dir = phases / "07-test"
+        phase_dir.mkdir()
+        (phase_dir / "07-REVIEW.md").write_text(
+            "# Review\n\nMEDIUM: could improve error messages\n"
+        )
+
+        harvest_planning_gotchas(store, tmp_path)
+
+        entries = [e for e in store.get_by_kind(MemoryKind.INSIGHT, limit=50) if "gotcha" in e.tags]
+        checker_entries = [e for e in entries if "plan-checker" in e.tags]
+        assert len(checker_entries) >= 1
+        assert checker_entries[0].metadata.get("severity") == "warning"
+
+    def test_no_phases_dir_returns_normally(self, store: MemoryStore, tmp_path: Path):
+        """harvest_planning_gotchas on a root with no .planning/phases returns without error."""
+        from flowstate.gotchas import harvest_planning_gotchas
+
+        # No phases dir — must not raise
+        harvest_planning_gotchas(store, tmp_path)
+        # Nothing captured
+        entries = [e for e in store.get_by_kind(MemoryKind.INSIGHT) if "gotcha" in e.tags]
+        assert len(entries) == 0
+
+    def test_malformed_verification_is_skipped(self, store: MemoryStore, tmp_path: Path):
+        """A malformed/binary VERIFICATION.md is skipped without raising or hanging."""
+        from flowstate.gotchas import harvest_planning_gotchas
+
+        phases = self._make_phases(tmp_path)
+        phase_dir = phases / "07-test"
+        phase_dir.mkdir()
+        # Write binary garbage
+        (phase_dir / "07-VERIFICATION.md").write_bytes(b"\x00\xff\xfe" * 100)
+
+        # Must not raise
+        harvest_planning_gotchas(store, tmp_path)
+
+    def test_double_harvest_deduplicates(self, store: MemoryStore, tmp_path: Path):
+        """Running harvest twice over the same artifacts increments count, not duplicates."""
+        from flowstate.gotchas import harvest_planning_gotchas
+
+        phases = self._make_phases(tmp_path)
+        phase_dir = phases / "07-test"
+        phase_dir.mkdir()
+        (phase_dir / "07-VERIFICATION.md").write_text(
+            "---\nstatus: failed\n---\n\n# Result\n\nFailed.\n"
+        )
+
+        harvest_planning_gotchas(store, tmp_path)
+        harvest_planning_gotchas(store, tmp_path)
+
+        entries = [e for e in store.get_by_kind(MemoryKind.INSIGHT, limit=50) if "gotcha" in e.tags]
+        # Should have deduplicated — same signature → count incremented, not duplicated
+        # Total unique signatures should be <= entries before harvest
+        verifier_entries = [e for e in entries if "verifier" in e.tags]
+        # At least 1 verifier entry
+        assert len(verifier_entries) >= 1
+        # Count should be >= 2 for at least one entry (deduplicated across two runs)
+        counts = [e.metadata.get("count", 1) for e in verifier_entries]
+        assert any(c >= 2 for c in counts)
