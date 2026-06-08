@@ -48,11 +48,21 @@ def _make_fixture_file(root: Path, data: dict | None = None) -> Path:
     return fixture_path
 
 
-def _make_memory_stub(returns: str = "") -> MagicMock:
+def _make_memory_stub(returns: str = "", run_entries=None) -> MagicMock:
     """Return a mock MemoryStore whose get_context returns the given string."""
     mem = MagicMock()
     mem.get_context.return_value = returns
+    mem.get_by_kind.return_value = run_entries if run_entries is not None else []
     return mem
+
+
+def _make_run_entry(summary: str = "run delta", content: str = "some delta content") -> MagicMock:
+    """Return a minimal fake MemoryEntry for MemoryKind.RUN tests."""
+    entry = MagicMock()
+    entry.summary = summary
+    entry.content = content
+    entry.metadata = {}
+    return entry
 
 
 # ---------------------------------------------------------------------------
@@ -409,3 +419,91 @@ class TestMissingArtifacts:
         # Only memory present
         result = build_context_prefix(tmp_path, memory, "q", budget_tokens=50000)
         assert isinstance(result, str)
+
+
+# ---------------------------------------------------------------------------
+# Since Last Run layer
+# ---------------------------------------------------------------------------
+
+
+class TestSinceLastRunLayer:
+    def test_since_last_run_omitted_when_empty(self, tmp_path: Path):
+        """Empty get_by_kind() result → '## Since Last Run' not in output."""
+        memory = _make_memory_stub("## Prior Knowledge\n\nfact\n", run_entries=[])
+
+        result = build_context_prefix(tmp_path, memory, "q", budget_tokens=50000)
+
+        assert "## Since Last Run" not in result
+
+    def test_since_last_run_present_when_populated(self, tmp_path: Path):
+        """One RUN entry → '## Since Last Run' appears after '## Prior Knowledge'."""
+        entry = _make_run_entry("research re-ran", "research step completed")
+        memory = _make_memory_stub("## Prior Knowledge\n\nsome fact\n", run_entries=[entry])
+
+        result = build_context_prefix(tmp_path, memory, "q", budget_tokens=50000)
+
+        assert "## Since Last Run" in result
+        memory_idx = result.find("## Prior Knowledge")
+        since_idx = result.find("## Since Last Run")
+        assert memory_idx != -1, "## Prior Knowledge must be present"
+        assert since_idx != -1, "## Since Last Run must be present"
+        assert since_idx > memory_idx, "## Since Last Run must appear after ## Prior Knowledge"
+
+    def test_since_last_run_respects_limit_from_config(self, tmp_path: Path):
+        """Config run_journal_prefix_entries=2 → get_by_kind called with limit=2."""
+        config_path = tmp_path / ".planning" / "config.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text('{"run_journal_prefix_entries": 2}')
+
+        entries = [_make_run_entry(f"run {i}", f"content {i}") for i in range(5)]
+        memory = _make_memory_stub(run_entries=entries[:2])
+
+        build_context_prefix(tmp_path, memory, "q", budget_tokens=50000)
+
+        from flowstate.memory import MemoryKind
+
+        memory.get_by_kind.assert_called_once_with(MemoryKind.RUN, limit=2)
+
+    def test_load_journal_prefix_n_rejects_bad_values(self, tmp_path: Path):
+        """_load_journal_prefix_n falls back to 3 for missing key, non-int, negative."""
+        from flowstate.context_prefix import _load_journal_prefix_n
+
+        # Missing key
+        config_missing = tmp_path / "missing" / ".planning" / "config.json"
+        config_missing.parent.mkdir(parents=True, exist_ok=True)
+        config_missing.write_text("{}")
+        assert _load_journal_prefix_n(tmp_path / "missing") == 3
+
+        # Non-int value
+        config_str = tmp_path / "str_val" / ".planning" / "config.json"
+        config_str.parent.mkdir(parents=True, exist_ok=True)
+        config_str.write_text('{"run_journal_prefix_entries": "five"}')
+        assert _load_journal_prefix_n(tmp_path / "str_val") == 3
+
+        # Negative value
+        config_neg = tmp_path / "neg_val" / ".planning" / "config.json"
+        config_neg.parent.mkdir(parents=True, exist_ok=True)
+        config_neg.write_text('{"run_journal_prefix_entries": -1}')
+        assert _load_journal_prefix_n(tmp_path / "neg_val") == 3
+
+        # Zero value
+        config_zero = tmp_path / "zero_val" / ".planning" / "config.json"
+        config_zero.parent.mkdir(parents=True, exist_ok=True)
+        config_zero.write_text('{"run_journal_prefix_entries": 0}')
+        assert _load_journal_prefix_n(tmp_path / "zero_val") == 3
+
+        # Valid positive int
+        config_ok = tmp_path / "ok_val" / ".planning" / "config.json"
+        config_ok.parent.mkdir(parents=True, exist_ok=True)
+        config_ok.write_text('{"run_journal_prefix_entries": 5}')
+        assert _load_journal_prefix_n(tmp_path / "ok_val") == 5
+
+    def test_since_last_run_entry_content_in_output(self, tmp_path: Path):
+        """Entry summary and content appear in the since-last-run section."""
+        entry = _make_run_entry("research+strategy re-ran", "roadmap.md changed; 2 new memories")
+        memory = _make_memory_stub(run_entries=[entry])
+
+        result = build_context_prefix(tmp_path, memory, "q", budget_tokens=50000)
+
+        assert "research+strategy re-ran" in result
+        assert "roadmap.md changed" in result
