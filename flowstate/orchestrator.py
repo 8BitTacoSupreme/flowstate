@@ -16,6 +16,7 @@ from flowstate.context_prefix import build_context_prefix
 from flowstate.discipline import check_setup
 from flowstate.events.bus import EventBus
 from flowstate.events.event import StepCompleted, StepFailed
+from flowstate.journal import append_run_entry
 from flowstate.launcher import print_next_steps
 from flowstate.memory import MemoryEntry, MemoryKind, MemoryStore
 from flowstate.memory_handlers import create_memory_handlers
@@ -308,6 +309,12 @@ def run_pipeline(state: FlowStateModel, root: Path) -> FlowStateModel:
     update_tool(state, "discipline", status=ToolStatus.COMPLETED)
     console.print(f"  [green]{audit.summary}[/green]")
     save_state(state, root)
+
+    # Journal: write delta entry after all steps complete
+    try:
+        append_run_entry(memory, state, run_id, root=root, dry_run=dry_run)
+    except Exception as exc:
+        console.print(f"  [yellow]journal: non-fatal error: {exc}[/yellow]")
 
     memory.close()
 

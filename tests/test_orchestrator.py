@@ -266,3 +266,33 @@ def test_pipeline_empty_interview_skips_memory_lookup(tmp_path: Path, monkeypatc
     assert call_count["n"] == 0, (
         f"expected 0 calls to get_context with empty interview, got {call_count['n']}"
     )
+
+
+def test_run_pipeline_writes_run_journal_entry(tmp_path: Path):
+    """append_run_entry must be called once per pipeline run."""
+    from unittest.mock import patch
+
+    state = FlowStateModel()
+    state.preferences.dry_run = True
+
+    with patch("flowstate.orchestrator.append_run_entry") as mock_journal:
+        run_pipeline(state, tmp_path)
+
+    assert mock_journal.call_count == 1
+    # run_id must be a 12-char hex string (third positional arg)
+    call_run_id = mock_journal.call_args.args[2]
+    assert len(call_run_id) == 12
+    assert call_run_id.isalnum()
+
+
+def test_run_pipeline_journal_entry_lands_in_memory_db(tmp_path: Path):
+    """After a dry-run pipeline, exactly one MemoryKind.RUN entry exists in memory.db."""
+    from flowstate.memory import MemoryKind, MemoryStore
+
+    state = FlowStateModel()
+    state.preferences.dry_run = True
+
+    run_pipeline(state, tmp_path)
+
+    with MemoryStore(root=tmp_path) as store:
+        assert store.count(MemoryKind.RUN) == 1
