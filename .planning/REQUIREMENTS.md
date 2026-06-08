@@ -9,7 +9,7 @@ Requirements for this milestone. Each maps to a roadmap phase (Phases 6–8, con
 
 ### Run Journal (RUN)
 
-- [ ] **RUN-01**: Each pipeline run appends ONE delta-only entry to an append-only run journal — persisted as a memory entry (`MemoryKind.RUN`, new kind) AND mirrored to `.planning/RUNLOG.md`. The entry captures `run_id`, timestamp, steps executed + status, artifacts changed, decisions emitted, gotchas encountered, and a one-line "since last run" delta. Entry generation is pure-Python (no LLM).
+- [x] **RUN-01**: Each pipeline run appends ONE delta-only entry to an append-only run journal — persisted as a memory entry (`MemoryKind.RUN`, new kind) AND mirrored to `.planning/RUNLOG.md`. The entry captures `run_id`, timestamp, steps executed + status, artifacts changed, decisions emitted, gotchas encountered, and a one-line "since last run" delta. Entry generation is pure-Python (no LLM).
 - [ ] **RUN-02**: `build_context_prefix()` gains a `## Since Last Run` layer sourced from the last N run-journal entries, appended AFTER the memory layer (most-dynamic slot) so the canon → fixtures → pack → memory prefix stays cache-stable. N is configurable; absent journal → layer omitted.
 - [ ] **RUN-03**: `flowstate journal` command lists recent run entries (newest first, bounded/configurable) for handoff/inspection; pure-Python, never raises on a missing journal.
 
@@ -48,7 +48,7 @@ Explicitly excluded for this milestone.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RUN-01 | Phase 6 | Pending |
+| RUN-01 | Phase 6 | Complete |
 | RUN-02 | Phase 6 | Pending |
 | RUN-03 | Phase 6 | Pending |
 | GOT-01 | Phase 7 | Pending |
