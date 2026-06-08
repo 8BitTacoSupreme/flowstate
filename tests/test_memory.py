@@ -272,3 +272,59 @@ class TestPersistence:
         with MemoryStore(root=tmp_path):
             pass
         assert (tmp_path / "memory.db").exists()
+
+
+class TestMemoryStoreUpdate:
+    def test_update_mutates_fields(self, store: MemoryStore):
+        """update() stores mutated metadata + summary; get() reflects the new values."""
+        entry = MemoryEntry.create(
+            MemoryKind.INSIGHT,
+            "original content",
+            "original summary",
+            metadata={"count": 1, "first_seen": "2026-01-01T00:00:00+00:00"},
+        )
+        store.add(entry)
+
+        # Mutate in-place and update
+        entry.metadata["count"] = 2
+        entry.metadata["last_seen"] = "2026-01-02T00:00:00+00:00"
+        entry.summary = "updated summary"
+        store.update(entry)
+
+        got = store.get(entry.id)
+        assert got is not None
+        assert got.summary == "updated summary"
+        assert got.metadata["count"] == 2
+        assert got.metadata["last_seen"] == "2026-01-02T00:00:00+00:00"
+        # first_seen unchanged
+        assert got.metadata["first_seen"] == "2026-01-01T00:00:00+00:00"
+
+    def test_update_resyncs_fts(self, store: MemoryStore):
+        """After update(), FTS search finds the new summary token and NOT the old-only token."""
+        entry = MemoryEntry.create(
+            MemoryKind.INSIGHT,
+            "old content text",
+            "old unique summary token xylophone",
+        )
+        store.add(entry)
+
+        # Verify old token is searchable
+        assert len(store.search("xylophone")) >= 1
+
+        # Update to new summary
+        entry.summary = "new unique summary token zeppelin"
+        entry.content = "new content text"
+        store.update(entry)
+
+        # New token should be found; old unique token should NOT be found
+        new_results = store.search("zeppelin")
+        old_results = store.search("xylophone")
+        assert len(new_results) >= 1
+        assert len(old_results) == 0
+
+    def test_update_nonexistent_id_is_noop(self, store: MemoryStore):
+        """update() on a non-existent id does not raise and leaves store empty."""
+        entry = MemoryEntry.create(MemoryKind.INSIGHT, "ghost content", "ghost summary")
+        # Do NOT add — entry has a valid id but no row in DB
+        store.update(entry)  # must not raise
+        assert store.count() == 0

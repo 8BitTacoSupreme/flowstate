@@ -169,6 +169,32 @@ class MemoryStore:
         self._conn.commit()
         return entry.id
 
+    def update(self, entry: MemoryEntry) -> None:
+        """Update an existing memory entry by id.
+
+        Issues a single UPDATE memories SET ... WHERE id=? — mirrors the column
+        list of add(). The memories_au AFTER UPDATE trigger keeps FTS5 in sync
+        automatically; no manual FTS writes are needed here.
+        A missing id (zero rows matched) is a silent no-op; it does not raise.
+        """
+        self._conn.execute(
+            """UPDATE memories
+               SET kind=?, content=?, summary=?, source=?, tags=?, metadata=?, created_at=?, run_id=?
+               WHERE id=?""",
+            (
+                entry.kind.value,
+                entry.content,
+                entry.summary,
+                entry.source,
+                json.dumps(entry.tags),
+                json.dumps(entry.metadata),
+                entry.created_at.isoformat(),
+                entry.run_id,
+                entry.id,
+            ),
+        )
+        self._conn.commit()
+
     def add_many(self, entries: list[MemoryEntry]) -> list[str]:
         ids = []
         for entry in entries:
