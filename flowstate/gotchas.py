@@ -217,13 +217,19 @@ def _parse_frontmatter(text: str) -> dict[str, str]:
         return {}
 
     result: dict[str, str] = {}
-    for line in lines[start + 1 :]:
+    closed = False
+    for i, line in enumerate(lines[start + 1 :]):
+        if i > 20:  # guard against unclosed frontmatter scanning entire document body
+            break
         if line.strip() == "---":
+            closed = True
             break
         if ":" in line:
             k, _, v = line.partition(":")
             result[k.strip()] = v.strip()
-    return result
+    # Only return parsed pairs when a closing delimiter was found; an unclosed
+    # opening '---' must not silently parse the document body as frontmatter.
+    return result if closed else {}
 
 
 def harvest_planning_gotchas(memory: MemoryStore, root: Path) -> None:

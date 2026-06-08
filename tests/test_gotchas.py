@@ -364,11 +364,19 @@ class TestParseFrontmatter:
     def test_malformed_no_closing_dashes(self):
         from flowstate.gotchas import _parse_frontmatter
 
-        # No closing --- — should still parse what it finds (or return partially)
+        # No closing --- — must return {} (not partial parse of document body)
         text = "---\nstatus: failed\n"
         result = _parse_frontmatter(text)
-        # May return partially or empty — must not raise
-        assert isinstance(result, dict)
+        assert result == {}
+
+    def test_unclosed_frontmatter_does_not_parse_body(self):
+        """Opening --- with no closing --- must return {}, not parse body key:value lines."""
+        from flowstate.gotchas import _parse_frontmatter
+
+        # Body contains a "status: see above" line that must NOT be parsed as frontmatter
+        text = "---\n# document body\nstatus: see above\nphase: 07\n"
+        result = _parse_frontmatter(text)
+        assert result == {}
 
 
 # ---------------------------------------------------------------------------
