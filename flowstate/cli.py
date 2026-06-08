@@ -330,7 +330,7 @@ def memory():
 @click.argument("query")
 @click.option(
     "--kind",
-    type=click.Choice(["research", "strategy", "decision", "tool_run", "insight"]),
+    type=click.Choice(["research", "strategy", "decision", "tool_run", "insight", "run"]),
     default=None,
     help="Filter by memory kind.",
 )
