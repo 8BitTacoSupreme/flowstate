@@ -631,14 +631,9 @@ def gotchas_group(ctx: click.Context, limit: int, root: Path | None):
         console.print("[dim]no gotchas recorded yet[/dim]")
         return
 
-    # Sort: count desc, then last_seen desc (client-side)
-    entries.sort(
-        key=lambda e: (
-            -int(e.metadata.get("count", 1)),
-            e.metadata.get("last_seen", "") or "",
-        ),
-        reverse=False,
-    )
+    # Two-pass stable sort: last_seen desc, then count desc (matching GOTCHAS.md ranking).
+    entries.sort(key=lambda e: e.metadata.get("last_seen", "") or "", reverse=True)
+    entries.sort(key=lambda e: -int(e.metadata.get("count", 1)))
 
     # Truncate to --limit after sort
     entries = entries[:limit]
