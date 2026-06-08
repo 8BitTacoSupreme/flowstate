@@ -32,12 +32,12 @@ def append_run_entry(
     """
     ts = timestamp or datetime.now(UTC)
 
-    # 1. Idempotency guard — fetch existing RUN entries and bail if already journaled
-    existing = memory.get_by_kind(MemoryKind.RUN, limit=50)
-    if any(e.run_id == run_id for e in existing):
+    # 1. Idempotency guard — indexed COUNT query (scale-independent, hits idx_memories_run_id)
+    if memory.count(MemoryKind.RUN, run_id=run_id) > 0:
         return
 
-    # 2. Fetch prior RUN entry (newest-first list; existing[0] is most recent)
+    # 2. Fetch prior RUN entry for delta computation (separate from idempotency guard)
+    existing = memory.get_by_kind(MemoryKind.RUN, limit=1)
     prior_entry: MemoryEntry | None = existing[0] if existing else None
     prior_snapshot: dict[str, str] = {}
     if prior_entry is not None:
@@ -57,7 +57,7 @@ def append_run_entry(
         for path in prior_snapshot:
             if path not in current_snapshot:
                 artifacts_changed.append(path)
-        delta_line = _build_delta_line(artifacts_changed, state)
+        delta_line = _build_delta_line(artifacts_changed)
     else:
         delta_line = "first run"
 
@@ -107,18 +107,21 @@ def append_run_entry(
         created_at=ts,
         run_id=run_id,
     )
-    memory.add(entry)
+    try:
+        memory.add(entry)
+    except Exception:
+        return  # memory write failed; best-effort — never raise into pipeline
 
     # 9. Mirror to RUNLOG.md — swallow any write errors
     _append_runlog(root, run_id, ts, steps, artifacts_changed, delta_line, dry_run)
 
 
-def _build_delta_line(artifacts_changed: list[str], state: FlowStateModel) -> str:
+def _build_delta_line(artifacts_changed: list[str]) -> str:
     """Build a concise one-line delta string."""
     if not artifacts_changed:
         return "no changes detected"
     n = len(artifacts_changed)
-    sample = artifacts_changed[0] if artifacts_changed else ""
+    sample = artifacts_changed[0]  # guaranteed non-empty — line above guards the empty case
     if n == 1:
         return f"{sample} changed"
     return f"{sample} and {n - 1} other file(s) changed"

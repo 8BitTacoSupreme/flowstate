@@ -301,8 +301,13 @@ class MemoryStore:
         except (TypeError, ValueError):
             return None
 
-    def count(self, kind: MemoryKind | None = None) -> int:
-        if kind is not None:
+    def count(self, kind: MemoryKind | None = None, *, run_id: str | None = None) -> int:
+        if kind is not None and run_id is not None:
+            row = self._conn.execute(
+                "SELECT COUNT(*) as cnt FROM memories WHERE kind = ? AND run_id = ?",
+                (kind.value, run_id),
+            ).fetchone()
+        elif kind is not None:
             row = self._conn.execute(
                 "SELECT COUNT(*) as cnt FROM memories WHERE kind = ?",
                 (kind.value,),
