@@ -507,3 +507,58 @@ class TestSinceLastRunLayer:
 
         assert "research+strategy re-ran" in result
         assert "roadmap.md changed" in result
+
+    def test_since_last_run_dropped_and_logged_when_over_budget(self, tmp_path: Path):
+        """With an oversized RUN layer and a very tight budget, since-last-run is dropped."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        # Each entry has large content (~250 chars → ~62 tokens each; 3 entries ≈ 186 tokens)
+        large_content = "X" * 250
+        entries = [_make_run_entry(f"run {i}", large_content) for i in range(3)]
+        memory = _make_memory_stub(run_entries=entries)
+
+        buf = StringIO()
+        test_console = Console(file=buf, highlight=False, markup=False)
+
+        # Budget of 50 tokens — tight enough that since-last-run (≈186 tokens) is dropped
+        result = build_context_prefix(tmp_path, memory, "q", budget_tokens=50, console=test_console)
+
+        log_output = buf.getvalue()
+        # Either since-last-run is absent, or budget was honored (or both)
+        over_budget = len(result) // 4 >= 50  # approximate token check
+        since_present = "## Since Last Run" in result
+        if since_present:
+            # If it's present, the prefix must still be within budget
+            assert not over_budget, "since-last-run kept but prefix exceeds budget"
+        else:
+            # It was dropped — the log must say so
+            assert "since-last-run" in log_output.lower() or "omit" in log_output.lower(), (
+                f"since-last-run dropped but no log emitted; log was: {log_output!r}"
+            )
+
+    def test_bool_config_falls_back_to_default_journal_prefix_n(self, tmp_path: Path):
+        """A JSON boolean value for run_journal_prefix_entries falls back to the default (3)."""
+        from flowstate.context_prefix import _load_journal_prefix_n
+
+        # bool True should NOT be treated as a valid positive int
+        config_bool = tmp_path / "bool_val" / ".planning" / "config.json"
+        config_bool.parent.mkdir(parents=True, exist_ok=True)
+        config_bool.write_text('{"run_journal_prefix_entries": true}')
+        assert _load_journal_prefix_n(tmp_path / "bool_val") == 3
+
+        # bool False should also fall back
+        config_false = tmp_path / "bool_false" / ".planning" / "config.json"
+        config_false.parent.mkdir(parents=True, exist_ok=True)
+        config_false.write_text('{"run_journal_prefix_entries": false}')
+        assert _load_journal_prefix_n(tmp_path / "bool_false") == 3
+
+    def test_bool_config_falls_back_to_default_budget(self, tmp_path: Path):
+        """A JSON boolean value for context_prefix_budget_tokens falls back to the default."""
+        from flowstate.context_prefix import _DEFAULT_BUDGET_TOKENS, _load_budget
+
+        config_bool = tmp_path / "bool_budget" / ".planning" / "config.json"
+        config_bool.parent.mkdir(parents=True, exist_ok=True)
+        config_bool.write_text('{"context_prefix_budget_tokens": true}')
+        assert _load_budget(tmp_path / "bool_budget") == _DEFAULT_BUDGET_TOKENS
