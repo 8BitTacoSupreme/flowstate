@@ -62,7 +62,9 @@ def _normalize(message: str) -> str:
     #    and optional timezone offset. [Tt] handles case after lower().
     #    Anchored pattern, no backtracking risk.
     s = re.sub(
-        r"\b\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2}|Z)?\b", "<ts>", s
+        r"\b\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2}|[Zz])?\b",
+        "<ts>",
+        s,
     )
 
     # 3. 12-character lowercase hex run_ids (e.g. abc123def456).

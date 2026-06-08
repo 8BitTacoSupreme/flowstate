@@ -47,6 +47,14 @@ class TestNormalize:
         assert "2026-01-15" not in result
         assert "<ts>" in result
 
+    def test_replaces_iso_timestamp_z_suffix(self):
+        """Z-suffix UTC timestamp is fully replaced with <ts> placeholder."""
+        from flowstate.gotchas import _normalize
+
+        result = _normalize("error at 2026-01-15T10:30:00Z in module")
+        assert "2026-01-15" not in result
+        assert "<ts>" in result
+
     def test_replaces_12hex_run_id(self):
         from flowstate.gotchas import _normalize
 
@@ -104,6 +112,14 @@ class TestSignature:
 
         sig1 = _signature("verifier", "status failed at 2026-01-01T00:00:00+00:00")
         sig2 = _signature("verifier", "status failed at 2026-06-15T12:34:56+00:00")
+        assert sig1 == sig2
+
+    def test_z_and_offset_timestamp_same_sig(self):
+        """Z-suffix and +00:00 offset timestamps on the same message produce the same sig."""
+        from flowstate.gotchas import _signature
+
+        sig1 = _signature("verifier", "failed at 2026-06-08T12:00:00Z")
+        sig2 = _signature("verifier", "failed at 2026-06-08T12:00:00+00:00")
         assert sig1 == sig2
 
     def test_run_id_variance_same_sig(self):
