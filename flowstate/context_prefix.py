@@ -70,7 +70,7 @@ def _load_budget(root: Path) -> int:
     """Read context_prefix_budget_tokens from .planning/config.json.
 
     Falls back to ``_DEFAULT_BUDGET_TOKENS`` (~12 000) when the file is absent,
-    the key is missing, or the value is not a positive integer.
+    the key is missing, or the value is not a positive integer (booleans excluded).
     """
     config_path = root / _CONFIG_PATH
     if not config_path.exists():
@@ -78,7 +78,7 @@ def _load_budget(root: Path) -> int:
     try:
         data: dict[str, Any] = json.loads(config_path.read_text())
         value = data.get("context_prefix_budget_tokens")
-        if isinstance(value, int) and value > 0:
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0:
             return value
     except Exception:
         pass
@@ -89,7 +89,7 @@ def _load_journal_prefix_n(root: Path) -> int:
     """Read run_journal_prefix_entries from .planning/config.json.
 
     Falls back to ``_DEFAULT_JOURNAL_PREFIX_N`` (3) when the file is absent,
-    the key is missing, or the value is not a positive integer.
+    the key is missing, or the value is not a positive integer (booleans excluded).
     """
     config_path = root / _CONFIG_PATH
     if not config_path.exists():
@@ -97,7 +97,7 @@ def _load_journal_prefix_n(root: Path) -> int:
     try:
         data: dict[str, Any] = json.loads(config_path.read_text())
         value = data.get("run_journal_prefix_entries")
-        if isinstance(value, int) and value > 0:
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0:
             return value
     except Exception:
         pass
@@ -179,6 +179,9 @@ def build_context_prefix(
       2. Else → call ``run_pack(root, compress=True)``, re-read pack, retry.
       3. Still over → omit pack entirely and log the decision.
 
+    The since-last-run layer is always included in budget accounting; if
+    including it would exceed the budget, the layer is dropped and logged.
+
     Every omit/compress decision is logged via the Rich console (``console``
     parameter, or a module-level default). Logging is NEVER silent.
 
@@ -210,6 +213,9 @@ def build_context_prefix(
     # ── Layer 3: memory (most dynamic — built now so we know its size) ───────
     memory_layer = memory.get_context(query) if query else ""
 
+    # ── Layer 4: since-last-run (built early so its cost is included in budget checks)
+    since_last_run_layer = _read_since_last_run_layer(root, memory)
+
     # ── Layer 2: pack (semi-stable, fit-ladder applied) ──────────────────────
     pack_path = root / _PACK_PATH
     pack_exists = pack_path.exists()
@@ -217,7 +223,9 @@ def build_context_prefix(
     pack_layer = ""
     if pack_exists:
         pack_raw = _read_pack_layer(root)
-        candidate = _SEPARATOR.join(filter(None, [fixtures_layer, pack_raw, memory_layer]))
+        candidate = _SEPARATOR.join(
+            filter(None, [fixtures_layer, pack_raw, memory_layer, since_last_run_layer])
+        )
         if _estimate_tokens(candidate) < budget:
             # Rung 1 — fits inline
             pack_layer = pack_raw
@@ -232,7 +240,10 @@ def build_context_prefix(
             if compress_result.success:
                 pack_compressed = _read_pack_layer(root)
                 candidate2 = _SEPARATOR.join(
-                    filter(None, [fixtures_layer, pack_compressed, memory_layer])
+                    filter(
+                        None,
+                        [fixtures_layer, pack_compressed, memory_layer, since_last_run_layer],
+                    )
                 )
                 if _estimate_tokens(candidate2) < budget:
                     # Rung 2 success — compressed pack fits
@@ -254,8 +265,18 @@ def build_context_prefix(
                 )
                 pack_layer = ""
 
-    # ── Layer 4: since-last-run (most dynamic — always last) ─────────────────
-    since_last_run_layer = _read_since_last_run_layer(root, memory)
+    # ── Final budget guard for since-last-run ────────────────────────────────
+    # since_last_run_layer is the most dynamic layer; drop it if the full
+    # assembled prefix would still exceed budget (its content also lives in memory.db).
+    full_assembly = _SEPARATOR.join(
+        filter(None, [fixtures_layer, pack_layer, memory_layer, since_last_run_layer])
+    )
+    if since_last_run_layer and _estimate_tokens(full_assembly) >= budget:
+        con.print(
+            "[red]context_prefix: omit since-last-run layer — full prefix exceeds budget "
+            f"({budget} tokens); since-last-run dropped (content lives in memory.db)[/red]"
+        )
+        since_last_run_layer = ""
 
     # ── Assemble final string ─────────────────────────────────────────────────
     layers = [fixtures_layer, pack_layer, memory_layer, since_last_run_layer]
