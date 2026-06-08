@@ -218,6 +218,29 @@ class TestLastEntryAt:
             assert isinstance(ts, datetime)
 
 
+class TestMemoryKindRUN:
+    def test_run_kind_value(self):
+        assert MemoryKind.RUN == "run"
+
+    def test_count_includes_run(self, store: MemoryStore):
+        assert store.count(MemoryKind.RUN) == 0
+
+    def test_add_run_entry_and_get_by_kind(self, store: MemoryStore):
+        entry = MemoryEntry.create(
+            MemoryKind.RUN,
+            "Pipeline run delta: first run",
+            "run abc123",
+            source="journal",
+            tags=["run"],
+            run_id="abc123",
+        )
+        store.add(entry)
+        results = store.get_by_kind(MemoryKind.RUN, limit=1)
+        assert len(results) == 1
+        assert results[0].kind == MemoryKind.RUN
+        assert results[0].run_id == "abc123"
+
+
 class TestPersistence:
     def test_data_persists_across_reopen(self, tmp_path: Path):
         entry = MemoryEntry.create(MemoryKind.RESEARCH, "persistent data", "test persistence")

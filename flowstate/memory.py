@@ -73,6 +73,7 @@ class MemoryKind(StrEnum):
     DECISION = "decision"
     TOOL_RUN = "tool_run"
     INSIGHT = "insight"
+    RUN = "run"
 
 
 @dataclass
