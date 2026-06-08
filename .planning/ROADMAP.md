@@ -64,7 +64,7 @@ Plans:
   4. The gotchas layer is bounded: a configurable token budget caps the injected set to most-recent/most-frequent N entries; entries can be pruned when resolved; the layer never grows the prefix beyond its budget.
 **Plans**: 4 plans
 Plans:
-- [ ] 07-01-PLAN.md — MemoryStore.update + gotchas.py core (signature/dedup/capture/mirror/harvest) (GOT-01, GOT-03)
+- [x] 07-01-PLAN.md — MemoryStore.update + gotchas.py core (signature/dedup/capture/mirror/harvest) (GOT-01, GOT-03)
 - [ ] 07-02-PLAN.md — `## Gotchas` prefix layer before memory + cap/budget participation (GOT-02, GOT-03)
 - [ ] 07-03-PLAN.md — `flowstate gotchas` list/prune CLI + doctor/repair capture (GOT-01, GOT-03)
 - [ ] 07-04-PLAN.md — executor-failure capture + run_pipeline harvest + journal gotchas slot (GOT-01)
@@ -92,5 +92,5 @@ Plans:
 | 4. Integration — Layered CAG Assembly  | v0.4.0    | 1/1            | Complete    | 2026-06-06           |
 | 5. UX — Guided Kickoff + Hygiene       | v0.4.0    | 2/2            | Complete    | 2026-06-06           |
 | 6. Run Journal                         | v0.5.0    | 3/3 | Complete   | 2026-06-08 |
-| 7. Gotchas Accumulator                 | v0.5.0    | 0/4            | Planned     | -                    |
+| 7. Gotchas Accumulator                 | v0.5.0    | 1/4 | In Progress|  |
 | 8. Runnable Verification               | v0.5.0    | 0/?            | Not started | -                    |
