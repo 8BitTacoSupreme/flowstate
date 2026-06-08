@@ -121,12 +121,70 @@ class TestStepFailed:
         )
         wired_bus.emit(event)
 
-        assert mem_store.count() == 1
+        # TOOL_RUN entry count is unchanged (existing behavior preserved)
         entries = mem_store.get_by_kind(MemoryKind.TOOL_RUN)
         assert len(entries) == 1
         assert "timeout" in entries[0].content
         assert entries[0].run_id == "test-run"
         assert "failure" in entries[0].tags
+
+    def test_step_failed_also_captures_executor_gotcha(self, wired_bus, mem_store, tmp_path):
+        """Firing step.failed stores TOOL_RUN AND an INSIGHT gotcha with source=executor."""
+        event = StepFailed(
+            payload={"tool": "strategy", "error": "bridge timeout"},
+            source="test",
+        )
+        wired_bus.emit(event)
+
+        # Existing TOOL_RUN entry still present
+        tool_run_entries = mem_store.get_by_kind(MemoryKind.TOOL_RUN)
+        assert len(tool_run_entries) == 1
+
+        # New INSIGHT gotcha also captured
+        insight_entries = mem_store.get_by_kind(MemoryKind.INSIGHT)
+        gotcha_entries = [e for e in insight_entries if "gotcha" in e.tags]
+        assert len(gotcha_entries) == 1
+        assert "executor" in gotcha_entries[0].tags
+        assert gotcha_entries[0].metadata.get("severity") == "error"
+        assert gotcha_entries[0].run_id == "test-run"
+
+    def test_step_failed_gotcha_dedup(self, wired_bus, mem_store, tmp_path):
+        """Two step.failed events with the same tool+error produce ONE gotcha (count=2)."""
+        event = StepFailed(
+            payload={"tool": "research", "error": "repeated failure"},
+            source="test",
+        )
+        wired_bus.emit(event)
+        wired_bus.emit(event)
+
+        # Two TOOL_RUN entries (existing behavior unchanged)
+        assert len(mem_store.get_by_kind(MemoryKind.TOOL_RUN)) == 2
+
+        # One deduplicated gotcha with count=2
+        insight_entries = mem_store.get_by_kind(MemoryKind.INSIGHT)
+        gotcha_entries = [e for e in insight_entries if "gotcha" in e.tags]
+        assert len(gotcha_entries) == 1
+        assert gotcha_entries[0].metadata.get("count") == 2
+
+    def test_step_failed_gotcha_failure_is_nonfatal(self, mem_store, tmp_path, monkeypatch):
+        """If capture_gotcha raises, the TOOL_RUN store still completes."""
+        from unittest.mock import patch
+
+        bus = EventBus(keep_history=True)
+        handlers = create_memory_handlers(mem_store, tmp_path, run_id="safe-run")
+        for h in handlers:
+            bus.register(h)
+
+        # Patch capture_gotcha to raise
+        with patch("flowstate.gotchas.capture_gotcha", side_effect=RuntimeError("boom")):
+            event = StepFailed(
+                payload={"tool": "gsd", "error": "exploded"},
+                source="test",
+            )
+            bus.emit(event)
+
+        # TOOL_RUN entry still landed
+        assert mem_store.count(MemoryKind.TOOL_RUN) == 1
 
 
 class TestMemoryHandlersProfileGating:

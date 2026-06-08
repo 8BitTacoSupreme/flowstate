@@ -117,4 +117,19 @@ def create_memory_handlers(store: MemoryStore, root: Path, run_id: str = "") -> 
             )
         )
 
+        # Also capture as a deduped executor gotcha — best-effort, never raises
+        try:
+            from flowstate.gotchas import capture_gotcha
+
+            capture_gotcha(
+                store,
+                source="executor",
+                message=f"Tool '{tool_name}' failed: {error}",
+                root=root,
+                severity="error",
+                run_id=run_id,
+            )
+        except Exception:
+            pass
+
     return [on_step_completed, on_step_failed]
