@@ -292,8 +292,8 @@ def build_context_prefix(
 ) -> str:
     """Assemble the ordered CAG context prefix for the current pipeline run.
 
-    Composes four layers in most-stable-first order:
-      fixtures → pack (if it fits) → memory → since-last-run
+    Composes five layers in most-stable-first order:
+      fixtures → pack (if it fits) → gotchas → memory → since-last-run
 
     The fit ladder for the PACK layer:
       1. ``total_tokens < budget`` → inline full pack.
