@@ -279,6 +279,24 @@ class MemoryStore:
         ).fetchall()
         return [_row_to_entry(row) for row in rows]
 
+    def get_gotchas(self) -> list[MemoryEntry]:
+        """Return ALL gotcha-tagged INSIGHT entries ordered by created_at DESC.
+
+        Uses a SQL LIKE filter on the tags column so the result is not limited
+        by the arbitrary limit budget shared with non-gotcha INSIGHT entries.
+        The LIKE pattern is parameterized — no injection risk.
+        """
+        rows = self._conn.execute(
+            "SELECT * FROM memories WHERE kind = ? AND tags LIKE ? ORDER BY created_at DESC",
+            (MemoryKind.INSIGHT.value, '%"gotcha"%'),
+        ).fetchall()
+        return [_row_to_entry(row) for row in rows]
+
+    def delete(self, memory_id: str) -> None:
+        """Delete a memory entry by id. FTS index updated via memories_ad trigger."""
+        self._conn.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
+        self._conn.commit()
+
     def get_context(self, query: str, *, max_tokens: int = 2000) -> str:
         """Return markdown-formatted context for prompt injection.
 

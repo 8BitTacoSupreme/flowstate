@@ -113,11 +113,14 @@ def capture_gotcha(
         ts = timestamp or datetime.now(UTC)
         sig = _signature(source, message)
 
-        # --- dedup: scan existing INSIGHT+gotcha entries for a matching signature ---
-        existing_entries = memory.get_by_kind(MemoryKind.INSIGHT, limit=500)
+        # --- dedup: scan ALL gotcha-tagged INSIGHT entries for a matching signature ---
+        # Uses get_gotchas() to avoid the shared INSIGHT limit competing with
+        # non-gotcha entries (research/strategy/decision); prevents silent dedup failure
+        # when older gotchas fall past an arbitrary position limit (Phase-6 CR-02 class).
+        existing_entries = memory.get_gotchas()
         existing: MemoryEntry | None = None
         for entry in existing_entries:
-            if "gotcha" in entry.tags and entry.metadata.get("signature") == sig:
+            if entry.metadata.get("signature") == sig:
                 existing = entry
                 break
 
@@ -160,8 +163,7 @@ def _rewrite_gotchas_md(root: Path, memory: MemoryStore) -> None:
     memory.db is the source of truth. Never raises (swallows all errors).
     """
     try:
-        all_entries = memory.get_by_kind(MemoryKind.INSIGHT, limit=1000)
-        gotchas = [e for e in all_entries if "gotcha" in e.tags]
+        gotchas = memory.get_gotchas()
 
         # Two-pass stable sort: last_seen desc, then count desc.
         # Matches _read_gotchas_layer in context_prefix.py for consistent ranking.

@@ -328,3 +328,42 @@ class TestMemoryStoreUpdate:
         # Do NOT add — entry has a valid id but no row in DB
         store.update(entry)  # must not raise
         assert store.count() == 0
+
+    def test_get_gotchas_returns_only_gotcha_tagged_insight(self, store: MemoryStore):
+        """get_gotchas() returns only INSIGHT entries tagged 'gotcha', regardless of total count."""
+        from flowstate.memory import MemoryEntry, MemoryKind
+
+        # Add 5 non-gotcha INSIGHT entries
+        for i in range(5):
+            store.add(MemoryEntry.create(MemoryKind.INSIGHT, f"research {i}", f"summary {i}"))
+
+        # Add 2 gotcha INSIGHT entries
+        g1 = MemoryEntry.create(
+            MemoryKind.INSIGHT, "gotcha one", "gotcha one", tags=["gotcha", "doctor"]
+        )
+        g2 = MemoryEntry.create(
+            MemoryKind.INSIGHT, "gotcha two", "gotcha two", tags=["gotcha", "verifier"]
+        )
+        store.add(g1)
+        store.add(g2)
+
+        gotchas = store.get_gotchas()
+        assert len(gotchas) == 2
+        assert all("gotcha" in e.tags for e in gotchas)
+
+    def test_delete_removes_entry(self, store: MemoryStore):
+        """delete() removes entry by id; FTS trigger fires via memories_ad."""
+        from flowstate.memory import MemoryEntry, MemoryKind
+
+        entry = MemoryEntry.create(MemoryKind.INSIGHT, "to delete", "summary")
+        store.add(entry)
+        assert store.count() == 1
+
+        store.delete(entry.id)
+        assert store.count() == 0
+        assert store.get(entry.id) is None
+
+    def test_delete_nonexistent_is_noop(self, store: MemoryStore):
+        """delete() on a non-existent id does not raise."""
+        store.delete("nonexistent000")  # must not raise
+        assert store.count() == 0

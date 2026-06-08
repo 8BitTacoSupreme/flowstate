@@ -613,19 +613,17 @@ def gotchas_group(ctx: click.Context, limit: int, root: Path | None):
 
     from rich.table import Table
 
-    from flowstate.memory import MemoryKind, MemoryStore
+    from flowstate.memory import MemoryStore
 
     root = resolve_root(root, option_was_explicit=_root_was_explicit())
 
     try:
         store = MemoryStore(root=root)
-        all_entries = store.get_by_kind(MemoryKind.INSIGHT, limit=limit * 5)
+        entries = store.get_gotchas()
         store.close()
     except Exception:
         console.print("[dim]no gotchas recorded yet[/dim]")
         return
-
-    entries = [e for e in all_entries if "gotcha" in e.tags]
 
     if not entries:
         console.print("[dim]no gotchas recorded yet[/dim]")
@@ -679,7 +677,7 @@ def gotchas_prune(sig: str | None, resolved: bool, root: Path | None):
     Exits 0 even when the DB is absent or corrupt.
     """
     from flowstate.gotchas import _rewrite_gotchas_md
-    from flowstate.memory import MemoryKind, MemoryStore
+    from flowstate.memory import MemoryStore
 
     root = resolve_root(root, option_was_explicit=_root_was_explicit())
 
@@ -689,23 +687,18 @@ def gotchas_prune(sig: str | None, resolved: bool, root: Path | None):
 
     try:
         store = MemoryStore(root=root)
-        all_entries = store.get_by_kind(MemoryKind.INSIGHT, limit=1000)
-        gotchas = [e for e in all_entries if "gotcha" in e.tags]
+        gotchas = store.get_gotchas()
 
         pruned = 0
         if sig:
-            targets = [e for e in gotchas if e.metadata.get("signature") == sig]
-            for entry in targets:
-                store._conn.execute("DELETE FROM memories WHERE id = ?", (entry.id,))
+            for entry in [e for e in gotchas if e.metadata.get("signature") == sig]:
+                store.delete(entry.id)
                 pruned += 1
-            store._conn.commit()
 
         if resolved:
-            targets = [e for e in gotchas if "resolved" in e.tags]
-            for entry in targets:
-                store._conn.execute("DELETE FROM memories WHERE id = ?", (entry.id,))
+            for entry in [e for e in gotchas if "resolved" in e.tags]:
+                store.delete(entry.id)
                 pruned += 1
-            store._conn.commit()
 
         _rewrite_gotchas_md(root, store)
         store.close()

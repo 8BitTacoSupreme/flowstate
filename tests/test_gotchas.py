@@ -239,6 +239,31 @@ class TestCaptureGotcha:
         content = gotchas_md.read_text()
         assert "doctor" in content
 
+    def test_dedup_survives_many_non_gotcha_insight_entries(
+        self, store: MemoryStore, tmp_path: Path
+    ):
+        """Re-capturing an existing gotcha still increments count when >500 non-gotcha
+        INSIGHT entries are present (get_gotchas() filters by tag, not by shared limit)."""
+        from flowstate.gotchas import capture_gotcha
+
+        # Insert 510 non-gotcha INSIGHT entries to push past the old limit=500 boundary
+        for i in range(510):
+            entry = MemoryEntry.create(
+                MemoryKind.INSIGHT,
+                content=f"research finding {i}",
+                summary=f"research {i}",
+            )
+            store.add(entry)
+
+        # First gotcha capture
+        capture_gotcha(store, source="doctor", message="config missing", root=tmp_path)
+        # Second capture — should dedup, not create a second entry
+        capture_gotcha(store, source="doctor", message="config missing", root=tmp_path)
+
+        gotchas = store.get_gotchas()
+        assert len(gotchas) == 1
+        assert gotchas[0].metadata["count"] == 2
+
 
 # ---------------------------------------------------------------------------
 # never-raises contract
@@ -251,7 +276,7 @@ class TestNeverRaises:
         from flowstate.gotchas import capture_gotcha
 
         fake_memory = MagicMock(spec=MemoryStore)
-        fake_memory.get_by_kind.return_value = []
+        fake_memory.get_gotchas.return_value = []
         fake_memory.add.side_effect = RuntimeError("simulated storage failure")
 
         # Must not raise
@@ -283,7 +308,7 @@ class TestNeverRaises:
         )
 
         fake_memory = MagicMock(spec=MemoryStore)
-        fake_memory.get_by_kind.return_value = [existing]
+        fake_memory.get_gotchas.return_value = [existing]
         fake_memory.update.side_effect = RuntimeError("simulated update failure")
 
         # Must not raise
