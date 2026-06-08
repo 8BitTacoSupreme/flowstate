@@ -547,6 +547,52 @@ def fresh(root: Path | None, yes: bool, force: bool):
     console.print(f"\n[green]Removed {removed} items. Ready for flowstate init.[/green]")
 
 
+@main.command("journal")
+@click.option("--limit", type=int, default=10, help="Max entries to show (default: 10).")
+@click.option(
+    "--root",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Project root directory.",
+)
+def journal(limit: int, root: Path | None):
+    """List recent run-journal entries, newest first."""
+    from rich.table import Table
+
+    from flowstate.memory import MemoryKind, MemoryStore
+
+    root = resolve_root(root, option_was_explicit=_root_was_explicit())
+
+    try:
+        store = MemoryStore(root=root)
+        entries = store.get_by_kind(MemoryKind.RUN, limit=limit)
+        store.close()
+    except Exception:
+        console.print("[dim]no journal entries yet[/dim]")
+        return
+
+    if not entries:
+        console.print("[dim]no journal entries yet[/dim]")
+        return
+
+    table = Table(title="Run Journal", border_style="blue")
+    table.add_column("Run ID", style="dim", width=12)
+    table.add_column("Timestamp", width=24)
+    table.add_column("Delta", min_width=40)
+    table.add_column("Dry Run", width=8)
+
+    for entry in entries:
+        meta = entry.metadata
+        table.add_row(
+            entry.run_id,
+            entry.created_at.isoformat()[:19],
+            meta.get("delta_line", entry.summary),
+            "yes" if meta.get("dry_run") else "no",
+        )
+
+    console.print(table)
+
+
 @main.command("pack")
 @click.option(
     "--root",
