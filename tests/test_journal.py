@@ -258,3 +258,99 @@ class TestRemovedPathDelta:
         # Newest-first — run002 at index 0
         second_entry = entries[0]
         assert ".planning/ROADMAP.md" in second_entry.metadata["artifacts_changed"]
+
+
+class TestGotchasSlot:
+    """Tests for the gotchas metadata slot and RUNLOG gotchas line (07-04 GOT-01)."""
+
+    def test_gotchas_slot_empty_when_no_gotchas_this_run(
+        self, store: MemoryStore, state_with_manifest, tmp_path
+    ):
+        """When no gotchas exist for this run_id, metadata['gotchas'] is []."""
+        append_run_entry(store, state_with_manifest, "nogtch0", root=tmp_path, timestamp=FIXED_TS)
+        entries = store.get_by_kind(MemoryKind.RUN, limit=1)
+        assert entries[0].metadata["gotchas"] == []
+
+    def test_gotchas_slot_populated_with_this_run_signatures(
+        self, store: MemoryStore, state_with_manifest, tmp_path
+    ):
+        """When a gotcha with matching run_id exists, metadata['gotchas'] contains its signature."""
+        from flowstate.gotchas import capture_gotcha
+
+        run_id = "gtchrun1"
+        # Capture a gotcha for this run
+        capture_gotcha(
+            store,
+            source="executor",
+            message="Tool 'research' failed: timeout",
+            root=tmp_path,
+            severity="error",
+            run_id=run_id,
+        )
+
+        append_run_entry(store, state_with_manifest, run_id, root=tmp_path, timestamp=FIXED_TS)
+        entries = store.get_by_kind(MemoryKind.RUN, limit=1)
+        gotchas_meta = entries[0].metadata["gotchas"]
+        assert len(gotchas_meta) == 1
+        # Should contain a signature (16-char hex)
+        sig = gotchas_meta[0]
+        assert len(sig) == 16
+
+    def test_gotchas_slot_excludes_other_runs(
+        self, store: MemoryStore, state_with_manifest, tmp_path
+    ):
+        """Gotchas from a different run_id are NOT included in this run's metadata slot."""
+        from flowstate.gotchas import capture_gotcha
+
+        # Capture a gotcha for a different run
+        capture_gotcha(
+            store,
+            source="executor",
+            message="Tool 'gsd' failed: crash",
+            root=tmp_path,
+            severity="error",
+            run_id="other-run",
+        )
+
+        this_run_id = "thisrun1"
+        append_run_entry(store, state_with_manifest, this_run_id, root=tmp_path, timestamp=FIXED_TS)
+        entries = store.get_by_kind(MemoryKind.RUN, limit=1)
+        assert entries[0].metadata["gotchas"] == []
+
+    def test_runlog_gotchas_line_none_when_empty(
+        self, store: MemoryStore, state_with_manifest, tmp_path
+    ):
+        """RUNLOG.md gotchas line shows '(none this run)' when no gotchas captured for this run."""
+        append_run_entry(store, state_with_manifest, "nogtch1", root=tmp_path, timestamp=FIXED_TS)
+        content = (tmp_path / ".planning" / "RUNLOG.md").read_text()
+        # The gotchas line specifically uses the new placeholder (not the old one)
+        assert "- gotchas: (none this run)" in content
+        assert "- gotchas: (none this phase)" not in content
+
+    def test_runlog_gotchas_line_shows_signatures_when_present(
+        self, store: MemoryStore, state_with_manifest, tmp_path
+    ):
+        """RUNLOG.md gotchas line lists captured signatures joined by ', '."""
+        from flowstate.gotchas import capture_gotcha
+
+        run_id = "sigrun01"
+        capture_gotcha(
+            store,
+            source="executor",
+            message="Tool 'strategy' failed: auth error",
+            root=tmp_path,
+            severity="error",
+            run_id=run_id,
+        )
+
+        append_run_entry(store, state_with_manifest, run_id, root=tmp_path, timestamp=FIXED_TS)
+        content = (tmp_path / ".planning" / "RUNLOG.md").read_text()
+        # Should NOT show the old placeholder on the gotchas line
+        assert "- gotchas: (none this phase)" not in content
+        assert "- gotchas: (none this run)" not in content
+        # Extract the gotchas line and verify it has a signature value
+        for line in content.splitlines():
+            if line.startswith("- gotchas:"):
+                value = line.split(":", 1)[1].strip()
+                assert len(value) == 16, f"expected 16-char hex signature, got: {value!r}"
+                break

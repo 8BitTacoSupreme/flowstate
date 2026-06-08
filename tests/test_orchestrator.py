@@ -296,3 +296,41 @@ def test_run_pipeline_journal_entry_lands_in_memory_db(tmp_path: Path):
 
     with MemoryStore(root=tmp_path) as store:
         assert store.count(MemoryKind.RUN) == 1
+
+
+def test_run_pipeline_calls_harvest_planning_gotchas_once(tmp_path: Path, monkeypatch):
+    """harvest_planning_gotchas is called exactly once after memory opens, before adapters."""
+    from unittest.mock import patch
+
+    call_log: list[str] = []
+
+    def fake_harvest(memory, root):
+        call_log.append("harvest")
+
+    state = FlowStateModel()
+    state.preferences.dry_run = True
+
+    with patch("flowstate.gotchas.harvest_planning_gotchas", side_effect=fake_harvest):
+        run_pipeline(state, tmp_path)
+
+    assert call_log.count("harvest") == 1
+
+
+def test_run_pipeline_harvest_failure_does_not_abort(tmp_path: Path, monkeypatch):
+    """If harvest_planning_gotchas raises, run_pipeline completes normally."""
+    from unittest.mock import patch
+
+    from flowstate.state import ToolStatus
+
+    def exploding_harvest(memory, root):
+        raise RuntimeError("harvest exploded")
+
+    state = FlowStateModel()
+    state.preferences.dry_run = True
+
+    with patch("flowstate.gotchas.harvest_planning_gotchas", side_effect=exploding_harvest):
+        result = run_pipeline(state, tmp_path)
+
+    # Pipeline still completed all tools
+    for name, ts in result.tools.items():
+        assert ts.status == ToolStatus.COMPLETED, f"{name} not completed: {ts.status}"

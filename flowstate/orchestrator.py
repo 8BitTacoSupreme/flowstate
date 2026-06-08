@@ -180,6 +180,14 @@ def run_pipeline(state: FlowStateModel, root: Path) -> FlowStateModel:
     for h in create_memory_handlers(memory, root, run_id=run_id):
         bus.register(h)
 
+    # Harvest GSD-artifact gotchas from prior phases — best-effort, never raises
+    try:
+        from flowstate.gotchas import harvest_planning_gotchas
+
+        harvest_planning_gotchas(memory, root)
+    except Exception as exc:
+        console.print(f"  [yellow]gotchas harvest: non-fatal error: {exc}[/yellow]")
+
     # Store interview answers as a decision memory
     answers = state.interview
     if answers.core_problem or answers.ten_x_vision:

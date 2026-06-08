@@ -70,13 +70,24 @@ def append_run_entry(
             steps[name] = ts_entry.status.value
 
     # 6. Build metadata dict
+    # Populate gotchas slot from INSIGHT entries captured this run
+    try:
+        gotcha_entries = memory.get_by_kind(MemoryKind.INSIGHT, limit=200)
+        this_run_sigs = [
+            e.metadata.get("signature", "")
+            for e in gotcha_entries
+            if run_id and e.run_id == run_id and "gotcha" in e.tags
+        ]
+    except Exception:
+        this_run_sigs = []
+
     metadata: dict[str, Any] = {
         "run_id": run_id,
         "snapshot": current_snapshot,
         "steps": steps,
         "artifacts_changed": artifacts_changed,
         "decisions": [],
-        "gotchas": [],
+        "gotchas": this_run_sigs,
         "delta_line": delta_line,
         "dry_run": dry_run,
     }
@@ -113,7 +124,7 @@ def append_run_entry(
         return  # memory write failed; best-effort — never raise into pipeline
 
     # 9. Mirror to RUNLOG.md — swallow any write errors
-    _append_runlog(root, run_id, ts, steps, artifacts_changed, delta_line, dry_run)
+    _append_runlog(root, run_id, ts, steps, artifacts_changed, delta_line, dry_run, this_run_sigs)
 
 
 def _build_delta_line(artifacts_changed: list[str]) -> str:
@@ -142,6 +153,7 @@ def _append_runlog(
     artifacts_changed: list[str],
     delta_line: str,
     dry_run: bool,
+    gotchas: list[str] | None = None,
 ) -> None:
     """Append a section to .planning/RUNLOG.md. Never raises."""
     try:
@@ -150,12 +162,14 @@ def _append_runlog(
         ts_iso = ts.isoformat()
         steps_str = ", ".join(f"{k}:{v}" for k, v in steps.items()) or "none"
         artifacts_str = ", ".join(artifacts_changed) if artifacts_changed else "none"
+        gotchas_list = gotchas or []
+        gotchas_str = ", ".join(gotchas_list) if gotchas_list else "(none this run)"
         with runlog.open("a") as fh:
             fh.write(f"\n## {ts_iso} — run {run_id}\n")
             fh.write(f"- steps: {steps_str}\n")
             fh.write(f"- artifacts changed: {artifacts_str}\n")
-            fh.write("- decisions: (none this phase)\n")
-            fh.write("- gotchas: (none this phase)\n")
+            fh.write("- decisions: (none this run)\n")
+            fh.write(f"- gotchas: {gotchas_str}\n")
             fh.write(f"- delta: {delta_line}\n")
             if dry_run:
                 fh.write("- dry_run: true\n")
