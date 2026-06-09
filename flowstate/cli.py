@@ -845,6 +845,84 @@ def doctor(root: Path | None):
         sys.exit(errors)
 
 
+@main.command("verify")
+@click.option(
+    "--root",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Project root directory.",
+)
+def verify(root: Path | None):
+    """Run runnable verification of fixture gates against produced artifacts.
+
+    Reads every .planning/fixtures/*.json, runs the bounded checker registry
+    (real mechanical checks for checkable gates, explicit SKIP for NL gates),
+    and prints a Rich PASS/FAIL/SKIP report.  Exits non-zero (count of failing
+    gates) so it composes in CI / pre-commit hooks alongside ``flowstate doctor``.
+    """
+    import sys
+
+    from rich.table import Table
+
+    from flowstate.state import load_state
+    from flowstate.verify import run_verify
+
+    root = resolve_root(root, option_was_explicit=_root_was_explicit())
+    console.print(Panel(BANNER, title="v" + __version__, border_style="blue", expand=False))
+
+    # Early exit when there are no fixture files to check
+    fixtures_dir = root / ".planning" / "fixtures"
+    if not fixtures_dir.exists() or not any(fixtures_dir.glob("*.json")):
+        console.print("[dim]No fixtures to verify — run 'flowstate kickoff' to scaffold.[/dim]")
+        return
+
+    state = load_state(root)
+    results = run_verify(state, root)
+
+    # Loop-closure block: capture gotchas per FAIL + append journal entry — best-effort, never raises
+    try:
+        from flowstate.gotchas import capture_gotcha
+        from flowstate.journal import append_verify_entry
+        from flowstate.memory import MemoryStore as _MemoryStore
+
+        with _MemoryStore(root=root) as _store:
+            for r in results:
+                if r.status == "fail":
+                    capture_gotcha(
+                        _store,
+                        source="verify",
+                        message=f"{r.gate}: {r.message}",
+                        root=root,
+                        severity="error",
+                    )
+            append_verify_entry(_store, root, results)
+    except Exception:
+        pass
+
+    table = Table(title="flowstate verify", border_style="blue")
+    table.add_column("Gate", style="bold")
+    table.add_column("Status")
+    table.add_column("Fixture")
+    table.add_column("Message")
+    status_style = {"pass": "green", "fail": "red", "skip": "dim"}
+    for r in results:
+        style = status_style.get(r.status, "white")
+        table.add_row(
+            r.gate,
+            f"[{style}]{r.status}[/{style}]",
+            r.fixture,
+            r.message,
+        )
+    console.print(table)
+
+    fails = sum(1 for r in results if r.status == "fail")
+    passes = sum(1 for r in results if r.status == "pass")
+    skips = sum(1 for r in results if r.status == "skip")
+    console.print(f"\n[bold]Summary:[/bold] {fails} fail(s), {passes} pass(es), {skips} skip(s)")
+    if fails:
+        sys.exit(fails)
+
+
 @main.command("repair")
 @click.option(
     "--root",
