@@ -566,6 +566,13 @@ def test_cheap_seed_three_iteration_axes_fire(tmp_path: Path):
     assert card.axis_enrichment == "compounding"
 
 
+def _dir_fingerprint(root: Path) -> dict[str, bytes]:
+    """Map every file under ``root`` to its bytes — for byte-for-byte comparison."""
+    return {
+        str(p.relative_to(root)): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()
+    }
+
+
 def test_cheap_dry_smoke_on_fixture_copy(tmp_path: Path):
     """Copy the checked-in sample_project and run the runner main() — never raises."""
     import shutil
@@ -578,6 +585,26 @@ def test_cheap_dry_smoke_on_fixture_copy(tmp_path: Path):
     assert rc == 0
     # The checked-in copy must be untouched by the run (we mutated only the copy).
     assert _FIXTURE_ROOT.exists()
+
+
+def test_runner_leaves_source_root_byte_for_byte_unchanged():
+    """Running main() directly against the checked-in fixture must not write to it.
+
+    Strong assertion (LOW-01): snapshot every file's bytes before and after, and
+    assert nothing changed and no pipeline output (PROJECT.md, memory.db, etc.)
+    appeared in the source root. The runner copies --root into a temp dir, so the
+    source fixture stays pristine even when --root IS the fixture.
+    """
+    from bench.compound_eval import main
+
+    before = _dir_fingerprint(_FIXTURE_ROOT)
+    rc = main(["--mode", "cheap", "--runs", "2", "--root", str(_FIXTURE_ROOT)])
+    assert rc == 0
+    after = _dir_fingerprint(_FIXTURE_ROOT)
+    assert after == before, "runner mutated the checked-in source fixture"
+    # Pipeline outputs must NOT appear in the source root.
+    for leaked in (".planning/PROJECT.md", ".planning/ROADMAP.md", "memory.db", ".mcp.json"):
+        assert not (_FIXTURE_ROOT / leaked).exists(), f"runner leaked {leaked} into source root"
 
 
 def test_cheap_dry_smoke_writes_deterministic_json(tmp_path: Path):
@@ -611,3 +638,157 @@ def test_sample_project_fixture_is_self_consistent():
     assert (
         _FIXTURE_ROOT / ".planning" / "phases" / "01-foundation" / "01-VERIFICATION.md"
     ).exists()
+
+
+# ── Review fixes: insufficient-data, verdict masking, --out, real-mode, axes ──
+
+
+def test_axis_convergence_insufficient_data_when_artifacts_all_zero():
+    """All-zero artifacts_changed => no convergence signal => insufficient-data, not flat."""
+    seq = [_snap(0, artifacts_changed=0), _snap(1, artifacts_changed=0)]
+    assert axis_convergence(seq) == "insufficient-data"
+
+
+def test_axis_verify_insufficient_data_when_all_skip():
+    """Verify all-skip every run (no pass/fail) => insufficient-data, not flat."""
+    seq = [_snap(0, verify_skip=7), _snap(1, verify_skip=7)]
+    assert axis_verify_non_regression(seq) == "insufficient-data"
+
+
+def test_insufficient_data_does_not_count_toward_score():
+    """An insufficient-data axis counts as neither compounding nor regressing.
+
+    Here convergence has no signal (all-zero artifacts) while gotcha + enrichment
+    compound. The score reflects only the two real compounding axes (=2), and the
+    inert convergence axis neither inflates nor deflates it.
+    """
+    seq = [
+        _snap(0, new_gotchas=4, prefix_tokens=100, mem_hits=1),
+        _snap(1, new_gotchas=0, prefix_tokens=300, mem_hits=4),
+    ]
+    card = compute_scorecard(seq)
+    assert card.axis_convergence == "insufficient-data"
+    assert card.axis_gotcha_learning == "compounding"
+    assert card.axis_enrichment == "compounding"
+    # Only two real compounding axes contribute; the inert axis adds nothing.
+    assert card.compounding_score == 2
+
+
+def test_verdict_surfaces_regression_even_when_score_nets_zero():
+    """One regressing axis must not be masked by a compounding one (LOW-02)."""
+    # convergence compounds (8->2), gotcha regresses (0->4); verify/enrich flat.
+    seq = [
+        _snap(0, artifacts_changed=8, new_gotchas=0, verify_pass=3, prefix_tokens=100, mem_hits=2),
+        _snap(1, artifacts_changed=2, new_gotchas=4, verify_pass=3, prefix_tokens=100, mem_hits=2),
+    ]
+    card = compute_scorecard(seq)
+    assert card.axis_convergence == "compounding"
+    assert card.axis_gotcha_learning == "regressing"
+    assert card.compounding_score == 0
+    assert card.verdict == "regressing"
+
+
+def test_write_json_includes_caveat_and_insufficient_axes(tmp_path: Path):
+    """MEDIUM-02: the caveat travels with the JSON artifact; inert axes are listed."""
+    import json
+
+    from bench.report import CAVEAT, write_json
+
+    seq = [_snap(0, artifacts_changed=0), _snap(1, artifacts_changed=0)]
+    card = compute_scorecard(seq)
+    out = tmp_path / "r.json"
+    write_json(card, out)
+    payload = json.loads(out.read_text())
+    assert payload["caveat"] == CAVEAT
+    assert "convergence" in payload["insufficient_data_axes"]
+
+
+def test_main_does_not_crash_on_unwritable_out(tmp_path: Path):
+    """MEDIUM-01: an unwritable --out warns and continues; main returns 0, no raise."""
+    import shutil
+
+    from bench.compound_eval import main
+
+    dest = tmp_path / "sample_project"
+    shutil.copytree(_FIXTURE_ROOT, dest)
+    # A path whose parent is a regular file cannot be created => OSError on write.
+    blocker = tmp_path / "blocker"
+    blocker.write_text("x")
+    bad_out = blocker / "nested" / "results.json"
+    rc = main(["--mode", "cheap", "--runs", "2", "--root", str(dest), "--out", str(bad_out)])
+    assert rc == 0
+    assert not bad_out.exists()
+
+
+def test_real_loop_refuses_without_bridge(tmp_path: Path, monkeypatch):
+    """MEDIUM-04: --mode real fails fast (empty scorecard) when no bridge is available."""
+    from io import StringIO
+
+    from rich.console import Console
+
+    import bench.compound_eval as ce
+
+    monkeypatch.setattr(ce, "_bridge_available", lambda: False)
+    buf = StringIO()
+    console = Console(file=buf, width=120, force_terminal=False)
+    card = ce._real_loop(tmp_path, 3, console=console)
+    assert card.snapshots == ()
+    assert card.verdict != "compounding"
+    assert "requires a usable claude bridge" in buf.getvalue()
+
+
+def test_real_loop_runs_with_monkeypatched_pipeline(tmp_path: Path, monkeypatch):
+    """MEDIUM-04: with the bridge faked-available and pipeline stubbed, _real_loop runs.
+
+    No real LLM call: _run_one is replaced with a no-op so dispatch is exercised
+    against a temp copy without touching the source root.
+    """
+    import shutil
+    from io import StringIO
+
+    from rich.console import Console
+
+    import bench.compound_eval as ce
+    from bench.metrics import Scorecard
+
+    src = tmp_path / "src"
+    shutil.copytree(_FIXTURE_ROOT, src)
+    before = _dir_fingerprint(src)
+
+    monkeypatch.setattr(ce, "_bridge_available", lambda: True)
+    monkeypatch.setattr(ce, "_run_one", lambda root, *, dry_run: None)
+
+    buf = StringIO()
+    console = Console(file=buf, width=120, force_terminal=False)
+    card = ce._real_loop(src, 2, console=console)
+    assert isinstance(card, Scorecard)
+    assert len(card.snapshots) == 2
+    # The source root must be byte-for-byte unchanged (work happened in a temp copy).
+    assert _dir_fingerprint(src) == before
+
+
+def test_cheap_dry_all_four_axes_show_movement(tmp_path: Path):
+    """HIGH-03: under cheap-dry, all four axes are genuinely exercised (no all-flat).
+
+    Convergence falls, verify flips fail->pass, gotchas decay, enrichment grows —
+    none should read 'flat' or 'insufficient-data' on the synthetic project.
+    """
+    import shutil
+    from io import StringIO
+
+    from rich.console import Console
+
+    from bench.compound_eval import _cheap_loop
+
+    src = tmp_path / "src"
+    shutil.copytree(_FIXTURE_ROOT, src)
+    buf = StringIO()
+    console = Console(file=buf, width=120, force_terminal=False)
+    card = _cheap_loop(src, 5, console=console)
+
+    inert = {"flat", "insufficient-data"}
+    assert card.axis_convergence not in inert
+    assert card.axis_gotcha_learning not in inert
+    assert card.axis_verify_non_regression not in inert
+    assert card.axis_enrichment not in inert
+    assert card.verdict == "compounding"
