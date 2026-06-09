@@ -920,7 +920,7 @@ def verify(root: Path | None):
     skips = sum(1 for r in results if r.status == "skip")
     console.print(f"\n[bold]Summary:[/bold] {fails} fail(s), {passes} pass(es), {skips} skip(s)")
     if fails:
-        sys.exit(fails)
+        sys.exit(min(fails, 255))
 
 
 @main.command("repair")
