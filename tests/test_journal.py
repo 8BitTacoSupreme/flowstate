@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from flowstate.journal import append_run_entry
+from flowstate.journal import append_run_entry, append_verify_entry
 from flowstate.memory import MemoryKind, MemoryStore
 from flowstate.state import FlowStateModel, InstallEntry, ToolStatus, update_tool
 
@@ -258,6 +258,111 @@ class TestRemovedPathDelta:
         # Newest-first — run002 at index 0
         second_entry = entries[0]
         assert ".planning/ROADMAP.md" in second_entry.metadata["artifacts_changed"]
+
+
+class TestAppendVerifyEntry:
+    """Tests for the append_verify_entry sibling (08-02 VER-02)."""
+
+    def _make_results(self, tmp_path):
+        """Build a mix of pass/fail/skip VerifyResult instances."""
+        from flowstate.verify import VerifyResult
+
+        return [
+            VerifyResult(gate="artifact-exists", status="pass", message="ok", fixture="s.json"),
+            VerifyResult(
+                gate="coverage-gate", status="fail", message="below threshold", fixture="s.json"
+            ),
+            VerifyResult(
+                gate="milestone-check", status="skip", message="not verifiable", fixture="s.json"
+            ),
+        ]
+
+    def test_writes_one_run_entry_tagged_verify(self, store: MemoryStore, tmp_path):
+        results = self._make_results(tmp_path)
+        append_verify_entry(store, tmp_path, results)
+        entries = store.get_by_kind(MemoryKind.RUN, limit=10)
+        assert len(entries) == 1
+        assert "verify" in entries[0].tags
+
+    def test_metadata_counts_match_results(self, store: MemoryStore, tmp_path):
+        results = self._make_results(tmp_path)
+        append_verify_entry(store, tmp_path, results)
+        meta = store.get_by_kind(MemoryKind.RUN, limit=1)[0].metadata
+        assert meta["gates_passed"] == 1
+        assert meta["gates_failed"] == 1
+        assert meta["gates_skipped"] == 1
+
+    def test_metadata_failed_signatures_contains_fail_gates(self, store: MemoryStore, tmp_path):
+        results = self._make_results(tmp_path)
+        append_verify_entry(store, tmp_path, results)
+        meta = store.get_by_kind(MemoryKind.RUN, limit=1)[0].metadata
+        assert meta["failed_signatures"] == ["coverage-gate"]
+
+    def test_metadata_verify_flag_is_true(self, store: MemoryStore, tmp_path):
+        results = self._make_results(tmp_path)
+        append_verify_entry(store, tmp_path, results)
+        meta = store.get_by_kind(MemoryKind.RUN, limit=1)[0].metadata
+        assert meta["verify"] is True
+
+    def test_runlog_created_and_contains_verify(self, store: MemoryStore, tmp_path):
+        results = self._make_results(tmp_path)
+        append_verify_entry(store, tmp_path, results)
+        runlog = tmp_path / ".planning" / "RUNLOG.md"
+        assert runlog.exists()
+        content = runlog.read_text()
+        assert "verify" in content
+
+    def test_runlog_contains_count_line(self, store: MemoryStore, tmp_path):
+        results = self._make_results(tmp_path)
+        append_verify_entry(store, tmp_path, results)
+        content = (tmp_path / ".planning" / "RUNLOG.md").read_text()
+        assert "pass" in content
+        assert "fail" in content
+        assert "skip" in content
+
+    def test_all_pass_no_failed_signatures(self, store: MemoryStore, tmp_path):
+        from flowstate.verify import VerifyResult
+
+        results = [
+            VerifyResult(gate="gate-a", status="pass", message="ok", fixture="s.json"),
+            VerifyResult(gate="gate-b", status="pass", message="ok", fixture="s.json"),
+        ]
+        append_verify_entry(store, tmp_path, results)
+        meta = store.get_by_kind(MemoryKind.RUN, limit=1)[0].metadata
+        assert meta["gates_failed"] == 0
+        assert meta["failed_signatures"] == []
+
+    def test_never_raises_when_memory_add_raises(self, tmp_path, monkeypatch):
+        from unittest.mock import MagicMock
+
+        from flowstate.verify import VerifyResult
+
+        fake_memory = MagicMock(spec=MemoryStore)
+        fake_memory.add.side_effect = RuntimeError("storage failure")
+
+        results = [VerifyResult(gate="g", status="pass", message="ok", fixture="s.json")]
+        # Must not raise
+        append_verify_entry(fake_memory, tmp_path, results)
+        fake_memory.add.assert_called_once()
+
+    def test_never_raises_when_runlog_unwritable(self, store: MemoryStore, tmp_path, monkeypatch):
+        import builtins
+
+        from flowstate.verify import VerifyResult
+
+        real_open = builtins.open
+
+        def patched_open(file, mode="r", *args, **kwargs):
+            if "RUNLOG.md" in str(file) and "a" in str(mode):
+                raise OSError("disk full")
+            return real_open(file, mode, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "open", patched_open)
+
+        results = [VerifyResult(gate="g", status="pass", message="ok", fixture="s.json")]
+        # Must not raise; memory entry still lands
+        append_verify_entry(store, tmp_path, results)
+        assert store.count(MemoryKind.RUN) == 1
 
 
 class TestGotchasSlot:
