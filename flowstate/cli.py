@@ -873,7 +873,10 @@ def verify(root: Path | None):
     # Early exit when there are no fixture files to check
     fixtures_dir = root / ".planning" / "fixtures"
     if not fixtures_dir.exists() or not any(fixtures_dir.glob("*.json")):
-        console.print("[dim]No fixtures to verify — run 'flowstate kickoff' to scaffold.[/dim]")
+        console.print(
+            "[dim]No fixtures to verify — artifact integrity not checked."
+            " Run 'flowstate kickoff' to scaffold fixtures.[/dim]"
+        )
         return
 
     state = load_state(root)
