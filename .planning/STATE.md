@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.5.0
 milestone_name: Compounding Loop
-status: ready_to_plan
-stopped_at: Phase 07 complete (4/4) — ready to discuss Phase 8
-last_updated: 2026-06-08T23:42:57.001Z
-last_activity: 2026-06-08
+status: executing
+stopped_at: Completed 08-01-PLAN.md — VerifyResult + checker registry + run_verify; 19 tests at 92% coverage
+last_updated: "2026-06-09T14:29:28.359Z"
+last_activity: 2026-06-09
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 7
-  completed_plans: 17
+  total_plans: 10
+  completed_plans: 8
   percent: 67
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-06)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Phase 8 — runnable verification
+**Current focus:** Phase 08 — runnable-verification
 
 ## Current Position
 
-Phase: 8
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-06-08
+Phase: 08 (runnable-verification) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-06-09
 
 ```
 v0.5.0 progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/3 phases)
@@ -68,6 +68,7 @@ v0.5.0 progress: [░░░░░░░░░░░░░░░░░░░░] 
 | Phase 06 P03 | 189 | 2 tasks | 2 files |
 | Phase 07 P03 | 35 | 2 tasks | 2 files |
 | Phase 07-gotchas-accumulator P04 | 20min | 2 tasks | 6 files |
+| Phase 08-runnable-verification P01 | 35min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -121,6 +122,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 07 P04]: Lazy import of capture_gotcha inside on_step_failed avoids circular import (gotchas->memory<-memory_handlers)
 - [Phase ?]: [Phase 07 P04]: Journal gotchas slot queries INSIGHT entries by run_id in-band — no threading needed through append_run_entry call site
 - [Phase ?]: [Phase 07 P04]: harvest_planning_gotchas placed after MemoryStore opens, before interview answer seeding — prior-phase artifacts available to all adapters
+- [Phase ?]: SKIP (not FAIL) for NL acceptance_gates and forbidden_actions — honest about mechanical vs manual verifiability
 
 ### Pending Todos
 
@@ -139,8 +141,8 @@ None at roadmap start. Implementation order matters: MemoryKind.RUN must be adde
 
 ## Session Continuity
 
-Last session: 2026-06-08T23:15:44.701Z
-Stopped at: Completed 07-04-PLAN.md — GOT-01 executor source wired, harvest at pipeline start, journal gotchas slot populated
+Last session: 2026-06-09T14:29:28.355Z
+Stopped at: Completed 08-01-PLAN.md — VerifyResult + checker registry + run_verify; 19 tests at 92% coverage
 Resume file: None
 Next step: `/gsd:plan-phase 6`
 

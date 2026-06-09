@@ -81,7 +81,7 @@ Plans:
   4. `flowstate verify` exits 0 (with a clear "no fixtures" message) when `.planning/fixtures/` is absent or empty, and never raises an unhandled exception on malformed fixture files.
 **Plans**: 3 plans
 Plans:
-- [ ] 08-01-PLAN.md — verify.py core: VerifyResult + run_verify + bounded checker registry (VER-01)
+- [x] 08-01-PLAN.md — verify.py core: VerifyResult + run_verify + bounded checker registry (VER-01)
 - [ ] 08-02-PLAN.md — journal.append_verify_entry sibling for standalone verify runs (VER-02)
 - [ ] 08-03-PLAN.md — `flowstate verify` CLI: report + exit code + gotchas/journal loop wiring (VER-01, VER-02)
 **UI hint**: no
@@ -97,4 +97,4 @@ Plans:
 | 5. UX — Guided Kickoff + Hygiene       | v0.4.0    | 2/2            | Complete    | 2026-06-06           |
 | 6. Run Journal                         | v0.5.0    | 3/3 | Complete   | 2026-06-08 |
 | 7. Gotchas Accumulator                 | v0.5.0    | 4/4 | Complete   | 2026-06-08 |
-| 8. Runnable Verification               | v0.5.0    | 0/3            | Planned     | -                    |
+| 8. Runnable Verification               | v0.5.0    | 1/3 | In Progress|  |
