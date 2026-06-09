@@ -1,0 +1,73 @@
+{
+  "version": "0.4.0",
+  "created_at": "2026-06-09T17:56:26.294752Z",
+  "updated_at": "2026-06-09T17:56:26.294917Z",
+  "interview": {
+    "research_focus": "compounding measurement apparatus",
+    "core_problem": "prove run N+1 beats run N on the same project",
+    "ten_x_vision": "each run starts smarter than the last",
+    "milestones": [
+      "Foundation",
+      "Compounding loop"
+    ],
+    "test_coverage": 80,
+    "architecture_pattern": "event-driven orchestrator",
+    "deployment_target": "cli"
+  },
+  "preferences": {
+    "project_name": "bench-sample",
+    "dry_run": true,
+    "auto_branch_on_hardening": true,
+    "model": "",
+    "max_budget_usd": null,
+    "effort": ""
+  },
+  "tools": {
+    "research": {
+      "status": "ready",
+      "started_at": null,
+      "completed_at": null,
+      "error": null,
+      "artifacts": []
+    },
+    "strategy": {
+      "status": "ready",
+      "started_at": null,
+      "completed_at": null,
+      "error": null,
+      "artifacts": []
+    },
+    "gsd": {
+      "status": "ready",
+      "started_at": null,
+      "completed_at": null,
+      "error": null,
+      "artifacts": []
+    },
+    "discipline": {
+      "status": "ready",
+      "started_at": null,
+      "completed_at": null,
+      "error": null,
+      "artifacts": []
+    }
+  },
+  "artifacts": {},
+  "context_files": [],
+  "install_manifest": [
+    {
+      "path": ".planning/artifacts/work.txt",
+      "owner": "bench",
+      "kind": "artifact",
+      "created_at": "2026-06-09T17:56:26.294910Z",
+      "checksum": "2d47d2b3a51b6380"
+    },
+    {
+      "path": ".planning/fixtures/starter.json",
+      "owner": "bench",
+      "kind": "fixture",
+      "created_at": "2026-06-09T17:56:26.294912Z",
+      "checksum": null
+    }
+  ]
+}

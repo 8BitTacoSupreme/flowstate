@@ -484,3 +484,130 @@ def test_judge_stub_noop_when_flag_absent():
     args = argparse.Namespace(judge=False, mode="cheap", allow_llm=False)
     _maybe_judge(args, console)
     assert buf.getvalue() == ""
+
+
+# ── Task 4: sample_project fixture + cheap-seed e2e + cheap-dry smoke ────────
+
+
+def _seed_run_entry(store, *, run_id: str, artifacts_changed: int) -> None:
+    """Seed a MemoryKind.RUN journal entry with a given artifacts_changed count."""
+    from flowstate.memory import MemoryEntry, MemoryKind
+
+    store.add(
+        MemoryEntry.create(
+            MemoryKind.RUN,
+            content=f"run {run_id} journal",
+            summary=f"run {run_id}",
+            metadata={"artifacts_changed": ["f"] * artifacts_changed},
+            run_id=run_id,
+        )
+    )
+
+
+def _seed_memory(store, *, run_id: str, n: int) -> None:
+    """Seed N searchable RESEARCH memories so mem_hits / prefix grow across runs."""
+    from flowstate.memory import MemoryEntry, MemoryKind
+
+    for k in range(n):
+        store.add(
+            MemoryEntry.create(
+                MemoryKind.RESEARCH,
+                content=f"compounding finding {run_id}-{k} about vision architecture",
+                summary=f"finding {run_id}-{k}",
+                tags=["compounding"],
+                run_id=run_id,
+            )
+        )
+
+
+def test_cheap_seed_three_iteration_axes_fire(tmp_path: Path):
+    """Deterministically seed a 3-run compounding trend and assert axes fire."""
+    from bench.capture import capture_run_snapshot
+    from bench.metrics import compute_scorecard
+    from bench.project import scaffold
+    from flowstate.gotchas import capture_gotcha
+    from flowstate.memory import MemoryStore
+
+    scaffold(tmp_path)
+    probe = "compounding vision architecture"
+    snapshots = []
+    prior = None
+    # Decreasing artifact deltas, decaying new gotchas, growing memory.
+    plan = [
+        {"run_id": "seedrun0", "artifacts": 8, "new_gotchas": 3, "mem": 1},
+        {"run_id": "seedrun1", "artifacts": 4, "new_gotchas": 1, "mem": 3},
+        {"run_id": "seedrun2", "artifacts": 1, "new_gotchas": 0, "mem": 6},
+    ]
+    for step in plan:
+        store = MemoryStore(root=tmp_path)
+        try:
+            _seed_run_entry(store, run_id=step["run_id"], artifacts_changed=step["artifacts"])
+            _seed_memory(store, run_id=step["run_id"], n=step["mem"])
+            for g in range(step["new_gotchas"]):
+                capture_gotcha(
+                    store,
+                    source="seed",
+                    message=f"distinct gotcha {step['run_id']}-{g}",
+                    root=tmp_path,
+                    run_id=step["run_id"],
+                )
+        finally:
+            store.close()
+        snap = capture_run_snapshot(tmp_path, probe, prior=prior, run_id=step["run_id"])
+        snapshots.append(snap)
+        prior = snap
+
+    card = compute_scorecard(snapshots)
+    # Convergence: artifacts_changed 8 -> 1 decreasing.
+    assert card.axis_convergence == "compounding"
+    # Gotcha-learning: new gotchas 3 -> 0 decaying.
+    assert card.axis_gotcha_learning == "compounding"
+    # Enrichment: prefix tokens + mem hits grow as memory accumulates.
+    assert card.axis_enrichment == "compounding"
+
+
+def test_cheap_dry_smoke_on_fixture_copy(tmp_path: Path):
+    """Copy the checked-in sample_project and run the runner main() — never raises."""
+    import shutil
+
+    from bench.compound_eval import main
+
+    dest = tmp_path / "sample_project"
+    shutil.copytree(_FIXTURE_ROOT, dest)
+    rc = main(["--mode", "cheap", "--runs", "2", "--root", str(dest)])
+    assert rc == 0
+    # The checked-in copy must be untouched by the run (we mutated only the copy).
+    assert _FIXTURE_ROOT.exists()
+
+
+def test_cheap_dry_smoke_writes_deterministic_json(tmp_path: Path):
+    """main() with --out writes JSON; two write_json calls are byte-identical."""
+    import shutil
+
+    from bench.compound_eval import main
+    from bench.metrics import compute_scorecard
+    from bench.report import write_json
+
+    dest = tmp_path / "sample_project"
+    shutil.copytree(_FIXTURE_ROOT, dest)
+    out = tmp_path / "results.json"
+    rc = main(["--mode", "cheap", "--runs", "2", "--root", str(dest), "--out", str(out)])
+    assert rc == 0
+    assert out.exists()
+
+    # JSON determinism: same scorecard -> byte-identical output.
+    card = compute_scorecard(_compounding_sequence())
+    a = tmp_path / "a.json"
+    b = tmp_path / "b.json"
+    write_json(card, a)
+    write_json(card, b)
+    assert a.read_bytes() == b.read_bytes()
+
+
+def test_sample_project_fixture_is_self_consistent():
+    """The checked-in fixture exists with the three required files."""
+    assert (_FIXTURE_ROOT / "flowstate.json").exists()
+    assert (_FIXTURE_ROOT / ".planning" / "fixtures" / "starter.json").exists()
+    assert (
+        _FIXTURE_ROOT / ".planning" / "phases" / "01-foundation" / "01-VERIFICATION.md"
+    ).exists()

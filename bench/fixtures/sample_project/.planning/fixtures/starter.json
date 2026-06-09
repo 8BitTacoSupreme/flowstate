@@ -1,0 +1,25 @@
+{
+  "acceptance_gates": [
+    "Milestone satisfied: Foundation",
+    "Milestone satisfied: Compounding loop",
+    "Test coverage meets or exceeds 80% as required."
+  ],
+  "few_shot_exemplars": [
+    {
+      "expected_output": "A focused implementation that satisfies the acceptance gates, passes all tests, and does not introduce scope beyond what was described.",
+      "input": "Implement the first milestone for bench-sample.",
+      "rationale": "The agent should address the stated problem directly, verify against acceptance gates, and avoid scope creep."
+    }
+  ],
+  "forbidden_actions": [
+    "Do not invent requirements not established in PROJECT.md.",
+    "Do not modify files outside the stated task scope.",
+    "Do not skip or disable tests to reach coverage targets.",
+    "Do not introduce new runtime dependencies without explicit approval."
+  ],
+  "retrieval_questions": [
+    "How does this change advance the vision: 'each run starts smarter than the last'?",
+    "Does this approach align with the 'event-driven orchestrator' architecture pattern?"
+  ],
+  "system_contract": "The agent operates on bench-sample. Core problem: prove run N+1 beats run N on the same project. The agent must address this problem faithfully without inventing requirements or scope not established in PROJECT.md."
+}
