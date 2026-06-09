@@ -416,3 +416,71 @@ def test_capture_attributes_new_gotchas_by_run_id(tmp_path: Path):
 
     snap = capture_run_snapshot(tmp_path, "boom", run_id="run0")
     assert snap.new_gotchas >= 1
+
+
+# ── Task 3: runner + report ─────────────────────────────────────────────────
+
+
+def _captured_console_output(render) -> str:
+    from io import StringIO
+
+    from rich.console import Console
+
+    buf = StringIO()
+    console = Console(file=buf, width=120, force_terminal=False)
+    render(console)
+    return buf.getvalue()
+
+
+def test_render_report_prints_caveat_and_renders():
+    from bench.report import CAVEAT, render_report
+
+    card = compute_scorecard(_compounding_sequence())
+    out = _captured_console_output(lambda c: render_report(card, console=c))
+    # The honest caveat must be present (allowing Rich to wrap it).
+    assert "validates the apparatus" in out or "validates that the substrate" in out
+    assert "Scorecard" in out
+    # The caveat constant must name the causation distinction explicitly.
+    assert "causes the llm to compound" in CAVEAT.lower()
+    assert "regression guard" in out or "regression" in out
+
+
+def test_render_report_markdown_branch():
+    from bench.report import render_report
+
+    card = compute_scorecard(_compounding_sequence())
+    out = _captured_console_output(lambda c: render_report(card, console=c, markdown=True))
+    assert "Compounding Eval Run" in out
+
+
+def test_judge_stub_refuses_without_real_and_allow():
+    import argparse
+    from io import StringIO
+
+    from rich.console import Console
+
+    from bench.compound_eval import _maybe_judge
+
+    buf = StringIO()
+    console = Console(file=buf, width=120, force_terminal=False)
+    # --judge in cheap mode without --allow-llm must refuse, not judge.
+    args = argparse.Namespace(judge=True, mode="cheap", allow_llm=False)
+    _maybe_judge(args, console)
+    out = buf.getvalue()
+    assert "spec-only" in out
+    assert "NOT implemented" in out
+
+
+def test_judge_stub_noop_when_flag_absent():
+    import argparse
+    from io import StringIO
+
+    from rich.console import Console
+
+    from bench.compound_eval import _maybe_judge
+
+    buf = StringIO()
+    console = Console(file=buf, width=120, force_terminal=False)
+    args = argparse.Namespace(judge=False, mode="cheap", allow_llm=False)
+    _maybe_judge(args, console)
+    assert buf.getvalue() == ""
