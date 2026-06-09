@@ -260,5 +260,159 @@ def test_verdict_requires_enrichment_compounding():
     assert card.verdict != "compounding"
 
 
-# Placeholder import guard so later-task imports resolve once modules land.
 _FIXTURE_ROOT = Path(__file__).resolve().parent.parent / "bench" / "fixtures" / "sample_project"
+
+
+# ── Task 2: capture + project ───────────────────────────────────────────────
+
+
+def test_layer_headings_match_context_prefix_source():
+    """_LAYER_HEADINGS must match the actual headings emitted by context_prefix.py.
+
+    Fails loudly if any heading drifts in the source module.
+    """
+    from bench.capture import _LAYER_HEADINGS
+
+    flowstate_dir = Path(__file__).resolve().parent.parent / "flowstate"
+    # "## Prior Knowledge" is emitted by MemoryStore.get_context (memory.py),
+    # the other three by context_prefix.py. Scan the union of the emitters so
+    # the guard couples to wherever each heading actually originates.
+    src = (
+        (flowstate_dir / "context_prefix.py").read_text()
+        + "\n"
+        + (flowstate_dir / "memory.py").read_text()
+    )
+    expected = (
+        "## Eval Fixtures",
+        "## Gotchas",
+        "## Prior Knowledge",
+        "## Since Last Run",
+    )
+    assert expected == _LAYER_HEADINGS
+    for heading in _LAYER_HEADINGS:
+        assert heading in src, f"layer heading drifted from its emitter: {heading!r}"
+
+
+def test_capture_run_snapshot_never_raises_on_empty_dir(tmp_path: Path):
+    from bench.capture import capture_run_snapshot
+    from bench.metrics import RunSnapshot
+
+    snap = capture_run_snapshot(tmp_path, "anything")
+    assert isinstance(snap, RunSnapshot)
+    assert snap.run_index == 0
+    # Empty dir degrades to zeros / empty layers.
+    assert snap.artifacts_changed == 0
+    assert snap.layers_present == ()
+
+
+def test_capture_run_index_derives_from_prior(tmp_path: Path):
+    from bench.capture import capture_run_snapshot
+
+    first = capture_run_snapshot(tmp_path, "q")
+    second = capture_run_snapshot(tmp_path, "q", prior=first)
+    assert second.run_index == first.run_index + 1
+
+
+def test_scaffold_is_idempotent(tmp_path: Path):
+    from bench.project import scaffold
+
+    scaffold(tmp_path)
+    fixture = tmp_path / ".planning" / "fixtures" / "starter.json"
+    state = tmp_path / "flowstate.json"
+    verification = tmp_path / ".planning" / "phases" / "01-foundation" / "01-VERIFICATION.md"
+    assert fixture.exists()
+    assert state.exists()
+    assert verification.exists()
+    first_fixture = fixture.read_text()
+    first_verification = verification.read_text()
+
+    scaffold(tmp_path)  # second run
+    assert fixture.read_text() == first_fixture
+    assert verification.read_text() == first_verification
+
+
+def test_scaffold_verification_has_gaps_section(tmp_path: Path):
+    from bench.project import scaffold
+
+    scaffold(tmp_path)
+    verification = (
+        tmp_path / ".planning" / "phases" / "01-foundation" / "01-VERIFICATION.md"
+    ).read_text()
+    assert "Gaps" in verification
+    # harvest_planning_gotchas should find bullets to capture.
+    assert "- " in verification
+
+
+def test_scaffold_verification_feeds_harvest(tmp_path: Path):
+    """The scaffolded VERIFICATION.md must produce gotchas via harvest_planning_gotchas."""
+    from bench.project import scaffold
+    from flowstate.gotchas import harvest_planning_gotchas
+    from flowstate.memory import MemoryStore
+
+    scaffold(tmp_path)
+    store = MemoryStore(root=tmp_path)
+    try:
+        harvest_planning_gotchas(store, tmp_path)
+        assert len(store.get_gotchas()) >= 1
+    finally:
+        store.close()
+
+
+def test_mutate_for_run_is_deterministic(tmp_path: Path):
+    from bench.project import mutate_for_run, scaffold
+
+    scaffold(tmp_path)
+    mutate_for_run(tmp_path, 1)
+    snapshot_a = (
+        tmp_path / ".planning" / "phases" / "01-foundation" / "01-VERIFICATION.md"
+    ).read_text()
+
+    # Re-scaffold + same mutation index yields identical content.
+    scaffold(tmp_path)
+    mutate_for_run(tmp_path, 1)
+    snapshot_b = (
+        tmp_path / ".planning" / "phases" / "01-foundation" / "01-VERIFICATION.md"
+    ).read_text()
+    assert snapshot_a == snapshot_b
+
+
+def test_mutate_for_run_resolves_gaps_over_runs(tmp_path: Path):
+    """Successive run indices remove gaps (gotcha gaps resolve over runs)."""
+    from bench.project import mutate_for_run, scaffold
+
+    scaffold(tmp_path)
+    vpath = tmp_path / ".planning" / "phases" / "01-foundation" / "01-VERIFICATION.md"
+
+    def _gap_count() -> int:
+        return vpath.read_text().count("\n- ")
+
+    mutate_for_run(tmp_path, 0)
+    early = _gap_count()
+    mutate_for_run(tmp_path, 2)
+    late = _gap_count()
+    assert late < early
+
+
+def test_capture_attributes_new_gotchas_by_run_id(tmp_path: Path):
+    """A gotcha stamped with the current run_id counts as new this run."""
+    from datetime import UTC, datetime
+
+    from bench.capture import capture_run_snapshot
+    from flowstate.gotchas import capture_gotcha
+    from flowstate.memory import MemoryStore
+
+    store = MemoryStore(root=tmp_path)
+    try:
+        capture_gotcha(
+            store,
+            source="verifier",
+            message="boom in foo.py",
+            root=tmp_path,
+            run_id="run0",
+            timestamp=datetime.now(UTC),
+        )
+    finally:
+        store.close()
+
+    snap = capture_run_snapshot(tmp_path, "boom", run_id="run0")
+    assert snap.new_gotchas >= 1
