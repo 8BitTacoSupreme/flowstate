@@ -86,14 +86,16 @@ def _check_artifact_integrity(state: FlowStateModel, root: Path) -> list[VerifyR
     return results
 
 
-def _check_coverage_gate(gate: str, root: Path, fixture_name: str) -> VerifyResult:
+def _check_coverage_gate(
+    gate: str, root: Path, fixture_name: str, match: re.Match[str]
+) -> VerifyResult:
     """Evaluate a coverage-threshold acceptance gate against coverage.xml.
 
     Returns PASS/FAIL when coverage.xml is present; SKIP when no report exists.
-    The caller is responsible for only invoking this when _COVERAGE_RE matches.
+    The caller is responsible for only invoking this when _COVERAGE_RE matches
+    and must pass the resulting re.Match object to avoid a redundant search.
     """
-    match = _COVERAGE_RE.search(gate)
-    required_pct = int(match.group(1))  # type: ignore[union-attr]
+    required_pct = int(match.group(1))
     rate = _parse_coverage_rate(root)
     if rate is None:
         return VerifyResult(
@@ -173,8 +175,9 @@ def run_verify(state: FlowStateModel, root: Path) -> list[VerifyResult]:
             fixture_name = fixture_path.name
 
             for gate in acceptance_gates:
-                if _COVERAGE_RE.search(gate):
-                    results.append(_check_coverage_gate(gate, root, fixture_name))
+                m = _COVERAGE_RE.search(gate)
+                if m:
+                    results.append(_check_coverage_gate(gate, root, fixture_name, m))
                 else:
                     results.append(
                         VerifyResult(
