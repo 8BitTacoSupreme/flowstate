@@ -127,6 +127,85 @@ def append_run_entry(
     _append_runlog(root, run_id, ts, steps, artifacts_changed, delta_line, dry_run, this_run_sigs)
 
 
+def append_verify_entry(
+    memory: MemoryStore,
+    root: Path,
+    results: list[Any],
+    *,
+    timestamp: datetime | None = None,
+) -> None:
+    """Write one MemoryKind.RUN entry tagged ["verify"] for a standalone verify run.
+
+    Mirrors the result to .planning/RUNLOG.md as an append-only human-readable trail.
+    Never raises — journal failures must not break the caller.
+    Each CLI invocation is a distinct event; no idempotency guard is applied.
+    """
+    ts = timestamp or datetime.now(UTC)
+
+    # Derive counts from results by status (duck-typed: .status and .gate attributes)
+    gates_passed = sum(1 for r in results if r.status == "pass")
+    gates_failed = sum(1 for r in results if r.status == "fail")
+    gates_skipped = sum(1 for r in results if r.status == "skip")
+    failed_signatures = [r.gate for r in results if r.status == "fail"]
+
+    metadata: dict[str, Any] = {
+        "verify": True,
+        "gates_passed": gates_passed,
+        "gates_failed": gates_failed,
+        "gates_skipped": gates_skipped,
+        "failed_signatures": failed_signatures,
+    }
+
+    summary = f"verify: {gates_passed} pass / {gates_failed} fail / {gates_skipped} skip"
+    failed_str = ", ".join(failed_signatures) if failed_signatures else "none"
+    content = (
+        f"timestamp: {ts.isoformat()}\n"
+        f"gates: {gates_passed} pass / {gates_failed} fail / {gates_skipped} skip\n"
+        f"failed: {failed_str}\n"
+    )
+
+    entry = MemoryEntry(
+        id=_new_id(),
+        kind=MemoryKind.RUN,
+        content=content,
+        summary=summary,
+        source="journal",
+        tags=["verify"],
+        metadata=metadata,
+        created_at=ts,
+        run_id="",
+    )
+    try:
+        memory.add(entry)
+    except Exception:
+        return  # memory write failed; best-effort — never raise into caller
+
+    # Mirror to RUNLOG.md — swallow any write errors
+    _append_verify_runlog(root, ts, gates_passed, gates_failed, gates_skipped, failed_signatures)
+
+
+def _append_verify_runlog(
+    root: Path,
+    ts: datetime,
+    passed: int,
+    failed: int,
+    skipped: int,
+    failed_signatures: list[str],
+) -> None:
+    """Append a verify section to .planning/RUNLOG.md. Never raises."""
+    try:
+        runlog = root / ".planning" / "RUNLOG.md"
+        runlog.parent.mkdir(parents=True, exist_ok=True)
+        with runlog.open("a") as fh:
+            fh.write(f"\n## {ts.isoformat()} — verify\n")
+            fh.write(f"- gates: {passed} pass / {failed} fail / {skipped} skip\n")
+            if failed_signatures:
+                failed_str = ", ".join(failed_signatures)
+                fh.write(f"- failed: {failed_str}\n")
+    except Exception:
+        pass  # journal failure must never break the caller
+
+
 def _build_delta_line(artifacts_changed: list[str]) -> str:
     """Build a concise one-line delta string."""
     if not artifacts_changed:
