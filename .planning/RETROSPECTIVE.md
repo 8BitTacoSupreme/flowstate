@@ -80,6 +80,43 @@
 
 ---
 
+## Milestone: v0.5.0 — Compounding Loop
+
+**Shipped:** 2026-06-09
+**Phases:** 3 (Run Journal → Gotchas Accumulator → Runnable Verification) | **Plans:** 10 | **Tasks:** 18
+
+### What Was Built
+- Run journal: `journal.append_run_entry` writes one append-only, delta-only `MemoryKind.RUN` entry per pipeline run (checksum-snapshot diff, idempotent, never-raises), mirrored to `.planning/RUNLOG.md`; `## Since Last Run` prefix layer + `flowstate journal` viewer.
+- Gotchas accumulator: `gotchas.py` captures four bounded structured sources (doctor/repair, executor failures, harvested VERIFICATION.md/REVIEW.md) into signature-deduped, capped `MemoryKind.INSIGHT` gotchas; `## Gotchas` layer before memory; `MemoryStore.update`/`delete`/`get_gotchas`; `flowstate gotchas` list/prune + `.planning/GOTCHAS.md` mirror.
+- Runnable verification: `flowstate verify` bounded checker registry (artifact-integrity backbone + coverage gate, honest SKIP for NL gates), CI-composable exit code, never-raises; failures feed gotchas + `append_verify_entry` — the loop closes.
+
+### What Worked
+- **The "honest SKIP" framing for verify** turned an unbuildable requirement ("check that all functionality works" with no LLM) into a shippable, trustworthy one — real checks for the checkable subset, explicit SKIP with reasons for the rest.
+- **Adversarial code-review→fix pass after every phase** caught four real bugs that verification missed: a CR-01 budget-participation gap (the new layer bypassed the fit-ladder), a CR-02 repair/doctor dedup-source mislabel, a Z-suffix-timestamp normalization miss, and a 500-entry dedup-scan scaling bug. The reviewer is a distinct, load-bearing gate from the verifier.
+- **Phase-6 review lessons propagated forward as explicit CONTEXT/planner constraints** (CR-01 budget participation, WR-01 self-contained never-raises) — Phase 7 and 8 plans baked them in, so the same class of bug was pre-empted at plan time.
+- **Per-phase smart-discuss grounded in a fresh codebase surface-map** (especially Phase 7's "which of the four sources actually exist in-runtime") kept proposals honest and prevented planning against imagined APIs.
+
+### What Was Inefficient
+- An executor died mid-plan from an API socket error (08-01); recovery required a filesystem/git spot-check + a scoped resume executor to finish Task 2. The sequential-on-main model made recovery clean (Task 1's commit was intact), but it cost a round-trip.
+- The SDK `milestone.complete` accomplishment extractor produced empty `One-liner:` placeholders again (third milestone running) — manual MILESTONES.md rewrite still required. This is now a reliable tax, not a surprise.
+
+### Patterns Established
+- **Five-layer prefix, most-stable-first:** fixtures → pack → gotchas → memory → since-last-run; every layer participates in the budget fit-ladder + final guard (no silent cache-window blowout).
+- **Pure-Python compounding substrate:** journal/gotchas/verify do zero LLM/bridge calls and only consume STRUCTURED outputs — deterministic, cheap, inspectable; no transcript mining.
+- **Signature dedup for failure signals:** normalize (paths/line-numbers/timestamps/run_ids → placeholders) → sha256 → upsert last-seen/count, so a recurring failure is one growing entry, not N.
+
+### Key Lessons
+1. When a requirement names a capability the runtime can't honestly deliver (semantic gate eval without an LLM), redefine it as a bounded mechanical check + explicit SKIP rather than faking it — and surface that decision in smart-discuss.
+2. Carry each phase's review findings forward as the next phase's planning constraints; the cheapest place to fix a recurring bug class is the plan, not the diff.
+3. On an unattended chain, verify executor completion from git/filesystem after any transport error before retrying — partial atomic commits are resumable; blind retries are not.
+
+### Cost Observations
+- Model mix: opus for orchestration/planning, sonnet for executors/checkers/verifiers/reviewers/fixers.
+- Full autonomous chain (smart-discuss → plan → plan-check → execute → verify → review → fix → complete, ×3 phases, then milestone close) ran across one session; suite grew 381 → 549 tests, coverage held ~92.2% throughout.
+- One executor socket-error recovery; one Bash classifier-unavailable transient — both absorbed without losing work.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -88,6 +125,7 @@
 |-----------|--------|------------|
 | v0.3.0 | 2 | Adopted GSD for Phase 2; coarse granularity for solo maintainer |
 | v0.4.0 | 3 | Full autonomous chain (new-milestone → plan → execute → verify → complete); plan-checker as a load-bearing gate |
+| v0.5.0 | 3 | Added code-review→fix as a per-phase gate distinct from verification; review findings carried forward as next-phase planning constraints |
 
 ### Cumulative Quality
 
@@ -95,6 +133,7 @@
 |-----------|----------|-------------------|
 | v0.3.0 | ≥80% (enforced) | doctor, repair, status --markdown, hook gating — all pure-Python, no new runtime deps |
 | v0.4.0 | 92.85% | pack, CANON, fixtures, build_context_prefix, kickoff — repomix is external (Node CLI/MCP), still zero new Python deps |
+| v0.5.0 | 92.25% | journal, gotchas, verify + `flowstate journal`/`gotchas`/`verify` commands — pure-Python (stdlib hashlib/re/xml.etree), zero new Python deps, zero bridge imports |
 
 ### Top Lessons (Verified Across Milestones)
 

@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.5.0
 milestone_name: Compounding Loop
-status: milestone_complete
-stopped_at: Milestone complete (Phase 08 was final phase)
-last_updated: 2026-06-09T15:04:37.134Z
-last_activity: 2026-06-09
+status: Awaiting next milestone
+stopped_at: Completed 08-01-PLAN.md — VerifyResult + checker registry + run_verify; 19 tests at 92% coverage
+last_updated: "2026-06-09T15:06:03.914Z"
+last_activity: 2026-06-09 — Milestone v0.5.0 completed and archived
 progress:
   total_phases: 3
   completed_phases: 3
   total_plans: 10
-  completed_plans: 20
+  completed_plans: 10
   percent: 100
 ---
 
@@ -25,14 +25,10 @@ See: .planning/PROJECT.md (updated 2026-06-06)
 
 ## Current Position
 
-Phase: 08
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-06-09
-
-```
-v0.5.0 progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/3 phases)
-```
+Phase: Milestone v0.5.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-09 — Milestone v0.5.0 completed and archived
 
 ## Performance Metrics
 
@@ -150,4 +146,4 @@ Next step: `/gsd:plan-phase 6`
 
 ## Operator Next Steps
 
-- Run `/gsd:plan-phase 6` to begin Phase 6 — Run Journal
+- Start the next milestone with /gsd-new-milestone

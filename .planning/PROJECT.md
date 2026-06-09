@@ -12,14 +12,9 @@ Lives at `/Users/jhogan/frameworx`, package `flowstate`, Python 3.12+, Flox-mana
 
 If everything else fails, that compounding loop is what FlowState exists to deliver.
 
-## Current Milestone: v0.5.0 Compounding Loop
+## Current Milestone: Planning next (v0.5.0 shipped)
 
-**Goal:** Turn the core value from an implicit property into a concrete, inspectable mechanism — runs leave a delta trail the next run reads first, failures (verifier/checker/doctor/executor) become durable injected context, and eval fixtures become runnable checks that feed both. Builds directly on the v0.4 `build_context_prefix()` CAG architecture.
-
-**Target features:**
-- Run journal: append-only, delta-only per-run log persisted to memory + `.planning/RUNLOG.md`, surfaced as a `## Since Last Run` prefix layer (most-dynamic slot, cache-safe)
-- Gotchas accumulator: auto-promote verifier gaps / plan-checker findings / doctor diagnoses / executor deviations into a persistent, deduped, capped gotchas store injected as a `## Gotchas` prefix layer
-- Runnable verification: `flowstate verify` turns fixture acceptance-gates/forbidden-actions into real checks against produced artifacts (non-zero exit, CI-composable); failures feed the gotchas accumulator and the run journal
+**v0.5.0 Compounding Loop shipped 2026-06-09** — the core value is now a concrete, inspectable mechanism: runs leave a delta trail the next run reads first (`## Since Last Run`), structured failures from four bounded sources become a deduped/capped `## Gotchas` injected layer, and `flowstate verify` turns eval fixtures into runnable checks that feed both — closing the loop. Built on the v0.4 `build_context_prefix()` CAG architecture. Next milestone not yet scoped (`/gsd:new-milestone`).
 
 ## Requirements
 
@@ -47,14 +42,15 @@ If everything else fails, that compounding loop is what FlowState exists to deli
 - ✓ **CAG-01..03**: `build_context_prefix()` (fixtures → pack-if-fits → memory) with fit→compress→omit ladder + `ENABLE_PROMPT_CACHING_1H` lean-in — v0.4 / Phase 4
 - ✓ **KICK-01..02**: scaffold-only `flowstate kickoff` (no LLM) + enhanced shared interview (validation + branching) — v0.4 / Phase 5
 - ✓ **DX-01..02**: `status:` SUMMARY frontmatter standardization + "use the pack" CLAUDE.md guidance — v0.4 / Phases 3+5
+- ✓ **RUN-01..03**: append-only delta run journal (`MemoryKind.RUN` + `.planning/RUNLOG.md`) + `## Since Last Run` prefix layer + `flowstate journal` viewer — v0.5 / Phase 6
+- ✓ **GOT-01..03**: gotchas accumulator from doctor/repair/executor + harvested VERIFICATION.md/REVIEW.md findings, `## Gotchas` prefix layer (before memory), signature dedup/cap/prune + `flowstate gotchas` — v0.5 / Phase 7
+- ✓ **VER-01..02**: `flowstate verify` runs fixture gates against produced artifacts (bounded checker registry, CI-composable non-zero exit) + failures feed gotchas/journal, closing the loop — v0.5 / Phase 8
 
 ### Active
 
-<!-- Milestone v0.5.0 — Compounding Loop (Phases 6–8). -->
+<!-- Next milestone not yet scoped — run /gsd:new-milestone. -->
 
-- [ ] **RUN-01..03**: append-only delta run journal (memory `kind=run` + `.planning/RUNLOG.md`) + `## Since Last Run` prefix layer + `flowstate journal` viewer
-- [ ] **GOT-01..03**: gotchas accumulator from verifier/checker/doctor/executor outputs + `## Gotchas` prefix layer + dedup/cap
-- [ ] **VER-01..02**: `flowstate verify` runs fixture gates against artifacts (CI-composable) + failures feed gotchas/journal
+(None — v0.5.0 shipped; next milestone pending scoping.)
 
 ### Out of Scope
 
@@ -70,7 +66,8 @@ If everything else fails, that compounding loop is what FlowState exists to deli
 
 ## Context
 
-- **v0.4.0 shipped (Context Compaction & Compounding):** repomix pack + CAG layered context prefix (`build_context_prefix`) + Karpathy canon + ECC-modeled fixtures + scaffold-only `flowstate kickoff`. 381 tests at 92.85% coverage. The implicit-cache prefix (m9v/o6h spikes) is now formalized into ordered layers. Working tree clean on `main`.
+- **v0.5.0 shipped (Compounding Loop):** run journal (`## Since Last Run`) + gotchas accumulator (`## Gotchas`, before memory) + `flowstate verify` runnable fixture gates that close the loop into both. 549 tests at 92.25% coverage. `build_context_prefix` now assembles five layers (fixtures → pack → gotchas → memory → since-last-run), all budget-participating. Pure-Python, no new runtime deps. Two new CLI commands (`flowstate journal`, `flowstate gotchas`) + `flowstate verify`. Working tree clean on `main`.
+- **v0.4.0 shipped (Context Compaction & Compounding):** repomix pack + CAG layered context prefix (`build_context_prefix`) + Karpathy canon + ECC-modeled fixtures + scaffold-only `flowstate kickoff`. 381 tests at 92.85% coverage. The implicit-cache prefix (m9v/o6h spikes) is now formalized into ordered layers.
 - **External tool surface grew (no Python deps):** repomix is now an expected external Node CLI/MCP (located like `claude` via PATH / `FLOWSTATE_REPOMIX_BIN`); absent → graceful degradation. `.mcp.json` registers repomix-MCP for spawned-agent retrieval-on-top.
 - **v2 pivot landed (v0.3.0):** `config.py` default-root resolution, FTS5 sanitization, built-in tool markers (Phase 1, b38bbd6).
 - **ECC comparison done:** Researched `affaan-m/ECC`. Borrowed install-manifest/doctor/hook-profiles (v0.3) and the eval-fixture format (v0.4); explicitly rejected the surface-area-explosion patterns (Out of Scope).
@@ -81,7 +78,7 @@ If everything else fails, that compounding loop is what FlowState exists to deli
 - **Tech stack:** Python 3.12+, Click for CLI, Pydantic for state, SQLite + FTS5 for memory, subprocess for the Claude bridge. No new runtime dependencies in this milestone.
 - **Coverage:** ≥80% enforced by `pyproject.toml` (`--cov-fail-under=80`). Pre-commit runs ruff (legacy + format), trailing-whitespace, EOF, large-file, merge-conflict, debug-statement checks.
 - **Bridge:** Claude Code CLI v2+ must be locatable; FlowState invokes `claude --print` non-interactively. No direct Anthropic API calls.
-- **Compatibility:** State migration must work from v0.1.0 → v0.2.0 → v0.3.0 → v0.4.0 (each milestone bumps minor; `_migrate_state` ladder + early-exit guard kept in sync).
+- **Compatibility:** State migration must work from v0.1.0 → v0.2.0 → v0.3.0 → v0.4.0 → v0.5.0 (each milestone bumps minor; `_migrate_state` ladder + early-exit guard kept in sync). v0.5 added journal/gotchas to `memory.db` only — `flowstate.json` schema unchanged.
 
 ## Key Decisions
 
@@ -96,6 +93,10 @@ If everything else fails, that compounding loop is what FlowState exists to deli
 | Canon in the bridge system prompt, NOT in `build_context_prefix` | The user-prompt prefix and system-prompt canon are separate channels; re-emitting canon in the prefix would double-inject it every call | ✓ Validated (Phase 4 — plan-checker caught the ROADMAP SC wording before it shipped) |
 | repomix as external CLI/MCP, not a Python dependency | Keeps the no-new-runtime-deps rule; located like `claude`, degrades gracefully when absent | ✓ Validated (PACK-01..03, v0.4) |
 | Decouple `flowstate kickoff` from the LLM pipeline | A fast scaffold-and-stop entry point is distinct from full `init`; both share one `run_interview` to avoid divergence | ✓ Validated (KICK-01/02, v0.4) |
+| Journal/gotchas/verify are pure-Python, no LLM, no transcript mining | The compounding loop must be deterministic, cheap, and inspectable; bounded to STRUCTURED outputs to avoid the ECC silent-content-loss regression | ✓ Validated (v0.5 — zero bridge imports across journal/gotchas/verify) |
+| Gotchas layer placed BEFORE memory, since-last-run AFTER | Gotchas are stable-ish (cache near fixtures); the run delta is the most dynamic slot — most-stable-first ordering preserves the prompt cache | ✓ Validated (GOT-02/RUN-02, v0.5) |
+| All prefix layers must participate in the budget fit-ladder + final guard | A new layer appended without budget accounting silently blows the cache window (caught as CR-01 in Phase-6 review; reapplied to the gotchas layer) | ✓ Validated (v0.5 — review-enforced) |
+| `flowstate verify` SKIPs un-checkable NL gates, never fabricates verdicts | Pure-Python can't evaluate "all functionality works"; honesty (real checks for the checkable subset, explicit SKIP otherwise) beats theater | ✓ Validated (VER-01, v0.5) |
 | Skip Codex/OpenCode/Cursor adapters | ECC ships to 7 harnesses with one maintainer and it's visibly straining; FlowState stays Claude-Code-native until users ask | — Pending (still deferred at v0.4) |
 
 ## Evolution
@@ -116,4 +117,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-06 after v0.4.0 milestone completion (Context Compaction & Compounding) — archived, tagged*
+*Last updated: 2026-06-09 after v0.5.0 milestone completion (Compounding Loop) — archived, tagged*

@@ -1,5 +1,19 @@
 # Milestones
 
+## v0.5.0 Compounding Loop (Shipped: 2026-06-09)
+
+**Phases completed:** 3 phases, 10 plans, 18 tasks
+
+**Key accomplishments:**
+
+- **Run journal (Phase 6, RUN-01..03)** — `journal.append_run_entry` writes one append-only, delta-only `MemoryKind.RUN` entry per pipeline run (pure-Python, idempotent, checksum-snapshot diff vs prior run) mirrored to `.planning/RUNLOG.md`; surfaced as a `## Since Last Run` prefix layer (most-dynamic slot, budget-participating) and inspectable via `flowstate journal`.
+- **Gotchas accumulator (Phase 7, GOT-01..03)** — `gotchas.py` promotes structured failures from all four bounded sources (doctor/repair diagnoses, executor step failures, and harvested GSD VERIFICATION.md/REVIEW.md findings) into a deduped (normalized sha256 signature, last-seen/count upsert via new `MemoryStore.update`), capped `## Gotchas` prefix layer placed before memory; `flowstate gotchas` list/prune CLI + `.planning/GOTCHAS.md` mirror. No raw transcript mining.
+- **Runnable verification (Phase 8, VER-01..02)** — `flowstate verify` turns fixture `acceptance_gates`/`forbidden_actions` into a bounded checker registry (produced-artifact integrity backbone + coverage-threshold gate, honest SKIP for un-checkable NL gates), CI-composable non-zero exit, never-raises; failures close the loop by feeding the gotchas accumulator and appending an `append_verify_entry` run-journal entry the next run reads first.
+
+**Quality:** 549 tests passing at 92.25% coverage; every phase passed independent goal-backward verification and an adversarial code-review→fix pass (caught + fixed a CR-01 budget-participation gap, a CR-02 dedup-source mislabel, a Z-suffix-timestamp dedup miss, and a 500-entry dedup-scan scaling bug before close). No new runtime dependencies; pure-Python journal/gotchas/verify with zero `flowstate.bridge` imports.
+
+---
+
 ## v0.4.0 Context Compaction & Compounding (Shipped: 2026-06-06)
 
 **Phases completed:** 3 phases, 6 plans, 13 tasks
