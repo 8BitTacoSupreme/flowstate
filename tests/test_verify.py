@@ -267,6 +267,27 @@ class TestMalformedFixture:
         assert any("malformed" in m.lower() for m in messages)
         assert any("forbidden action" in m.lower() for m in messages)
 
+    def test_acceptance_gates_string_yields_single_malformed_skip(self, tmp_path: Path):
+        """WR-02: a non-list acceptance_gates value must produce exactly 1 malformed skip,
+        not one result per character."""
+        state = FlowStateModel()
+        fixtures_dir = tmp_path / ".planning" / "fixtures"
+        _write_fixture(fixtures_dir, "bad_gates.json", {"acceptance_gates": "hello"})
+        results = run_verify(state, tmp_path)
+        skip_results = [r for r in results if r.status == "skip"]
+        # Must be exactly 1 skip (the fixture-level malformed skip), not 5 char-skips
+        assert len(skip_results) == 1
+        assert "malformed" in skip_results[0].message.lower()
+
+    def test_acceptance_gates_string_does_not_raise(self, tmp_path: Path):
+        """WR-02: run_verify must not raise when acceptance_gates is a non-list."""
+        state = FlowStateModel()
+        fixtures_dir = tmp_path / ".planning" / "fixtures"
+        _write_fixture(fixtures_dir, "bad_gates.json", {"acceptance_gates": "hello"})
+        # Must not raise
+        results = run_verify(state, tmp_path)
+        assert isinstance(results, list)
+
 
 # ── Empty / absent fixtures dir ───────────────────────────────────────────────
 

@@ -152,8 +152,19 @@ def run_verify(state: FlowStateModel, root: Path) -> list[VerifyResult]:
         try:
             raw = fixture_path.read_text(encoding="utf-8")
             data = json.loads(raw)
-            acceptance_gates: list[str] = data.get("acceptance_gates") or []
-            forbidden_actions: list[str] = data.get("forbidden_actions") or []
+            acceptance_gates_raw = data.get("acceptance_gates")
+            if acceptance_gates_raw is not None and not isinstance(acceptance_gates_raw, list):
+                raise ValueError(
+                    f"acceptance_gates must be a list, got {type(acceptance_gates_raw).__name__}"
+                )
+            acceptance_gates: list[str] = acceptance_gates_raw or []
+
+            forbidden_actions_raw = data.get("forbidden_actions")
+            if forbidden_actions_raw is not None and not isinstance(forbidden_actions_raw, list):
+                raise ValueError(
+                    f"forbidden_actions must be a list, got {type(forbidden_actions_raw).__name__}"
+                )
+            forbidden_actions: list[str] = forbidden_actions_raw or []
             fixture_name = fixture_path.name
 
             for gate in acceptance_gates:
