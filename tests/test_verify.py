@@ -319,3 +319,21 @@ class TestEmptyFixturesDir:
         fails = [r for r in results if r.status == "fail"]
         assert len(fails) == 1
         assert fails[0].gate == "produced-artifact-integrity"
+
+    def test_permission_error_on_fixtures_dir_does_not_raise(self, tmp_path: Path, monkeypatch):
+        """WR-04: PermissionError on fixtures_dir.is_dir() must be swallowed; run_verify never raises."""
+        state = FlowStateModel()
+        # Monkeypatch Path.is_dir to raise PermissionError for the fixtures path
+        from pathlib import Path as _Path
+
+        real_is_dir = _Path.is_dir
+
+        def patched_is_dir(self):
+            if "fixtures" in str(self):
+                raise PermissionError("permission denied")
+            return real_is_dir(self)
+
+        monkeypatch.setattr(_Path, "is_dir", patched_is_dir)
+        # Must not raise; returns whatever backbone produced (empty manifest → [])
+        results = run_verify(state, tmp_path)
+        assert isinstance(results, list)

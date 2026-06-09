@@ -145,10 +145,15 @@ def run_verify(state: FlowStateModel, root: Path) -> list[VerifyResult]:
 
     # ── Per-fixture gate evaluation ────────────────────────────────────────────
     fixtures_dir = root / ".planning" / "fixtures"
-    if not fixtures_dir.is_dir():
+    try:
+        if not fixtures_dir.is_dir():
+            return results
+        fixture_paths = sorted(fixtures_dir.glob("*.json"))
+    except OSError as e:
+        logger.warning("cannot read fixtures directory: %s", e)
         return results
 
-    for fixture_path in sorted(fixtures_dir.glob("*.json")):
+    for fixture_path in fixture_paths:
         try:
             raw = fixture_path.read_text(encoding="utf-8")
             data = json.loads(raw)
