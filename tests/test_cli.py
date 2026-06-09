@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -976,6 +977,160 @@ class TestDoctorGotchaCapture:
             result = runner.invoke(main, ["doctor", "--root", str(tmp_path)])
 
         assert result.exit_code == 1  # still 1 error
+
+
+# ── verify command tests (VER-01, VER-02) ────────────────────────────
+
+
+def _make_verify_install(tmp_path: Path, *, add_missing_artifact: bool = False) -> None:
+    """Write a minimal FlowState project root with manifest + memory.db + a fixture file.
+
+    If add_missing_artifact is True, adds a manifest entry whose file does NOT exist on disk
+    so the artifact-integrity gate produces a FAIL result.
+    """
+    from flowstate.memory import MemoryStore
+    from flowstate.state import FlowStateModel, InstallEntry, save_state
+
+    # memory.db (checksum=None — excluded from integrity check)
+    with MemoryStore(root=tmp_path):
+        pass
+
+    # .planning/PROJECT.md — present, non-empty
+    planning = tmp_path / ".planning"
+    planning.mkdir(exist_ok=True)
+    pm = planning / "PROJECT.md"
+    pm.write_text("# Project\n")
+    pm_checksum = hashlib.sha256(pm.read_bytes()).hexdigest()
+
+    # .planning/fixtures/starter.json — realistic fixture from generate_starter_fixture
+    from flowstate.context import generate_starter_fixture
+    from flowstate.state import InterviewAnswers
+
+    answers = InterviewAnswers(
+        core_problem="test",
+        ten_x_vision="",
+        milestones=["v1"],
+        test_coverage=80,
+    )
+    fixture_data = generate_starter_fixture(answers, project_name="test")
+    fixtures_dir = planning / "fixtures"
+    fixtures_dir.mkdir(exist_ok=True)
+    (fixtures_dir / "starter.json").write_text(json.dumps(fixture_data))
+
+    state = FlowStateModel()
+    state.install_manifest.append(
+        InstallEntry(
+            path=".planning/PROJECT.md",
+            owner="context",
+            kind="context",
+            created_at=datetime.now(UTC),
+            checksum=pm_checksum,
+        )
+    )
+    state.install_manifest.append(
+        InstallEntry(
+            path="memory.db",
+            owner="memory",
+            kind="memory",
+            created_at=datetime.now(UTC),
+            checksum=None,
+        )
+    )
+    if add_missing_artifact:
+        # This file is deliberately NOT written — triggers a FAIL in artifact integrity
+        state.install_manifest.append(
+            InstallEntry(
+                path=".planning/MISSING_ARTIFACT.md",
+                owner="context",
+                kind="context",
+                created_at=datetime.now(UTC),
+                checksum="a" * 64,
+            )
+        )
+    save_state(state, tmp_path)
+
+
+class TestVerifyCommand:
+    def test_verify_empty_project_exits_zero(self, tmp_path: Path):
+        """No .planning/fixtures/ → exit 0 with 'no fixtures' message."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["verify", "--root", str(tmp_path)])
+        assert result.exit_code == 0, result.output
+        assert "no fixtures" in result.output.lower()
+
+    def test_verify_all_pass_or_skip_exits_zero(self, tmp_path: Path):
+        """Healthy install with all-present manifest artifacts → exit 0."""
+        _make_verify_install(tmp_path, add_missing_artifact=False)
+        runner = CliRunner()
+        result = runner.invoke(main, ["verify", "--root", str(tmp_path)])
+        assert result.exit_code == 0, result.output
+
+    def test_verify_missing_artifact_exits_nonzero(self, tmp_path: Path):
+        """Manifest entry pointing to a missing file → exit code > 0 and FAIL in output."""
+        _make_verify_install(tmp_path, add_missing_artifact=True)
+        runner = CliRunner()
+        result = runner.invoke(main, ["verify", "--root", str(tmp_path)])
+        assert result.exit_code > 0, result.output
+        assert "fail" in result.output.lower()
+
+    def test_verify_fail_captures_gotcha(self, tmp_path: Path):
+        """After a FAIL run, a gotcha with source='verify' exists in memory.db."""
+        from flowstate.memory import MemoryKind, MemoryStore
+
+        _make_verify_install(tmp_path, add_missing_artifact=True)
+        runner = CliRunner()
+        runner.invoke(main, ["verify", "--root", str(tmp_path)])
+
+        store = MemoryStore(root=tmp_path)
+        entries = store.get_by_kind(MemoryKind.INSIGHT, limit=50)
+        store.close()
+        gotchas = [e for e in entries if "gotcha" in e.tags]
+        assert any(e.metadata.get("source") == "verify" for e in gotchas), (
+            "Expected a gotcha with source='verify' in memory.db after a FAIL run"
+        )
+
+    def test_verify_run_appends_journal_entry(self, tmp_path: Path):
+        """Every verify run (pass or fail) appends one RUN entry tagged 'verify'."""
+        from flowstate.memory import MemoryKind, MemoryStore
+
+        _make_verify_install(tmp_path, add_missing_artifact=False)
+        runner = CliRunner()
+        runner.invoke(main, ["verify", "--root", str(tmp_path)])
+
+        store = MemoryStore(root=tmp_path)
+        run_entries = store.get_by_kind(MemoryKind.RUN, limit=50)
+        store.close()
+        verify_entries = [e for e in run_entries if "verify" in e.tags]
+        assert len(verify_entries) >= 1, (
+            "Expected at least one RUN entry tagged 'verify' after a verify run"
+        )
+
+    def test_verify_malformed_fixture_no_crash(self, tmp_path: Path):
+        """A malformed fixture JSON file → command exits cleanly (int exit code, no traceback)."""
+        from flowstate.memory import MemoryStore
+        from flowstate.state import FlowStateModel, save_state
+
+        with MemoryStore(root=tmp_path):
+            pass
+        planning = tmp_path / ".planning"
+        planning.mkdir(exist_ok=True)
+        fixtures_dir = planning / "fixtures"
+        fixtures_dir.mkdir(exist_ok=True)
+        (fixtures_dir / "broken.json").write_text("{not valid json!!!")
+
+        save_state(FlowStateModel(), tmp_path)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["verify", "--root", str(tmp_path)])
+        assert isinstance(result.exit_code, int), "exit_code must be an int"
+        assert "Traceback" not in result.output, "No traceback should appear on malformed fixture"
+
+    def test_verify_help_lists_command(self):
+        """verify --help exits 0 and mentions verify."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["verify", "--help"])
+        assert result.exit_code == 0
+        assert "verify" in result.output.lower()
 
 
 class TestRepairGotchaCapture:
