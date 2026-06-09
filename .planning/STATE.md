@@ -136,6 +136,7 @@ None at roadmap start. Implementation order matters: MemoryKind.RUN must be adde
 |---|-------------|------|--------|-----------|
 | 260525-m9v | Unify memory injection at orchestrator (CAG-inspired, arXiv 2412.15605) | 2026-05-25 | 27708c5 | [260525-m9v-unify-memory-injection-at-orchestrator-b](./quick/260525-m9v-unify-memory-injection-at-orchestrator-b/) |
 | 260525-o6h | Spike: confirm `claude --print` prompt cache fires (-32% wall, -37% API on call 2) | 2026-05-25 | 996049b | [260525-o6h-spike-confirm-claude-print-server-side-p](./quick/260525-o6h-spike-confirm-claude-print-server-side-p/) |
+| 260609-j0g | Phase A intrinsic compounding eval harness (`bench/` package: 4-axis scorecard, cheap/real modes, temp-isolated runner) — measures "run N+1 beats run N"; 42 bench tests, reviewed + fixed (3 HIGH incl. in-place-mutation + inert-axes) | 2026-06-09 | 0e2071b | [260609-j0g-build-phase-a-intrinsic-compounding-eval](./quick/260609-j0g-build-phase-a-intrinsic-compounding-eval/) |
 
 ## Session Continuity
 
