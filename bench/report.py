@@ -24,7 +24,9 @@ CAVEAT = (
     "CAVEAT: cheap mode validates that the substrate + metrics correctly register "
     "compounding signals — it is a regression guard for the measurement apparatus, "
     "NOT proof that FlowState causes the LLM to compound. Only --mode real tests "
-    "whether FlowState's prefix actually causes the LLM to compound."
+    "whether FlowState's prefix actually causes the LLM to compound. An axis with "
+    "no underlying signal reads as 'insufficient-data' (NOT 'compounding') and "
+    "contributes nothing toward a positive verdict."
 )
 
 _module_console = Console()
@@ -34,18 +36,29 @@ _VERDICT_STYLE = {
     "compounding": "green",
     "flat": "yellow",
     "regressing": "red",
+    "insufficient-data": "dim",
 }
 
 
 def write_json(scorecard: Scorecard, out_path: Path) -> None:
-    """Write the scorecard to ``out_path`` as deterministic JSON (sort_keys, indent=2)."""
+    """Write the scorecard to ``out_path`` as deterministic JSON (sort_keys, indent=2).
+
+    The honest caveat travels WITH the data as a top-level ``caveat`` key, so a
+    reader who only sees the archived JSON (a RUNLOG diff, a PR paste) cannot
+    mistake the cheap verdict for a causal claim. ``insufficient_data_axes`` lists
+    any axis that had no underlying signal, so an inert axis is visible in the
+    artifact too.
+    """
     payload = {
+        "caveat": CAVEAT,
+        "mode_note": "cheap mode validates the apparatus, not causation",
         "axes": {
             "convergence": scorecard.axis_convergence,
             "gotcha_learning": scorecard.axis_gotcha_learning,
             "verify_non_regression": scorecard.axis_verify_non_regression,
             "enrichment": scorecard.axis_enrichment,
         },
+        "insufficient_data_axes": _insufficient_axes(scorecard),
         "compounding_score": scorecard.compounding_score,
         "verdict": scorecard.verdict,
         "snapshots": [_snapshot_dict(s) for s in scorecard.snapshots],
@@ -53,6 +66,17 @@ def write_json(scorecard: Scorecard, out_path: Path) -> None:
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(payload, sort_keys=True, indent=2) + "\n")
+
+
+def _insufficient_axes(scorecard: Scorecard) -> list[str]:
+    """Names of axes reading 'insufficient-data' (no underlying signal), sorted."""
+    named = {
+        "convergence": scorecard.axis_convergence,
+        "gotcha_learning": scorecard.axis_gotcha_learning,
+        "verify_non_regression": scorecard.axis_verify_non_regression,
+        "enrichment": scorecard.axis_enrichment,
+    }
+    return sorted(name for name, state in named.items() if state == "insufficient-data")
 
 
 def _snapshot_dict(snapshot: object) -> dict:
@@ -89,18 +113,22 @@ def _scorecard_panel(scorecard: Scorecard) -> Panel:
         style = _VERDICT_STYLE.get(label, "white")
         return f"[{style}]{label}[/{style}]"
 
-    body = "\n".join(
-        [
-            f"Convergence:           {_styled(scorecard.axis_convergence)}",
-            f"Gotcha-learning:       {_styled(scorecard.axis_gotcha_learning)}",
-            f"Verify-non-regression: {_styled(scorecard.axis_verify_non_regression)}",
-            f"Enrichment:            {_styled(scorecard.axis_enrichment)}",
+    lines = [
+        f"Convergence:           {_styled(scorecard.axis_convergence)}",
+        f"Gotcha-learning:       {_styled(scorecard.axis_gotcha_learning)}",
+        f"Verify-non-regression: {_styled(scorecard.axis_verify_non_regression)}",
+        f"Enrichment:            {_styled(scorecard.axis_enrichment)}",
+        "",
+        f"CompoundingScore:      [bold]{scorecard.compounding_score}[/bold] (range -4..+4)",
+        f"Verdict:               {_styled(scorecard.verdict)}",
+    ]
+    inert = _insufficient_axes(scorecard)
+    if inert:
+        lines += [
             "",
-            f"CompoundingScore:      [bold]{scorecard.compounding_score}[/bold] (range -4..+4)",
-            f"Verdict:               {_styled(scorecard.verdict)}",
+            f"[dim]insufficient-data (no signal, excluded from verdict): {', '.join(inert)}[/dim]",
         ]
-    )
-    return Panel(body, title="Scorecard", border_style="blue")
+    return Panel("\n".join(lines), title="Scorecard", border_style="blue")
 
 
 def _markdown_record(scorecard: Scorecard) -> str:
