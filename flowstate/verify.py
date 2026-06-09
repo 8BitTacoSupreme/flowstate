@@ -42,9 +42,9 @@ def _parse_coverage_rate(root: Path) -> float | None:
     the file is absent, malformed, or missing the attribute.
     """
     cov_xml = root / "coverage.xml"
-    if not cov_xml.exists():
-        return None
     try:
+        if not cov_xml.exists():
+            return None
         tree = ET.parse(str(cov_xml))
         rate = tree.getroot().get("line-rate")
         if rate is None:
