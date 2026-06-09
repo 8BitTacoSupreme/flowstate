@@ -22,7 +22,7 @@ Requirements for this milestone. Each maps to a roadmap phase (Phases 6–8, con
 ### Runnable Verification (VER)
 
 - [x] **VER-01**: A `flowstate verify` command turns eval-fixture `acceptance_gates` / `forbidden_actions` (`.planning/fixtures/`) into runnable checks against produced artifacts — human-readable report, non-zero exit on failure so it composes in CI/pre-commit like `flowstate doctor`. Pure-Python; no LLM.
-- [ ] **VER-02**: `flowstate verify` failures auto-feed the gotchas accumulator (GOT-01) and append a run-journal entry (RUN-01), closing the loop: a failed gate becomes durable context the next run sees.
+- [x] **VER-02**: `flowstate verify` failures auto-feed the gotchas accumulator (GOT-01) and append a run-journal entry (RUN-01), closing the loop: a failed gate becomes durable context the next run sees.
 
 ## v2 Requirements
 
@@ -55,7 +55,7 @@ Explicitly excluded for this milestone.
 | GOT-02 | Phase 7 | Complete |
 | GOT-03 | Phase 7 | Complete |
 | VER-01 | Phase 8 | Complete |
-| VER-02 | Phase 8 | Pending |
+| VER-02 | Phase 8 | Complete |
 
 **Coverage:**
 - v1 requirements: 8 total
