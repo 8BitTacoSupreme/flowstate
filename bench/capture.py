@@ -62,9 +62,17 @@ def _zeroed_snapshot(run_index: int, run_id: str) -> RunSnapshot:
 def _is_new_gotcha(entry: MemoryEntry, run_id: str, window_start: datetime | None) -> bool:
     """Attribute a gotcha as new this run: run_id first, created_at window fallback.
 
-    - If the entry's run_id matches the current run_id, it is new.
-    - When run_id is empty/unknown, fall back to first_seen (or created_at) being
-      at or after the prior capture timestamp.
+    Two attribution rules, applied in order:
+    - run_id-first: if the entry's run_id equals the current run_id, it is new.
+      This is the exact, unambiguous rule, but it only fires when the CALLER
+      controls how the gotcha was stamped (a test, or a future path that threads
+      its own run_id through harvest). In the cheap loop the gotchas are written
+      by run_pipeline's internal harvest with NO run_id (stamped ""), so this
+      branch does not match there — the window rule below is what actually runs.
+    - created_at window fallback: an entry stamped with a DIFFERENT non-empty
+      run_id is treated as not-new; an entry with no run_id is new iff its
+      first_seen / created_at is at or after ``window_start`` (the prior capture's
+      wall-clock time). This window rule drives cheap-mode attribution.
     """
     if run_id and entry.run_id == run_id:
         return True
@@ -98,7 +106,7 @@ def capture_run_snapshot(
 
     Reads (each guarded):
       - latest MemoryKind.RUN entry -> artifacts_changed
-      - get_gotchas() -> new vs re-encountered split (run_id-first attribution)
+      - get_gotchas() -> new vs re-encountered split (run_id-first, window fallback)
       - search(probe_query) -> mem_hits
       - run_verify(load_state(root), root) -> pass/fail/skip counts
       - build_context_prefix(root, store, probe_query) -> prefix_tokens + layers_present
@@ -109,8 +117,11 @@ def capture_run_snapshot(
         prior:       The previous run's snapshot; sets run_index and the gotcha
                      created_at window. None => run_index 0, no window.
         run_id:      The run_id to attribute *new* gotchas to (run_id-first rule).
-        window_start: Prior capture's wall-clock time, used ONLY as the fallback
-                     created_at window for gotchas with no run_id stamp.
+                     In the cheap loop, harvested gotchas carry no run_id, so this
+                     does not match and attribution falls to the window below.
+        window_start: Prior capture's wall-clock time — the attribution window for
+                     gotchas with no run_id stamp. This is the rule that actually
+                     fires in cheap mode.
     """
     run_index = (prior.run_index + 1) if prior is not None else 0
 
