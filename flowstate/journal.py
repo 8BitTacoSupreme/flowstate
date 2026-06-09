@@ -142,11 +142,14 @@ def append_verify_entry(
     """
     ts = timestamp or datetime.now(UTC)
 
-    # Derive counts from results by status (duck-typed: .status and .gate attributes)
-    gates_passed = sum(1 for r in results if r.status == "pass")
-    gates_failed = sum(1 for r in results if r.status == "fail")
-    gates_skipped = sum(1 for r in results if r.status == "skip")
-    failed_signatures = [r.gate for r in results if r.status == "fail"]
+    try:
+        # Derive counts from results by status (duck-typed: .status and .gate attributes)
+        gates_passed = sum(1 for r in results if r.status == "pass")
+        gates_failed = sum(1 for r in results if r.status == "fail")
+        gates_skipped = sum(1 for r in results if r.status == "skip")
+        failed_signatures = [r.gate for r in results if r.status == "fail"]
+    except Exception:
+        return  # malformed results; nothing safe to journal
 
     metadata: dict[str, Any] = {
         "verify": True,

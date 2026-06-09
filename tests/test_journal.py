@@ -364,6 +364,18 @@ class TestAppendVerifyEntry:
         append_verify_entry(store, tmp_path, results)
         assert store.count(MemoryKind.RUN) == 1
 
+    def test_never_raises_on_malformed_result_object(self, tmp_path):
+        """WR-03: a result object lacking .status/.gate must not cause append_verify_entry to raise."""
+        from unittest.mock import MagicMock
+
+        fake_memory = MagicMock(spec=MemoryStore)
+        fake_memory.add.return_value = None
+
+        # An object with no .status attribute at all
+        malformed_result = object()
+        # Must not raise
+        append_verify_entry(fake_memory, tmp_path, [malformed_result])
+
 
 class TestGotchasSlot:
     """Tests for the gotchas metadata slot and RUNLOG gotchas line (07-04 GOT-01)."""
