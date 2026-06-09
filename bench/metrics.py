@@ -1,10 +1,17 @@
 """Pure metrics core for the intrinsic compounding harness — no IO, never raises.
 
 Turns a sequence of per-run ``RunSnapshot``s into a 4-axis verdict. Each axis is
-one of ``compounding`` / ``flat`` / ``regressing``; the headline ``CompoundingScore``
-is ``(#compounding) - (#regressing)`` clamped to ``[-4, +4]``. A run is judged
-``compounding`` only when the score is strong AND enrichment (the mechanism) fires
-AND nothing regressed.
+one of ``compounding`` / ``flat`` / ``regressing`` / ``insufficient-data``; the
+headline ``CompoundingScore`` is ``(#compounding) - (#regressing)`` clamped to
+``[-4, +4]``. A run is judged ``compounding`` only when the score is strong AND
+enrichment (the mechanism) fires AND nothing regressed.
+
+An axis reads ``insufficient-data`` when there is no underlying signal to measure
+across the run sequence (e.g. verify is all-skip every run, or ``artifacts_changed``
+is absent every run). ``insufficient-data`` is distinct from ``flat``: a flat axis
+WAS measured and did not move, whereas an insufficient-data axis could not be
+measured at all. An ``insufficient-data`` axis contributes nothing toward a positive
+compounding verdict (it is neither a +1 compounding nor a -1 regression).
 
 These functions are deliberately deterministic and dependency-free (stdlib only).
 Trend detection is a simple first-vs-last comparison with a tolerance band so that
@@ -17,8 +24,8 @@ from dataclasses import dataclass, field
 from itertools import pairwise
 from typing import Literal
 
-# Each axis verdict is one of these three labels.
-AxisVerdict = Literal["compounding", "flat", "regressing"]
+# Each axis verdict is one of these four labels.
+AxisVerdict = Literal["compounding", "flat", "regressing", "insufficient-data"]
 Verdict = Literal["compounding", "flat", "regressing"]
 
 # Number of measured axes; the score is clamped to ±this value.
@@ -83,10 +90,14 @@ def axis_convergence(snapshots: list[RunSnapshot]) -> AxisVerdict:
     """Work stops repeating: ``artifacts_changed`` trends down toward a floor.
 
     Falling deltas => compounding; rising => regressing; steady => flat.
-    Fewer than two runs is insufficient data => flat.
+    Fewer than two runs is insufficient data => flat. If ``artifacts_changed``
+    is zero on every run there is no convergence signal to read at all, which is
+    reported as ``insufficient-data`` (distinct from a measured-but-flat axis).
     """
     if len(snapshots) < 2:
         return "flat"
+    if all(s.artifacts_changed == 0 for s in snapshots):
+        return "insufficient-data"
     return _trend_down(snapshots[0].artifacts_changed, snapshots[-1].artifacts_changed)
 
 
@@ -109,6 +120,10 @@ def axis_verify_non_regression(snapshots: list[RunSnapshot]) -> AxisVerdict:
     """
     if len(snapshots) < 2:
         return "flat"
+    # All-skip on every run => the verify axis was never actually exercised; there
+    # is no pass/fail movement to read. Report insufficient-data, not flat.
+    if all(s.verify_pass == 0 and s.verify_fail == 0 for s in snapshots):
+        return "insufficient-data"
     # Scan adjacent pairs for any genuine regression first.
     for prev, cur in pairwise(snapshots):
         if cur.verify_fail > prev.verify_fail or cur.verify_pass < prev.verify_pass:
@@ -136,8 +151,14 @@ def compute_scorecard(snapshots: list[RunSnapshot]) -> Scorecard:
     """Compute the four axes, the headline score, and the overall verdict. Never raises.
 
     CompoundingScore = (#compounding) - (#regressing), clamped to [-4, +4].
+    ``insufficient-data`` axes count toward NEITHER term — an axis with no
+    underlying signal cannot push the verdict positive or negative.
+
     verdict == "compounding" iff score >= +2 AND enrichment == compounding AND no
-    axis == regressing. Empty / single-snapshot inputs yield all-flat, score 0.
+    axis == regressing (an insufficient-data enrichment axis can never satisfy the
+    enrichment requirement). A genuine regression is surfaced as "regressing"
+    even when the net score nets to 0, so one regressing axis is never masked by
+    compounding ones. Empty / single-snapshot inputs yield all-flat, score 0.
     """
     seq = list(snapshots)
     conv = axis_convergence(seq)
@@ -150,10 +171,12 @@ def compute_scorecard(snapshots: list[RunSnapshot]) -> Scorecard:
     score = max(-_AXIS_COUNT, min(_AXIS_COUNT, raw))
 
     has_regression = any(a == "regressing" for a in axes)
-    if score >= 2 and enrich == "compounding" and not has_regression:
-        verdict: Verdict = "compounding"
-    elif score < 0:
-        verdict = "regressing"
+    if has_regression and score < 2:
+        # Surface a real regression even when the net score is 0 (LOW-02): a
+        # single regressing axis must not be masked by compounding ones.
+        verdict: Verdict = "regressing"
+    elif score >= 2 and enrich == "compounding" and not has_regression:
+        verdict = "compounding"
     else:
         verdict = "flat"
 
