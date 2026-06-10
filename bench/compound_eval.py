@@ -162,7 +162,10 @@ def _real_loop(root: Path, runs: int, *, console: Console) -> Scorecard:
     with _worktree(root) as target:
         scaffold(target)
         for i in range(runs):
-            mutate_for_run(target, i)
+            # Real mode does NOT mutate between runs: the project is held fixed so the
+            # ONLY variable across runs is FlowState's accumulating memory/journal/gotchas
+            # (the compounding hypothesis). Scripted mutation would conflate that signal
+            # — it belongs to cheap mode, where it models a converging project.
             run_id = uuid4().hex[:12]
             window_start = datetime.now(UTC)
             try:
