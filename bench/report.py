@@ -16,7 +16,15 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from bench.judge import JudgeResult, summarize
 from bench.metrics import Scorecard
+
+_JUDGE_TREND_STYLE = {
+    "improving": "green",
+    "flat": "yellow",
+    "declining": "red",
+    "insufficient-data": "dim",
+}
 
 # The honest caveat — printed VERBATIM as the first line of every report header.
 # cheap mode validates the measurement apparatus, not causation.
@@ -40,7 +48,12 @@ _VERDICT_STYLE = {
 }
 
 
-def write_json(scorecard: Scorecard, out_path: Path) -> None:
+def write_json(
+    scorecard: Scorecard,
+    out_path: Path,
+    *,
+    judge_results: list[JudgeResult] | None = None,
+) -> None:
     """Write the scorecard to ``out_path`` as deterministic JSON (sort_keys, indent=2).
 
     The honest caveat travels WITH the data as a top-level ``caveat`` key, so a
@@ -63,6 +76,19 @@ def write_json(scorecard: Scorecard, out_path: Path) -> None:
         "verdict": scorecard.verdict,
         "snapshots": [_snapshot_dict(s) for s in scorecard.snapshots],
     }
+    if judge_results:
+        summary = summarize(judge_results)
+        payload["judge"] = {
+            "note": "Tier-2 output-quality judge — EXCLUDED from compounding_score",
+            "trend": summary["trend"],
+            "first": summary["first"],
+            "last": summary["last"],
+            "delta": summary["delta"],
+            "per_run": [
+                {"run_index": r.run_index, "score": r.score, "rationale": r.rationale}
+                for r in judge_results
+            ],
+        }
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(payload, sort_keys=True, indent=2) + "\n")
@@ -174,3 +200,29 @@ def render_report(
     con.print(_scorecard_panel(scorecard))
     if markdown:
         con.print(_markdown_record(scorecard))
+
+
+def render_judge_panel(results: list[JudgeResult], *, console: Console | None = None) -> None:
+    """Render the Tier-2 output-quality panel — SEPARATE from the mechanical scorecard.
+
+    A rising score across runs is evidence the accumulated context improved output
+    quality. This is advisory and NEVER feeds the CompoundingScore.
+    """
+    con = console or _module_console
+    summary = summarize(results)
+    trend = summary["trend"]
+    style = _JUDGE_TREND_STYLE.get(trend, "white")
+    lines = [
+        "Tier-2 LLM-as-judge — does the accumulating context make OUTPUT better?",
+        "(advisory; EXCLUDED from the mechanical CompoundingScore)",
+        "",
+    ]
+    for r in results:
+        score = "—" if r.score is None else f"{r.score:g}/10"
+        lines.append(f"run {r.run_index}: [bold]{score}[/bold]  [dim]{r.rationale}[/dim]")
+    lines += [
+        "",
+        f"Quality trend: [{style}]{trend}[/{style}]"
+        + (f"  (Δ {summary['delta']:+g})" if summary["delta"] is not None else ""),
+    ]
+    con.print(Panel("\n".join(lines), title="Output Quality (Tier-2)", border_style="magenta"))

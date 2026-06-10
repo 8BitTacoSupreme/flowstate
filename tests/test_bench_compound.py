@@ -459,16 +459,14 @@ def test_judge_stub_refuses_without_real_and_allow():
 
     from rich.console import Console
 
-    from bench.compound_eval import _maybe_judge
+    from bench.compound_eval import _judge_allowed
 
     buf = StringIO()
     console = Console(file=buf, width=120, force_terminal=False)
     # --judge in cheap mode without --allow-llm must refuse, not judge.
     args = argparse.Namespace(judge=True, mode="cheap", allow_llm=False)
-    _maybe_judge(args, console)
-    out = buf.getvalue()
-    assert "spec-only" in out
-    assert "NOT implemented" in out
+    assert _judge_allowed(args, console) is False
+    assert "requires --mode real AND --allow-llm" in buf.getvalue()
 
 
 def test_judge_stub_noop_when_flag_absent():
@@ -477,12 +475,12 @@ def test_judge_stub_noop_when_flag_absent():
 
     from rich.console import Console
 
-    from bench.compound_eval import _maybe_judge
+    from bench.compound_eval import _judge_allowed
 
     buf = StringIO()
     console = Console(file=buf, width=120, force_terminal=False)
     args = argparse.Namespace(judge=False, mode="cheap", allow_llm=False)
-    _maybe_judge(args, console)
+    assert _judge_allowed(args, console) is False
     assert buf.getvalue() == ""
 
 
@@ -731,7 +729,7 @@ def test_real_loop_refuses_without_bridge(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(ce, "_bridge_available", lambda: False)
     buf = StringIO()
     console = Console(file=buf, width=120, force_terminal=False)
-    card = ce._real_loop(tmp_path, 3, console=console)
+    card, _judged = ce._real_loop(tmp_path, 3, console=console)
     assert card.snapshots == ()
     assert card.verdict != "compounding"
     assert "requires a usable claude bridge" in buf.getvalue()
@@ -760,7 +758,7 @@ def test_real_loop_runs_with_monkeypatched_pipeline(tmp_path: Path, monkeypatch)
 
     buf = StringIO()
     console = Console(file=buf, width=120, force_terminal=False)
-    card = ce._real_loop(src, 2, console=console)
+    card, _judged = ce._real_loop(src, 2, console=console)
     assert isinstance(card, Scorecard)
     assert len(card.snapshots) == 2
     # The source root must be byte-for-byte unchanged (work happened in a temp copy).

@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import json
 import os
 import shutil
 import sys
@@ -41,9 +42,10 @@ from uuid import uuid4
 from rich.console import Console
 
 from bench.capture import capture_run_snapshot
+from bench.judge import JudgeResult, collect_artifacts, judge_run
 from bench.metrics import RunSnapshot, Scorecard, compute_scorecard
 from bench.project import mutate_for_run, scaffold
-from bench.report import render_report, write_json
+from bench.report import render_judge_panel, render_report, write_json
 
 # Fixed probe so enrichment is measured against a stable query across runs.
 _PROBE_QUERY = "core problem vision architecture compounding"
@@ -65,7 +67,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--allow-llm",
         action="store_true",
-        help="Required (with --mode real) to even consider the spec-only judge.",
+        help="Required (with --mode real --judge) to enable the Tier-2 output-quality judge.",
+    )
+    parser.add_argument(
+        "--judge-model",
+        default=None,
+        help="Model for the Tier-2 judge (default: claude CLI's default model).",
     )
     return parser
 
@@ -143,11 +150,28 @@ def _cheap_loop(root: Path, runs: int, *, console: Console) -> Scorecard:
     return compute_scorecard(snapshots)
 
 
-def _real_loop(root: Path, runs: int, *, console: Console) -> Scorecard:
+def _load_fixture(root: Path) -> dict:
+    """Read the run's starter fixture (system_contract/retrieval_questions). Never raises."""
+    try:
+        return json.loads((root / ".planning" / "fixtures" / "starter.json").read_text())
+    except Exception:
+        return {}
+
+
+def _real_loop(
+    root: Path,
+    runs: int,
+    *,
+    console: Console,
+    do_judge: bool = False,
+    judge_model: str | None = None,
+) -> tuple[Scorecard, list[JudgeResult]]:
     """real mode: run_pipeline live K times in a temp copy. Research-only.
 
     Fails fast (empty scorecard, clear message) when no claude bridge is available,
     rather than silently behaving like cheap mode. Never touches the source root.
+    When ``do_judge`` is set, scores each run's produced artifacts (Tier-2, excluded
+    from the mechanical scorecard).
     """
     if not _bridge_available():
         console.print(
@@ -155,12 +179,14 @@ def _real_loop(root: Path, runs: int, *, console: Console) -> Scorecard:
             "FLOWSTATE_CLAUDE_BIN set); none was found. Refusing to run real mode — it "
             "would silently degrade to dry-run. Use --mode cheap for the CI-safe path.[/red]"
         )
-        return compute_scorecard([])
+        return compute_scorecard([]), []
 
     snapshots: list[RunSnapshot] = []
+    judged: list[JudgeResult] = []
     prior: RunSnapshot | None = None
     with _worktree(root) as target:
         scaffold(target)
+        fixture = _load_fixture(target)
         for i in range(runs):
             # Real mode does NOT mutate between runs: the project is held fixed so the
             # ONLY variable across runs is FlowState's accumulating memory/journal/gotchas
@@ -177,27 +203,27 @@ def _real_loop(root: Path, runs: int, *, console: Console) -> Scorecard:
             )
             snapshots.append(snap)
             prior = snap
-    return compute_scorecard(snapshots)
+            if do_judge:
+                judged.append(judge_run(i, collect_artifacts(target), fixture, model=judge_model))
+                console.print(f"[dim]run {i}: judged output quality = {judged[-1].score}[/dim]")
+    return compute_scorecard(snapshots), judged
 
 
-def _maybe_judge(args: argparse.Namespace, console: Console) -> None:
-    """Guarded spec-only judge stub. Refuses unless --mode real + --allow-llm.
+def _judge_allowed(args: argparse.Namespace, console: Console) -> bool:
+    """Whether the Tier-2 judge runs. Requires --judge AND --mode real AND --allow-llm.
 
-    NEVER produces a score and NEVER touches the mechanical scorecard.
+    Prints a clear refusal when --judge is requested but the gate is not met. The judge
+    is ALWAYS excluded from the mechanical CompoundingScore.
     """
     if not args.judge:
-        return
+        return False
     if args.mode != "real" or not args.allow_llm:
         console.print(
-            "[red]--judge is spec-only and NOT implemented. It requires --mode real "
-            "AND --allow-llm to even be considered, and is excluded from the "
-            "mechanical score regardless.[/red]"
+            "[red]--judge requires --mode real AND --allow-llm (it makes live LLM calls "
+            "and is excluded from the mechanical score). Skipping the judge.[/red]"
         )
-        return
-    console.print(
-        "[yellow]--judge is a specified-but-unimplemented Tier-2 stub. No LLM judging "
-        "is performed; the mechanical scorecard above is authoritative.[/yellow]"
-    )
+        return False
+    return True
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -205,19 +231,24 @@ def main(argv: list[str] | None = None) -> int:
     console = _console
     root = Path(args.root)
     runs = max(1, args.runs)
+    do_judge = _judge_allowed(args, console)
 
+    judged: list[JudgeResult] = []
     if args.mode == "real":
-        scorecard = _real_loop(root, runs, console=console)
+        scorecard, judged = _real_loop(
+            root, runs, console=console, do_judge=do_judge, judge_model=args.judge_model
+        )
     else:
         scorecard = _cheap_loop(root, runs, console=console)
 
     render_report(scorecard, console=console, markdown=args.markdown)
-    _maybe_judge(args, console)
+    if judged:
+        render_judge_panel(judged, console=console)
 
     if args.out is not None:
         # never-raises: an unwritable --out degrades to a warning, not a crash.
         try:
-            write_json(scorecard, Path(args.out))
+            write_json(scorecard, Path(args.out), judge_results=judged or None)
             console.print(f"[dim]wrote results: {args.out}[/dim]")
         except OSError as exc:
             console.print(f"[red]could not write results to {args.out}: {exc}[/red]")
