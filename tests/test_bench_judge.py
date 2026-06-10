@@ -95,3 +95,29 @@ def test_write_json_omits_judge_when_absent(tmp_path: Path):
     out = tmp_path / "r.json"
     write_json(compute_scorecard([]), out)
     assert '"judge"' not in out.read_text()
+
+
+def test_run_one_inject_off_suppresses_and_restores(monkeypatch, tmp_path):
+    """Control arm: inject=False makes build_context_prefix return '' during the run,
+    then restores it — memory still accumulates, but the LLM sees no prior knowledge."""
+    import flowstate.orchestrator as orch
+    import flowstate.state as fstate
+    from bench import compound_eval as ce
+
+    orig = orch.build_context_prefix
+    seen = {}
+
+    class _Prefs:
+        dry_run = False
+
+    class _State:
+        preferences = _Prefs()
+
+    monkeypatch.setattr(fstate, "load_state", lambda root: _State())
+    monkeypatch.setattr(
+        orch, "run_pipeline", lambda s, r: seen.update(p=orch.build_context_prefix(r, None, "q"))
+    )
+
+    ce._run_one(tmp_path, dry_run=False, inject=False)
+    assert seen["p"] == ""  # injection suppressed during the run
+    assert orch.build_context_prefix is orig  # restored after

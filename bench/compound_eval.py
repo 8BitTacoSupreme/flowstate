@@ -59,6 +59,12 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Measure whether FlowState run N+1 beats run N on the same project.",
     )
     parser.add_argument("--mode", choices=("cheap", "real"), default="cheap")
+    parser.add_argument(
+        "--inject",
+        choices=("on", "off"),
+        default="on",
+        help="real mode: 'off' = control arm (suppress prefix injection; isolates compounding).",
+    )
     parser.add_argument("--runs", type=int, default=5)
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--out", type=Path, default=None)
@@ -115,14 +121,28 @@ def _bridge_available() -> bool:
         return False
 
 
-def _run_one(root: Path, *, dry_run: bool) -> None:
-    """Drive the real substrate once. Imported lazily to keep import cost off the path."""
-    from flowstate.orchestrator import run_pipeline
+def _run_one(root: Path, *, dry_run: bool, inject: bool = True) -> None:
+    """Drive the real substrate once. Imported lazily to keep import cost off the path.
+
+    When ``inject`` is False (the memory-OFF control arm), the accumulated context
+    prefix is suppressed for this run: the pipeline still accumulates memory on disk,
+    but the LLM never SEES prior knowledge — so run N+1 cannot benefit. This isolates
+    FlowState's compounding from pipeline nondeterminism / cold-start.
+    """
+    import flowstate.orchestrator as orch
     from flowstate.state import load_state
 
     state = load_state(root)
     state.preferences.dry_run = dry_run
-    run_pipeline(state, root)
+    if inject:
+        orch.run_pipeline(state, root)
+        return
+    original = orch.build_context_prefix
+    orch.build_context_prefix = lambda *a, **k: ""  # suppress prior-knowledge injection
+    try:
+        orch.run_pipeline(state, root)
+    finally:
+        orch.build_context_prefix = original
 
 
 def _cheap_loop(root: Path, runs: int, *, console: Console) -> Scorecard:
@@ -165,6 +185,7 @@ def _real_loop(
     console: Console,
     do_judge: bool = False,
     judge_model: str | None = None,
+    inject: bool = True,
 ) -> tuple[Scorecard, list[JudgeResult]]:
     """real mode: run_pipeline live K times in a temp copy. Research-only.
 
@@ -195,7 +216,7 @@ def _real_loop(
             run_id = uuid4().hex[:12]
             window_start = datetime.now(UTC)
             try:
-                _run_one(target, dry_run=False)
+                _run_one(target, dry_run=False, inject=inject)
             except Exception as exc:  # never abort the loop on a substrate hiccup
                 console.print(f"[yellow]run {i}: pipeline non-fatal error: {exc}[/yellow]")
             snap = capture_run_snapshot(
@@ -236,7 +257,12 @@ def main(argv: list[str] | None = None) -> int:
     judged: list[JudgeResult] = []
     if args.mode == "real":
         scorecard, judged = _real_loop(
-            root, runs, console=console, do_judge=do_judge, judge_model=args.judge_model
+            root,
+            runs,
+            console=console,
+            do_judge=do_judge,
+            judge_model=args.judge_model,
+            inject=(args.inject == "on"),
         )
     else:
         scorecard = _cheap_loop(root, runs, console=console)
