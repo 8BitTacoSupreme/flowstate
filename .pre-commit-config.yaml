@@ -19,6 +19,18 @@ repos:
 
   - repo: local
     hooks:
+      - id: flowstate-pack
+        name: refresh repomix pack (staleness-gated, non-blocking)
+        # flowstate pack self-skips when the pack is current (mtime check) and only
+        # repacks stale packs. Wrapped in `|| true` so a missing repomix never blocks
+        # a commit — the pack is a best-effort cache, not a commit gate. The artifact
+        # is untracked, so a refresh does not dirty the commit.
+        entry: bash -c '.venv/bin/flowstate pack || true'
+        language: system
+        files: \.py$
+        pass_filenames: false
+        stages: [pre-commit]
+
       - id: pytest-cov
         name: pytest with coverage (80% min)
         entry: .venv/bin/python -m pytest tests/ --cov=flowstate --cov-fail-under=80 --tb=short -q
