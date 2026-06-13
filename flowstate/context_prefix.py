@@ -288,6 +288,7 @@ def build_context_prefix(
     query: str,
     *,
     budget_tokens: int | None = None,
+    include_layers: frozenset[str] | None = None,
     console: Console | None = None,
 ) -> str:
     """Assemble the ordered CAG context prefix for the current pipeline run.
@@ -307,15 +308,22 @@ def build_context_prefix(
     parameter, or a module-level default). Logging is NEVER silent.
 
     Args:
-        root:          Project root directory.
-        memory:        MemoryStore instance with a ``get_context(query) -> str``
-                       method.
-        query:         FTS5 search query forwarded to ``memory.get_context()``.
-        budget_tokens: Maximum token budget for the assembled prefix.  Defaults
-                       to the value of ``context_prefix_budget_tokens`` in
-                       ``.planning/config.json`` (or ~12 000 if absent).
-        console:       Rich Console for compress/omit logging.  Defaults to the
-                       module-level Console when None.
+        root:           Project root directory.
+        memory:         MemoryStore instance with a ``get_context(query) -> str``
+                        method.
+        query:          FTS5 search query forwarded to ``memory.get_context()``.
+        budget_tokens:  Maximum token budget for the assembled prefix.  Defaults
+                        to the value of ``context_prefix_budget_tokens`` in
+                        ``.planning/config.json`` (or ~12 000 if absent).
+        include_layers: When ``None`` (default), all five layers are assembled —
+                        byte-identical to the no-kwarg call.  Pass a
+                        ``frozenset`` of layer key strings to include ONLY those
+                        layers; others are excluded at assembly time (their
+                        reader helpers are never invoked).  Valid keys are:
+                        ``"fixtures"``, ``"pack"``, ``"gotchas"``, ``"memory"``,
+                        ``"since_last_run"``.  An empty frozenset returns ``""``.
+        console:        Rich Console for compress/omit logging.  Defaults to the
+                        module-level Console when None.
 
     Returns:
         A single string with layers joined by ``\\n\\n---\\n\\n``.  Returns ``""``
@@ -328,24 +336,31 @@ def build_context_prefix(
     con = console or _console
     budget = budget_tokens if budget_tokens is not None else _load_budget(root)
 
+    # Assembly-time gate: include_layers=None means all layers (default path,
+    # byte-identical to the no-kwarg call).  A frozenset gates each layer by key.
+    def _included(key: str) -> bool:
+        return include_layers is None or key in include_layers
+
     # ── Layer 1: fixtures (most stable) ─────────────────────────────────────
-    fixtures_layer = _read_fixtures_layer(root)
+    fixtures_layer = _read_fixtures_layer(root) if _included("fixtures") else ""
 
     # ── Layer 3: gotchas (semi-stable failure signals; built early for budget accounting)
-    gotchas_layer = _read_gotchas_layer(root, memory)
+    gotchas_layer = _read_gotchas_layer(root, memory) if _included("gotchas") else ""
 
     # ── Layer 4: memory (most dynamic — built now so we know its size) ───────
-    memory_layer = memory.get_context(query) if query else ""
+    memory_layer = (memory.get_context(query) if query else "") if _included("memory") else ""
 
     # ── Layer 5: since-last-run (built early so its cost is included in budget checks)
-    since_last_run_layer = _read_since_last_run_layer(root, memory)
+    since_last_run_layer = (
+        _read_since_last_run_layer(root, memory) if _included("since_last_run") else ""
+    )
 
     # ── Layer 2: pack (semi-stable, fit-ladder applied) ──────────────────────
     pack_path = root / _PACK_PATH
     pack_exists = pack_path.exists()
 
     pack_layer = ""
-    if pack_exists:
+    if pack_exists and _included("pack"):
         pack_raw = _read_pack_layer(root)
         # Gotchas layer is included in the candidate estimate so the fit decision
         # accounts for the gotchas cost (Phase-6 CR-01 lesson).
