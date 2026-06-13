@@ -99,7 +99,9 @@ def test_write_json_omits_judge_when_absent(tmp_path: Path):
 
 def test_run_one_inject_off_suppresses_and_restores(monkeypatch, tmp_path):
     """Control arm: inject=False makes build_context_prefix return '' during the run,
-    then restores it — memory still accumulates, but the LLM sees no prior knowledge."""
+    then restores it — memory still accumulates, but the LLM sees no prior knowledge.
+    LEGACY test — kept to verify backward compat is NOT broken (inject kwarg removed).
+    """
     import flowstate.orchestrator as orch
     import flowstate.state as fstate
     from bench import compound_eval as ce
@@ -118,6 +120,177 @@ def test_run_one_inject_off_suppresses_and_restores(monkeypatch, tmp_path):
         orch, "run_pipeline", lambda s, r: seen.update(p=orch.build_context_prefix(r, None, "q"))
     )
 
-    ce._run_one(tmp_path, dry_run=False, inject=False)
+    # After migration inject= is removed; layers="none" is the equivalent.
+    ce._run_one(tmp_path, dry_run=False, layers="none")
     assert seen["p"] == ""  # injection suppressed during the run
     assert orch.build_context_prefix is orig  # restored after
+
+
+def _make_stub_state_and_run_pipeline(monkeypatch, seen: dict):
+    """Patch load_state and run_pipeline; run_pipeline records orch.build_context_prefix result."""
+    import flowstate.orchestrator as orch
+    import flowstate.state as fstate
+
+    class _Prefs:
+        dry_run = False
+
+    class _State:
+        preferences = _Prefs()
+
+    monkeypatch.setattr(fstate, "load_state", lambda root: _State())
+    monkeypatch.setattr(
+        orch, "run_pipeline", lambda s, r: seen.update(p=orch.build_context_prefix(r, None, "q"))
+    )
+
+
+def test_run_one_layers_full_no_patch(monkeypatch, tmp_path):
+    """full arm: orch.build_context_prefix is NOT patched during run and is orig after."""
+    import flowstate.orchestrator as orch
+    from bench import compound_eval as ce
+
+    orig = orch.build_context_prefix
+    seen_during: list = []
+    seen = {}
+
+    def _fake_pipeline(s, r):
+        seen_during.append(orch.build_context_prefix is orig)
+        seen["p"] = "not-empty"  # full arm — prefix not suppressed
+
+    import flowstate.state as fstate
+
+    class _Prefs:
+        dry_run = False
+
+    class _State:
+        preferences = _Prefs()
+
+    monkeypatch.setattr(fstate, "load_state", lambda root: _State())
+    monkeypatch.setattr(orch, "run_pipeline", _fake_pipeline)
+
+    ce._run_one(tmp_path, dry_run=False, layers="full")
+    assert seen_during == [True], "full arm must NOT patch build_context_prefix during run"
+    assert orch.build_context_prefix is orig, "build_context_prefix must be orig after full arm"
+
+
+def test_run_one_layers_none_empty_prefix(monkeypatch, tmp_path):
+    """none arm: wrapper injects include_layers=frozenset() → empty prefix; patch restored after."""
+    import flowstate.orchestrator as orch
+    from bench import compound_eval as ce
+    from bench.compound_eval import _LAYERS_MAP
+
+    orig = orch.build_context_prefix
+    seen = {}
+
+    # Provide a real-ish build_context_prefix that honors include_layers
+    def _fake_bcp(root, memory, query, **kwargs):
+        include = kwargs.get("include_layers")
+        if include is not None and len(include) == 0:
+            return ""
+        return "some-prefix"
+
+    orch.build_context_prefix = _fake_bcp
+    try:
+        import flowstate.state as fstate
+
+        class _Prefs:
+            dry_run = False
+
+        class _State:
+            preferences = _Prefs()
+
+        monkeypatch.setattr(fstate, "load_state", lambda root: _State())
+        monkeypatch.setattr(
+            orch,
+            "run_pipeline",
+            lambda s, r: seen.update(p=orch.build_context_prefix(r, None, "q")),
+        )
+
+        ce._run_one(tmp_path, dry_run=False, layers="none")
+        assert seen["p"] == "", "none arm: prefix must be empty (include_layers=frozenset())"
+        assert _LAYERS_MAP["none"] == frozenset()
+    finally:
+        orch.build_context_prefix = orig
+
+    assert orch.build_context_prefix is orig, "build_context_prefix must be restored after none arm"
+
+
+def test_run_one_layers_pack_selects_rag(monkeypatch, tmp_path):
+    """pack arm: wrapper injects include_layers=frozenset({'fixtures','pack'}); patch restored."""
+    import flowstate.orchestrator as orch
+    from bench import compound_eval as ce
+    from bench.compound_eval import _LAYERS_MAP
+
+    orig = orch.build_context_prefix
+    seen = {}
+
+    def _fake_bcp(root, memory, query, **kwargs):
+        seen["include_layers"] = kwargs.get("include_layers")
+        return "pack-prefix"
+
+    orch.build_context_prefix = _fake_bcp
+    try:
+        import flowstate.state as fstate
+
+        class _Prefs:
+            dry_run = False
+
+        class _State:
+            preferences = _Prefs()
+
+        monkeypatch.setattr(fstate, "load_state", lambda root: _State())
+        monkeypatch.setattr(
+            orch,
+            "run_pipeline",
+            lambda s, r: seen.update(p=orch.build_context_prefix(r, None, "q")),
+        )
+
+        ce._run_one(tmp_path, dry_run=False, layers="pack")
+        assert seen.get("include_layers") == _LAYERS_MAP["pack"], (
+            "pack arm: include_layers must be frozenset({'fixtures','pack'})"
+        )
+    finally:
+        orch.build_context_prefix = orig
+
+    assert orch.build_context_prefix is orig, "build_context_prefix must be restored after pack arm"
+
+
+def test_run_one_layers_memory_selects_compounding(monkeypatch, tmp_path):
+    """memory arm: wrapper injects include_layers=frozenset({'gotchas','memory','since_last_run'})."""
+    import flowstate.orchestrator as orch
+    from bench import compound_eval as ce
+    from bench.compound_eval import _LAYERS_MAP
+
+    orig = orch.build_context_prefix
+    seen = {}
+
+    def _fake_bcp(root, memory, query, **kwargs):
+        seen["include_layers"] = kwargs.get("include_layers")
+        return "memory-prefix"
+
+    orch.build_context_prefix = _fake_bcp
+    try:
+        import flowstate.state as fstate
+
+        class _Prefs:
+            dry_run = False
+
+        class _State:
+            preferences = _Prefs()
+
+        monkeypatch.setattr(fstate, "load_state", lambda root: _State())
+        monkeypatch.setattr(
+            orch,
+            "run_pipeline",
+            lambda s, r: seen.update(p=orch.build_context_prefix(r, None, "q")),
+        )
+
+        ce._run_one(tmp_path, dry_run=False, layers="memory")
+        assert seen.get("include_layers") == _LAYERS_MAP["memory"], (
+            "memory arm: include_layers must be frozenset({'gotchas','memory','since_last_run'})"
+        )
+    finally:
+        orch.build_context_prefix = orig
+
+    assert orch.build_context_prefix is orig, (
+        "build_context_prefix must be restored after memory arm"
+    )

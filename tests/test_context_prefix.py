@@ -939,3 +939,117 @@ class TestGotchasLayerIntegration:
 def _estimate_tokens(text: str) -> int:
     """Replicate the module helper for use in tests."""
     return len(text) // 4
+
+
+# ---------------------------------------------------------------------------
+# include_layers assembly-time gating
+# ---------------------------------------------------------------------------
+
+
+class TestIncludeLayers:
+    def test_include_layers_none_is_byte_identical(self, tmp_path: Path):
+        """build_context_prefix(..., include_layers=None) == build_context_prefix(...) byte-for-byte."""
+        _make_fixture_file(tmp_path)
+        _make_pack_file(tmp_path, "<pack>tiny</pack>")
+        run_entry = _make_run_entry("run delta", "some run content")
+        memory = _make_memory_stub(
+            returns="## Prior Knowledge\n\nsome fact\n",
+            run_entries=[run_entry],
+        )
+
+        with patch("flowstate.context_prefix.run_pack"):
+            result_no_kwarg = build_context_prefix(tmp_path, memory, "q", budget_tokens=50000)
+            result_none = build_context_prefix(
+                tmp_path, memory, "q", budget_tokens=50000, include_layers=None
+            )
+
+        assert result_no_kwarg == result_none, (
+            "include_layers=None must be byte-identical to the no-kwarg call"
+        )
+
+    def test_include_layers_pack_only_excludes_compounding(self, tmp_path: Path):
+        """include_layers=frozenset({'fixtures','pack'}): pack present; gotchas/memory/since absent."""
+        _make_fixture_file(tmp_path)
+        _make_pack_file(tmp_path, "<pack>xml-content</pack>")
+
+        from flowstate.memory import MemoryKind
+
+        mem = MagicMock()
+        mem.get_context.return_value = "## Prior Knowledge\n\nfact\n"
+
+        def _get_by_kind(kind, limit=None):
+            if kind == MemoryKind.RUN:
+                return [_make_run_entry("run delta", "run content")]
+            if kind == MemoryKind.INSIGHT:
+                return []
+            return []
+
+        mem.get_by_kind.side_effect = _get_by_kind
+
+        with patch("flowstate.context_prefix.run_pack"):
+            result = build_context_prefix(
+                tmp_path,
+                mem,
+                "q",
+                budget_tokens=50000,
+                include_layers=frozenset({"fixtures", "pack"}),
+            )
+
+        assert "<pack>xml-content</pack>" in result, "pack must be present"
+        assert "## Eval Fixtures" in result, "fixtures must be present"
+        assert "## Prior Knowledge" not in result, "memory must be excluded"
+        assert "## Since Last Run" not in result, "since-last-run must be excluded"
+        assert "## Gotchas" not in result, "gotchas must be excluded"
+
+    def test_include_layers_memory_only_excludes_pack_and_fixtures(self, tmp_path: Path):
+        """include_layers=frozenset({'gotchas','memory','since_last_run'}): no pack, no fixtures."""
+        _make_fixture_file(tmp_path)
+        _make_pack_file(tmp_path, "<pack>should-not-appear</pack>")
+
+        from flowstate.memory import MemoryKind
+
+        mem = MagicMock()
+        mem.get_context.return_value = "## Prior Knowledge\n\nsome fact\n"
+
+        def _get_by_kind(kind, limit=None):
+            if kind == MemoryKind.RUN:
+                return [_make_run_entry("run delta", "run content")]
+            if kind == MemoryKind.INSIGHT:
+                return []  # no gotchas
+            return []
+
+        mem.get_by_kind.side_effect = _get_by_kind
+
+        with patch("flowstate.context_prefix.run_pack"):
+            result = build_context_prefix(
+                tmp_path,
+                mem,
+                "q",
+                budget_tokens=50000,
+                include_layers=frozenset({"gotchas", "memory", "since_last_run"}),
+            )
+
+        assert "<pack>" not in result, "pack XML must be excluded"
+        assert "## Eval Fixtures" not in result, "fixtures heading must be excluded"
+        assert "## Prior Knowledge" in result, "memory must be present"
+        assert "## Since Last Run" in result, "since-last-run must be present"
+
+    def test_include_layers_empty_frozenset_returns_empty(self, tmp_path: Path):
+        """include_layers=frozenset() → returns empty string ''."""
+        _make_fixture_file(tmp_path)
+        _make_pack_file(tmp_path, "<pack>something</pack>")
+        memory = _make_memory_stub(
+            returns="## Prior Knowledge\n\nfact\n",
+            run_entries=[_make_run_entry()],
+        )
+
+        with patch("flowstate.context_prefix.run_pack"):
+            result = build_context_prefix(
+                tmp_path,
+                memory,
+                "q",
+                budget_tokens=50000,
+                include_layers=frozenset(),
+            )
+
+        assert result == "", f"Expected empty string, got: {result!r}"

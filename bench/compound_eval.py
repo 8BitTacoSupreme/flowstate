@@ -52,6 +52,18 @@ _PROBE_QUERY = "core problem vision architecture compounding"
 
 _console = Console()
 
+# Maps --layers CLI choice to the include_layers frozenset for build_context_prefix.
+# full   -> None            : all layers (no patch — call run_pipeline directly)
+# none   -> frozenset()     : empty prefix (== old inject=off control arm)
+# pack   -> frozenset({"fixtures","pack"})                        : RAG layers only
+# memory -> frozenset({"gotchas","memory","since_last_run"})      : compounding layers only
+_LAYERS_MAP: dict[str, frozenset[str] | None] = {
+    "full": None,
+    "none": frozenset(),
+    "pack": frozenset({"fixtures", "pack"}),
+    "memory": frozenset({"gotchas", "memory", "since_last_run"}),
+}
+
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -60,10 +72,16 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--mode", choices=("cheap", "real"), default="cheap")
     parser.add_argument(
-        "--inject",
-        choices=("on", "off"),
-        default="on",
-        help="real mode: 'off' = control arm (suppress prefix injection; isolates compounding).",
+        "--layers",
+        choices=("full", "none", "pack", "memory"),
+        default="full",
+        help=(
+            "real mode: per-layer context attribution. "
+            "full=all layers (default), "
+            "none=control arm (empty prefix, isolates compounding), "
+            "pack=fixtures+pack (RAG only), "
+            "memory=gotchas+memory+since_last_run (compounding only)."
+        ),
     )
     parser.add_argument("--runs", type=int, default=5)
     parser.add_argument("--root", type=Path, required=True)
@@ -121,24 +139,38 @@ def _bridge_available() -> bool:
         return False
 
 
-def _run_one(root: Path, *, dry_run: bool, inject: bool = True) -> None:
+def _run_one(root: Path, *, dry_run: bool, layers: str = "full") -> None:
     """Drive the real substrate once. Imported lazily to keep import cost off the path.
 
-    When ``inject`` is False (the memory-OFF control arm), the accumulated context
-    prefix is suppressed for this run: the pipeline still accumulates memory on disk,
-    but the LLM never SEES prior knowledge — so run N+1 cannot benefit. This isolates
-    FlowState's compounding from pipeline nondeterminism / cold-start.
+    When ``layers`` is not "full", the context prefix is filtered at assembly time
+    via the ``include_layers`` kwarg injected into ``build_context_prefix``.  The
+    pipeline still accumulates memory on disk, but the LLM only SEES the selected
+    layers — enabling per-layer A/B attribution.
+
+    ``layers="none"`` is the control arm: all prior-knowledge injection suppressed
+    (equivalent to the old ``inject=False`` behaviour).  ``layers="full"`` (default)
+    calls ``run_pipeline`` directly without any monkeypatch.
     """
     import flowstate.orchestrator as orch
     from flowstate.state import load_state
 
     state = load_state(root)
     state.preferences.dry_run = dry_run
-    if inject:
+
+    include = _LAYERS_MAP[layers]
+    if include is None:
+        # full arm — no patch, run directly
         orch.run_pipeline(state, root)
         return
+
+    # Non-full arm: wrap build_context_prefix to inject include_layers
     original = orch.build_context_prefix
-    orch.build_context_prefix = lambda *a, **k: ""  # suppress prior-knowledge injection
+
+    def _wrapped(*a, **k):
+        k.setdefault("include_layers", include)
+        return original(*a, **k)
+
+    orch.build_context_prefix = _wrapped
     try:
         orch.run_pipeline(state, root)
     finally:
@@ -185,7 +217,7 @@ def _real_loop(
     console: Console,
     do_judge: bool = False,
     judge_model: str | None = None,
-    inject: bool = True,
+    layers: str = "full",
 ) -> tuple[Scorecard, list[JudgeResult]]:
     """real mode: run_pipeline live K times in a temp copy. Research-only.
 
@@ -216,7 +248,7 @@ def _real_loop(
             run_id = uuid4().hex[:12]
             window_start = datetime.now(UTC)
             try:
-                _run_one(target, dry_run=False, inject=inject)
+                _run_one(target, dry_run=False, layers=layers)
             except Exception as exc:  # never abort the loop on a substrate hiccup
                 console.print(f"[yellow]run {i}: pipeline non-fatal error: {exc}[/yellow]")
             snap = capture_run_snapshot(
@@ -262,7 +294,7 @@ def main(argv: list[str] | None = None) -> int:
             console=console,
             do_judge=do_judge,
             judge_model=args.judge_model,
-            inject=(args.inject == "on"),
+            layers=args.layers,
         )
     else:
         scorecard = _cheap_loop(root, runs, console=console)
