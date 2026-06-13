@@ -1,10 +1,15 @@
-"""N-trial replication of the memory on/off A/B for a statistical effect size.
+"""N-trial replication across multiple layer arms for per-arm Cohen's d effect size.
 
-Runs the compound_eval harness N times per arm (--inject on vs off), each K live runs
+Runs the compound_eval harness N times per arm (--layers choices), each K live runs
 with the Tier-2 judge, then aggregates the per-run judge scores across trials and
-reports per-arm mean±std, per-trial improvement (last-first), and the effect size
-(Cohen's d) of on-arm vs off-arm improvement. This averages out the single-trial
-run-0 noise that made the first A/B directional rather than measured.
+reports per-arm mean±std, paired-normalized per-trial trajectories, per-arm
+improvement (last-first), and the effect size (Cohen's d) of each arm vs the `none`
+arm. This averages out the single-trial run-0 noise that made the first A/B
+directional rather than measured.
+
+Optional --paired normalization: subtracts each trial's run-0 score from all of that
+trial's scores so cross-arm run-0 baseline noise cancels out (each trajectory starts
+at 0). Raw scores are ALWAYS retained alongside paired.
 
 Research driver (long, real LLM cost). Run:
     python -m bench.replicate --trials 5 --runs 3 --root bench/fixtures/sample_project
@@ -21,14 +26,26 @@ import tempfile
 from pathlib import Path
 
 
-def _run_trial(inject: str, runs: int, root: Path, label: str) -> list[float] | None:
+def _run_trial(arm: str, runs: int, root: Path, label: str) -> list[float] | None:
     """One harness invocation; returns the per-run judge scores, or None on any gap."""
     out = Path(tempfile.mkstemp(prefix=f"repl_{label}_", suffix=".json")[1])
     cmd = [
-        sys.executable, "-m", "bench.compound_eval",
-        "--mode", "real", "--inject", inject, "--runs", str(runs),
-        "--root", str(root), "--judge", "--allow-llm", "--out", str(out),
-    ]  # fmt: skip
+        sys.executable,
+        "-m",
+        "bench.compound_eval",
+        "--mode",
+        "real",
+        "--layers",
+        arm,
+        "--runs",
+        str(runs),
+        "--root",
+        str(root),
+        "--judge",
+        "--allow-llm",
+        "--out",
+        str(out),
+    ]
     subprocess.run(cmd, check=False)
     try:
         d = json.loads(out.read_text())
@@ -38,6 +55,16 @@ def _run_trial(inject: str, runs: int, root: Path, label: str) -> list[float] | 
     if not scores or any(s is None for s in scores):
         return None
     return [float(s) for s in scores]
+
+
+def _paired_normalize(trials: list[list[float]]) -> list[list[float]]:
+    """Subtract each trial's run-0 score from all of that trial's scores.
+
+    Each normalized trajectory starts at 0 — cancels cross-arm run-0 baseline
+    noise while preserving inter-run deltas.  Translation-invariant: the
+    improvement (last - first) is unchanged by normalization.
+    """
+    return [[s - t[0] for s in t] for t in trials]
 
 
 def _agg(trials: list[list[float]]) -> dict:
@@ -70,28 +97,86 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--runs", type=int, default=3)
     ap.add_argument("--root", type=Path, required=True)
     ap.add_argument("--out", type=Path, default=None)
+    ap.add_argument(
+        "--layers",
+        nargs="+",
+        choices=("full", "pack", "memory", "none"),
+        default=["full", "pack", "memory", "none"],
+        help="Layer arms to replicate. Default: all four arms.",
+    )
+    ap.add_argument(
+        "--paired",
+        action="store_true",
+        help=(
+            "Subtract each trial's run-0 from its own scores before aggregating "
+            "(cancels cross-arm run-0 baseline noise)."
+        ),
+    )
     a = ap.parse_args(argv)
 
-    collected: dict[str, list[list[float]]] = {"on": [], "off": []}
-    for inject in ("on", "off"):
+    collected: dict[str, list[list[float]]] = {arm: [] for arm in a.layers}
+    for arm in a.layers:
         for t in range(a.trials):
-            scores = _run_trial(inject, a.runs, a.root, f"{inject}{t}")
-            print(f"[replicate] {inject} trial {t}: {scores}", flush=True)
+            scores = _run_trial(arm, a.runs, a.root, f"{arm}{t}")
+            print(f"[replicate] {arm} trial {t}: {scores}", flush=True)
             if scores is not None:
-                collected[inject].append(scores)
+                collected[arm].append(scores)
 
-    summary = {
+    # Build per-arm raw + paired aggregates
+    arms_summary: dict[str, dict] = {}
+    for arm in a.layers:
+        trials = collected[arm]
+        raw_agg = _agg(trials)
+        norm_agg = _agg(_paired_normalize(trials)) if trials else {"n": 0}
+        arms_summary[arm] = {"raw": raw_agg, "paired": norm_agg}
+
+    # Metric driving Cohen's d: paired when --paired requested, raw otherwise
+    metric = "paired" if a.paired else "raw"
+
+    # Per-arm Cohen's d vs the none arm (when none is present in the run)
+    effect_sizes: dict[str, float | None] = {}
+    for arm in a.layers:
+        if arm == "none":
+            continue
+        if "none" in arms_summary:
+            effect_sizes[arm] = _cohens_d(arms_summary[arm][metric], arms_summary["none"][metric])
+        else:
+            effect_sizes[arm] = None
+
+    summary: dict = {
         "trials_requested": a.trials,
         "runs_per_trial": a.runs,
-        "on": _agg(collected["on"]),
-        "off": _agg(collected["off"]),
+        "layers": a.layers,
+        "paired_mode": a.paired,
+        "metric_for_effect_size": metric,
+        "arms": arms_summary,
+        "effect_size_cohens_d": effect_sizes,
     }
-    summary["effect_size_cohens_d"] = _cohens_d(summary["on"], summary["off"])
-    summary["improvement_delta_on_minus_off"] = (
-        round(summary["on"]["improvement_mean"] - summary["off"]["improvement_mean"], 2)
-        if collected["on"] and collected["off"]
-        else None
-    )
+
+    # Retain improvement_delta vs none per arm (for both raw and paired metrics)
+    if "none" in arms_summary:
+        deltas: dict[str, dict | None] = {}
+        for arm in a.layers:
+            if arm == "none":
+                continue
+            none_raw = arms_summary["none"]["raw"]
+            none_paired = arms_summary["none"]["paired"]
+            arm_raw = arms_summary[arm]["raw"]
+            arm_paired = arms_summary[arm]["paired"]
+            deltas[arm] = {
+                "raw": (
+                    round(arm_raw["improvement_mean"] - none_raw["improvement_mean"], 2)
+                    if arm_raw.get("n", 0) > 0 and none_raw.get("n", 0) > 0
+                    else None
+                ),
+                "paired": (
+                    round(arm_paired["improvement_mean"] - none_paired["improvement_mean"], 2)
+                    if arm_paired.get("n", 0) > 0 and none_paired.get("n", 0) > 0
+                    else None
+                ),
+            }
+        summary["improvement_delta_vs_none"] = deltas
+
     print(json.dumps(summary, indent=2))
     if a.out:
         Path(a.out).write_text(json.dumps(summary, indent=2) + "\n")
