@@ -34,6 +34,7 @@ Token budget:
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +48,7 @@ from flowstate.pack import PackResult, run_pack
 # ──────────────────────────────────────────────────────────────────────────────
 
 _SEPARATOR = "\n\n---\n\n"
+_BUDGET_ENV_VAR = "FLOWSTATE_CONTEXT_BUDGET_TOKENS"
 _PACK_PATH = ".planning/codebase/repomix-pack.xml"
 _FIXTURE_PATH = ".planning/fixtures/starter.json"
 _CONFIG_PATH = ".planning/config.json"
@@ -71,11 +73,26 @@ def _estimate_tokens(text: str) -> int:
 
 
 def _load_budget(root: Path) -> int:
-    """Read context_prefix_budget_tokens from .planning/config.json.
+    """Resolve the context-prefix token budget.
 
-    Falls back to ``_DEFAULT_BUDGET_TOKENS`` (~12 000) when the file is absent,
-    the key is missing, or the value is not a positive integer (booleans excluded).
+    Precedence: ``FLOWSTATE_CONTEXT_BUDGET_TOKENS`` env var → ``.planning/config.json``
+    key ``context_prefix_budget_tokens`` → ``_DEFAULT_BUDGET_TOKENS`` (~12 000).
+
+    The env override exists because the pipeline's Context Generation step rewrites
+    config.json every run, so a config-only budget cannot survive a multi-run session
+    (e.g. the bench harness). The env var is authoritative and regeneration-proof.
+    Only a positive integer is accepted at each tier (booleans excluded); invalid
+    values fall through to the next tier. Default behavior is unchanged when unset.
     """
+    env_value = os.environ.get(_BUDGET_ENV_VAR)
+    if env_value is not None:
+        try:
+            parsed = int(env_value)
+            if parsed > 0:
+                return parsed
+        except ValueError:
+            pass
+
     config_path = root / _CONFIG_PATH
     if not config_path.exists():
         return _DEFAULT_BUDGET_TOKENS

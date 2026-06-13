@@ -564,6 +564,39 @@ class TestSinceLastRunLayer:
         config_bool.write_text('{"context_prefix_budget_tokens": true}')
         assert _load_budget(tmp_path / "bool_budget") == _DEFAULT_BUDGET_TOKENS
 
+    def test_env_var_overrides_config_budget(self, tmp_path: Path, monkeypatch):
+        """FLOWSTATE_CONTEXT_BUDGET_TOKENS takes precedence over config.json."""
+        from flowstate.context_prefix import _BUDGET_ENV_VAR, _load_budget
+
+        config = tmp_path / ".planning" / "config.json"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        config.write_text('{"context_prefix_budget_tokens": 12000}')
+        monkeypatch.setenv(_BUDGET_ENV_VAR, "40000")
+        # Env wins over the config value (the regeneration-proof override).
+        assert _load_budget(tmp_path) == 40000
+
+    def test_env_var_used_when_config_absent(self, tmp_path: Path, monkeypatch):
+        """The env override applies even when config.json does not exist."""
+        from flowstate.context_prefix import _BUDGET_ENV_VAR, _load_budget
+
+        monkeypatch.setenv(_BUDGET_ENV_VAR, "55000")
+        assert _load_budget(tmp_path / "no_config") == 55000
+
+    def test_invalid_env_var_falls_back_to_config_then_default(self, tmp_path: Path, monkeypatch):
+        """A non-int or non-positive env value falls through to config, then default."""
+        from flowstate.context_prefix import _BUDGET_ENV_VAR, _DEFAULT_BUDGET_TOKENS, _load_budget
+
+        config = tmp_path / ".planning" / "config.json"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        config.write_text('{"context_prefix_budget_tokens": 30000}')
+        monkeypatch.setenv(_BUDGET_ENV_VAR, "not-an-int")
+        assert _load_budget(tmp_path) == 30000  # falls through to config
+        monkeypatch.setenv(_BUDGET_ENV_VAR, "0")  # non-positive
+        assert _load_budget(tmp_path) == 30000
+        # No config + invalid env -> default
+        monkeypatch.setenv(_BUDGET_ENV_VAR, "-5")
+        assert _load_budget(tmp_path / "no_config") == _DEFAULT_BUDGET_TOKENS
+
 
 # ---------------------------------------------------------------------------
 # Gotchas config helpers
