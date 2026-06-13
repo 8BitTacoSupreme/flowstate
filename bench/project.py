@@ -189,13 +189,39 @@ def _seed_baseline_run(root: Path, manifest: list[InstallEntry]) -> None:
             store.close()
 
 
-def scaffold(root: Path) -> None:
-    """Create / refresh the synthetic target under ``root`` as a PRISTINE baseline.
+def scaffold(root: Path, *, synthetic: bool = True) -> None:
+    """Create / refresh the target under ``root`` as a PRISTINE baseline.
 
-    Clears memory.db and every generated pipeline output first, so each call
-    starts from the committed baseline only (reproducible run-to-run).
+    Args:
+        root: Directory to scaffold.
+        synthetic: Controls which path runs.
+
+            ``synthetic=True`` (default) — creates a fully self-consistent
+            synthetic bench-sample baseline: clears memory.db and every generated
+            pipeline output, writes the bench-sample ``fixtures/starter.json``,
+            writes ``_converged_body`` artifacts, seeds the baseline RUN journal
+            entry.  Byte-for-byte identical to the pre-2.0 ``scaffold(root)``
+            behaviour.
+
+            ``synthetic=False`` — preserves the real kickoff.  The caller is
+            expected to have populated ``root`` with a real-repo copy (config.json,
+            fixtures/starter.json, repomix-pack.xml, PROJECT.md, ROADMAP.md,
+            .claude/, research/, etc.).  The ONLY mutation is deleting ``memory.db``
+            (best-effort, never raises) so each trial starts from a clean
+            compounding baseline — the live pipeline recreates it on run 0.  No
+            ``_clean_generated`` call, no synthetic fixture write, no
+            ``_converged_body`` artifacts, no synthetic manifest, no
+            ``_seed_baseline_run``.
     """
     root = Path(root)
+
+    if not synthetic:
+        # Real-repo path: preserve the kickoff; only wipe memory.db so the
+        # compounding loop starts fresh without inheriting stale run history.
+        with contextlib.suppress(Exception):
+            (root / "memory.db").unlink(missing_ok=True)
+        return
+
     _clean_generated(root)
 
     planning = root / ".planning"

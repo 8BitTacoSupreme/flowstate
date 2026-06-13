@@ -358,6 +358,104 @@ def test_scaffold_verification_feeds_harvest(tmp_path: Path):
         store.close()
 
 
+def test_scaffold_real_path_preserves_kickoff(tmp_path: Path):
+    """scaffold(root, synthetic=False) preserves a real-style kickoff and removes memory.db."""
+    import json
+
+    from bench.project import scaffold
+
+    # Build a real-style .planning tree.
+    planning = tmp_path / ".planning"
+    (planning / "fixtures").mkdir(parents=True, exist_ok=True)
+    (planning / "codebase").mkdir(parents=True, exist_ok=True)
+
+    config = {"context_prefix_budget_tokens": 40000}
+    (planning / "config.json").write_text(json.dumps(config))
+
+    starter_sentinel = {"sentinel": "real-kickoff", "retrieval_questions": []}
+    (planning / "fixtures" / "starter.json").write_text(json.dumps(starter_sentinel))
+
+    (planning / "codebase" / "repomix-pack.xml").write_text("<repomix/>")
+    (planning / "PROJECT.md").write_text("# Real Project\n")
+    (planning / "ROADMAP.md").write_text("# Real Roadmap\n")
+
+    claude_dir = tmp_path / ".claude"
+    claude_dir.mkdir(parents=True, exist_ok=True)
+    (claude_dir / "CLAUDE.md").write_text("# CLAUDE\n")
+
+    research_dir = tmp_path / "research"
+    research_dir.mkdir(parents=True, exist_ok=True)
+    (research_dir / "brief.md").write_text("# Research Brief\n")
+
+    (tmp_path / "memory.db").write_bytes(b"fake-db")
+
+    scaffold(tmp_path, synthetic=False)
+
+    # All kickoff artifacts must survive untouched.
+    assert (planning / "config.json").exists()
+    assert json.loads((planning / "config.json").read_text()) == config
+    assert json.loads((planning / "fixtures" / "starter.json").read_text()) == starter_sentinel
+    assert (planning / "codebase" / "repomix-pack.xml").read_text() == "<repomix/>"
+    assert (planning / "PROJECT.md").read_text() == "# Real Project\n"
+    assert (planning / "ROADMAP.md").read_text() == "# Real Roadmap\n"
+    assert (claude_dir / "CLAUDE.md").read_text() == "# CLAUDE\n"
+    assert (research_dir / "brief.md").read_text() == "# Research Brief\n"
+
+    # memory.db must be deleted.
+    assert not (tmp_path / "memory.db").exists()
+
+    # No synthetic _converged_body artifacts must be written.
+    assert not (tmp_path / ".planning" / "artifacts" / "work_0.txt").exists()
+
+
+def test_scaffold_real_path_preserves_budget_key(tmp_path: Path):
+    """After scaffold(root, synthetic=False), config.json still parses and has context_prefix_budget_tokens."""
+    import json
+
+    from bench.project import scaffold
+
+    planning = tmp_path / ".planning"
+    planning.mkdir(parents=True, exist_ok=True)
+    (planning / "fixtures").mkdir(parents=True, exist_ok=True)
+
+    config = {"context_prefix_budget_tokens": 40000, "extra_key": "preserved"}
+    (planning / "config.json").write_text(json.dumps(config))
+    (planning / "fixtures" / "starter.json").write_text("{}")
+
+    scaffold(tmp_path, synthetic=False)
+
+    parsed = json.loads((planning / "config.json").read_text())
+    assert "context_prefix_budget_tokens" in parsed
+    assert parsed["context_prefix_budget_tokens"] == 40000
+
+
+def test_scaffold_synthetic_still_clears_and_writes(tmp_path: Path):
+    """scaffold(root) / scaffold(root, synthetic=True) clears config.json and writes bench-sample artifacts."""
+    import json
+
+    from bench.project import scaffold
+
+    # Pre-existing config.json must be cleared by synthetic scaffold.
+    planning = tmp_path / ".planning"
+    planning.mkdir(parents=True, exist_ok=True)
+    (planning / "config.json").write_text(json.dumps({"context_prefix_budget_tokens": 99999}))
+
+    scaffold(tmp_path)  # default: synthetic=True
+
+    # Synthetic run must clear config.json (it's in _GENERATED_FILES).
+    assert not (planning / "config.json").exists()
+
+    # Synthetic bench-sample starter.json must be written.
+    fixture_path = planning / "fixtures" / "starter.json"
+    assert fixture_path.exists()
+    fixture = json.loads(fixture_path.read_text())
+    # generate_starter_fixture always includes system_contract and retrieval_questions.
+    assert "system_contract" in fixture or "retrieval_questions" in fixture
+
+    # _converged_body artifacts must be written.
+    assert (tmp_path / ".planning" / "artifacts" / "work_0.txt").exists()
+
+
 def test_mutate_for_run_is_deterministic(tmp_path: Path):
     from bench.project import mutate_for_run, scaffold
 
@@ -754,7 +852,7 @@ def test_real_loop_runs_with_monkeypatched_pipeline(tmp_path: Path, monkeypatch)
     before = _dir_fingerprint(src)
 
     monkeypatch.setattr(ce, "_bridge_available", lambda: True)
-    monkeypatch.setattr(ce, "_run_one", lambda root, *, dry_run: None)
+    monkeypatch.setattr(ce, "_run_one", lambda root, *, dry_run, layers="full": None)
 
     buf = StringIO()
     console = Console(file=buf, width=120, force_terminal=False)
@@ -790,3 +888,51 @@ def test_cheap_dry_all_four_axes_show_movement(tmp_path: Path):
     assert card.axis_verify_non_regression not in inert
     assert card.axis_enrichment not in inert
     assert card.verdict == "compounding"
+
+
+def test_real_loop_calls_scaffold_with_synthetic_false(tmp_path: Path, monkeypatch):
+    """Guard: _real_loop must invoke scaffold with synthetic=False (not the default True)."""
+    from io import StringIO
+
+    from rich.console import Console
+
+    import bench.compound_eval as ce
+    from bench.metrics import RunSnapshot
+
+    # Record all calls to scaffold with their positional + keyword args.
+    scaffold_calls: list[dict] = []
+
+    def _scaffold_stub(root, *, synthetic=True):
+        scaffold_calls.append({"root": root, "synthetic": synthetic})
+
+    # Minimal RunSnapshot for compute_scorecard to receive valid data.
+    def _capture_stub(root, query, *, prior=None, run_id="", window_start=None):
+        return RunSnapshot(
+            run_index=0 if prior is None else prior.run_index + 1,
+            run_id=run_id,
+            artifacts_changed=0,
+            new_gotchas=0,
+            reencountered_gotchas=0,
+            verify_pass=0,
+            verify_fail=0,
+            verify_skip=0,
+            prefix_tokens=0,
+            mem_hits=0,
+            layers_present=(),
+        )
+
+    monkeypatch.setattr(ce, "_bridge_available", lambda: True)
+    monkeypatch.setattr(ce, "scaffold", _scaffold_stub)
+    monkeypatch.setattr(ce, "_run_one", lambda root, *, dry_run, layers="full": None)
+    monkeypatch.setattr(ce, "capture_run_snapshot", _capture_stub)
+
+    buf = StringIO()
+    console = Console(file=buf, width=120, force_terminal=False)
+    ce._real_loop(tmp_path, 1, console=console)
+
+    assert len(scaffold_calls) == 1, (
+        "scaffold must be called exactly once per _real_loop invocation"
+    )
+    assert scaffold_calls[0]["synthetic"] is False, (
+        f"_real_loop must call scaffold(target, synthetic=False); got synthetic={scaffold_calls[0]['synthetic']!r}"
+    )
