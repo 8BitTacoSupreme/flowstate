@@ -238,7 +238,7 @@ def _real_loop(
     judged: list[JudgeResult] = []
     prior: RunSnapshot | None = None
     with _worktree(root) as target:
-        scaffold(target)
+        scaffold(target, synthetic=False)
         fixture = _load_fixture(target)
         for i in range(runs):
             # Real mode does NOT mutate between runs: the project is held fixed so the

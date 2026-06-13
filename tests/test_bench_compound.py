@@ -852,7 +852,7 @@ def test_real_loop_runs_with_monkeypatched_pipeline(tmp_path: Path, monkeypatch)
     before = _dir_fingerprint(src)
 
     monkeypatch.setattr(ce, "_bridge_available", lambda: True)
-    monkeypatch.setattr(ce, "_run_one", lambda root, *, dry_run: None)
+    monkeypatch.setattr(ce, "_run_one", lambda root, *, dry_run, layers="full": None)
 
     buf = StringIO()
     console = Console(file=buf, width=120, force_terminal=False)
@@ -888,3 +888,51 @@ def test_cheap_dry_all_four_axes_show_movement(tmp_path: Path):
     assert card.axis_verify_non_regression not in inert
     assert card.axis_enrichment not in inert
     assert card.verdict == "compounding"
+
+
+def test_real_loop_calls_scaffold_with_synthetic_false(tmp_path: Path, monkeypatch):
+    """Guard: _real_loop must invoke scaffold with synthetic=False (not the default True)."""
+    from io import StringIO
+
+    from rich.console import Console
+
+    import bench.compound_eval as ce
+    from bench.metrics import RunSnapshot
+
+    # Record all calls to scaffold with their positional + keyword args.
+    scaffold_calls: list[dict] = []
+
+    def _scaffold_stub(root, *, synthetic=True):
+        scaffold_calls.append({"root": root, "synthetic": synthetic})
+
+    # Minimal RunSnapshot for compute_scorecard to receive valid data.
+    def _capture_stub(root, query, *, prior=None, run_id="", window_start=None):
+        return RunSnapshot(
+            run_index=0 if prior is None else prior.run_index + 1,
+            run_id=run_id,
+            artifacts_changed=0,
+            new_gotchas=0,
+            reencountered_gotchas=0,
+            verify_pass=0,
+            verify_fail=0,
+            verify_skip=0,
+            prefix_tokens=0,
+            mem_hits=0,
+            layers_present=(),
+        )
+
+    monkeypatch.setattr(ce, "_bridge_available", lambda: True)
+    monkeypatch.setattr(ce, "scaffold", _scaffold_stub)
+    monkeypatch.setattr(ce, "_run_one", lambda root, *, dry_run, layers="full": None)
+    monkeypatch.setattr(ce, "capture_run_snapshot", _capture_stub)
+
+    buf = StringIO()
+    console = Console(file=buf, width=120, force_terminal=False)
+    ce._real_loop(tmp_path, 1, console=console)
+
+    assert len(scaffold_calls) == 1, (
+        "scaffold must be called exactly once per _real_loop invocation"
+    )
+    assert scaffold_calls[0]["synthetic"] is False, (
+        f"_real_loop must call scaffold(target, synthetic=False); got synthetic={scaffold_calls[0]['synthetic']!r}"
+    )
