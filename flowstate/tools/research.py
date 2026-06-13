@@ -14,6 +14,9 @@ from textwrap import dedent
 from flowstate.state import InterviewAnswers
 from flowstate.tools.base import ToolAdapter, ToolResult
 
+_RESEARCH_MAX_TURNS = 6
+_RESEARCH_MAX_ATTEMPTS = 3
+
 MOCK_REPORT = """\
 # Research Report
 
@@ -94,15 +97,18 @@ class ResearchAdapter(ToolAdapter):
             prompt = _build_topic_prompt(topic, answers)
             if prior:
                 prompt = prior + "\n\n---\n\n" + prompt
-            br = self.bridge.run(
-                prompt,
-                system_prompt=RESEARCH_SYSTEM_PROMPT,
-                allowed_tools=["WebSearch", "WebFetch"],
-                max_turns=3,
-                model="sonnet",
-            )
-            if br.success and br.output.strip():
-                sections.append(br.output.strip())
+            br = None
+            for _ in range(_RESEARCH_MAX_ATTEMPTS):
+                br = self.bridge.run(
+                    prompt,
+                    system_prompt=RESEARCH_SYSTEM_PROMPT,
+                    allowed_tools=["WebSearch", "WebFetch"],
+                    max_turns=_RESEARCH_MAX_TURNS,
+                    model="sonnet",
+                )
+                if br.success and br.output.strip():
+                    sections.append(br.output.strip())
+                    break
             else:
                 sections.append(f"## {topic}\n\n*Research failed: {br.error or 'no output'}*\n")
 
