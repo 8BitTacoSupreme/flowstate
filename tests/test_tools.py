@@ -222,3 +222,119 @@ def test_research_does_not_call_get_memory_context_when_prior_knowledge_set(
         f"memory.get_context should not be called when prior_knowledge is set "
         f"(called {call_count['n']} times)"
     )
+
+
+# -- Bounded retry + raised max_turns (quick-260613-m60) --
+
+
+def test_research_retries_then_succeeds(tmp_path: Path):
+    """First attempt fails; second attempt succeeds — report has good output, not placeholder."""
+    from unittest.mock import MagicMock
+
+    from flowstate.bridge import BridgeResult
+
+    bridge = MagicMock()
+    bridge.run.side_effect = [
+        BridgeResult(success=False, output="", exit_code=1, error="Reached max turns"),
+        BridgeResult(success=True, output="GOOD SECTION", exit_code=0),
+    ]
+
+    adapter = ResearchAdapter(root=tmp_path, dry_run=False, bridge=bridge)
+    answers = InterviewAnswers(research_focus="websockets")
+    adapter.execute(answers)
+
+    assert bridge.run.call_count == 2
+    report = (tmp_path / "research" / "report.md").read_text()
+    assert "GOOD SECTION" in report
+    assert "*Research failed:" not in report
+
+
+def test_research_all_attempts_fail(tmp_path: Path):
+    """All attempts fail — placeholder appears in report; bridge called _RESEARCH_MAX_ATTEMPTS times."""
+    from unittest.mock import MagicMock
+
+    from flowstate.bridge import BridgeResult
+    from flowstate.tools.research import _RESEARCH_MAX_ATTEMPTS
+
+    bridge = MagicMock()
+    bridge.run.return_value = BridgeResult(success=False, output="", exit_code=1, error="boom")
+
+    adapter = ResearchAdapter(root=tmp_path, dry_run=False, bridge=bridge)
+    answers = InterviewAnswers(research_focus="websockets")
+    adapter.execute(answers)
+
+    assert bridge.run.call_count == _RESEARCH_MAX_ATTEMPTS
+    report = (tmp_path / "research" / "report.md").read_text()
+    assert "*Research failed:" in report
+    assert "boom" in report
+
+
+def test_research_first_try_success_no_retry(tmp_path: Path):
+    """First attempt succeeds — bridge called exactly once; no placeholder in report."""
+    from unittest.mock import MagicMock
+
+    from flowstate.bridge import BridgeResult
+
+    bridge = MagicMock()
+    bridge.run.return_value = BridgeResult(success=True, output="ONE SHOT", exit_code=0)
+
+    adapter = ResearchAdapter(root=tmp_path, dry_run=False, bridge=bridge)
+    answers = InterviewAnswers(research_focus="websockets")
+    adapter.execute(answers)
+
+    assert bridge.run.call_count == 1
+    report = (tmp_path / "research" / "report.md").read_text()
+    assert "ONE SHOT" in report
+
+
+def test_research_empty_output_is_retried(tmp_path: Path):
+    """Blank/whitespace output on first attempt is treated as failure and retried."""
+    from unittest.mock import MagicMock
+
+    from flowstate.bridge import BridgeResult
+
+    bridge = MagicMock()
+    bridge.run.side_effect = [
+        BridgeResult(success=True, output="   ", exit_code=0),
+        BridgeResult(success=True, output="REAL", exit_code=0),
+    ]
+
+    adapter = ResearchAdapter(root=tmp_path, dry_run=False, bridge=bridge)
+    answers = InterviewAnswers(research_focus="websockets")
+    adapter.execute(answers)
+
+    assert bridge.run.call_count == 2
+    report = (tmp_path / "research" / "report.md").read_text()
+    assert "REAL" in report
+
+
+def test_research_uses_max_turns_six(tmp_path: Path):
+    """Each bridge.run() call uses max_turns == _RESEARCH_MAX_TURNS == 6."""
+    from unittest.mock import MagicMock
+
+    from flowstate.bridge import BridgeResult
+    from flowstate.tools.research import _RESEARCH_MAX_TURNS
+
+    bridge = MagicMock()
+    bridge.run.return_value = BridgeResult(success=True, output="x", exit_code=0)
+
+    adapter = ResearchAdapter(root=tmp_path, dry_run=False, bridge=bridge)
+    answers = InterviewAnswers(research_focus="websockets")
+    adapter.execute(answers)
+
+    assert _RESEARCH_MAX_TURNS == 6
+    call_kwargs = bridge.run.call_args[1]
+    assert call_kwargs["max_turns"] == _RESEARCH_MAX_TURNS
+
+
+def test_research_dry_run_zero_bridge_calls(tmp_path: Path):
+    """dry_run=True makes zero bridge.run() calls and still writes the mock report."""
+    from unittest.mock import MagicMock
+
+    bridge = MagicMock()
+    adapter = ResearchAdapter(root=tmp_path, dry_run=True, bridge=bridge)
+    answers = InterviewAnswers(research_focus="websockets")
+    adapter.execute(answers)
+
+    assert bridge.run.call_count == 0
+    assert (tmp_path / "research" / "report.md").exists()
