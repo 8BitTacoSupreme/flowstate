@@ -70,6 +70,124 @@ def test_judge_run_subprocess_error_never_raises(monkeypatch):
     assert judge_run(0, "x", {}).score is None  # degrades, no raise
 
 
+# ---------------------------------------------------------------------------
+# Bounded retry tests (judge_run calls subprocess up to _JUDGE_MAX_ATTEMPTS)
+# ---------------------------------------------------------------------------
+
+
+def test_judge_run_bad_then_good_returns_score_at_2_calls(monkeypatch):
+    """bad-then-good: score returned, exactly 2 subprocess.run calls made."""
+    from unittest.mock import Mock
+
+    monkeypatch.setattr(judge_mod, "_locate_claude", lambda: "/bin/claude")
+
+    call_count = Mock()
+
+    class _Bad:
+        stdout = "not json"
+
+    class _Good:
+        stdout = '{"score": 7, "rationale": "looks good"}'
+
+    responses = [_Bad(), _Good()]
+
+    def _fake_run(*a, **k):
+        call_count()
+        return responses.pop(0)
+
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    r = judge_run(0, "artifacts", {})
+    assert r.score == 7.0
+    assert call_count.call_count == 2
+
+
+def test_judge_run_first_try_good_exactly_1_call(monkeypatch):
+    """first-try-good: exactly 1 subprocess.run call."""
+    from unittest.mock import Mock
+
+    monkeypatch.setattr(judge_mod, "_locate_claude", lambda: "/bin/claude")
+
+    call_count = Mock()
+
+    class _Good:
+        stdout = '{"score": 9, "rationale": "excellent"}'
+
+    def _fake_run(*a, **k):
+        call_count()
+        return _Good()
+
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    r = judge_run(0, "artifacts", {})
+    assert r.score == 9.0
+    assert call_count.call_count == 1
+
+
+def test_judge_run_all_bad_3_attempts_score_none(monkeypatch):
+    """all-bad over 3 attempts → score is None after exactly 3 subprocess.run calls."""
+    from unittest.mock import Mock
+
+    monkeypatch.setattr(judge_mod, "_locate_claude", lambda: "/bin/claude")
+
+    call_count = Mock()
+
+    class _Bad:
+        stdout = "garbage output"
+
+    def _fake_run(*a, **k):
+        call_count()
+        return _Bad()
+
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    r = judge_run(0, "artifacts", {})
+    assert r.score is None
+    assert call_count.call_count == judge_mod._JUDGE_MAX_ATTEMPTS
+
+
+def test_judge_run_subprocess_raises_then_good_returns_score(monkeypatch):
+    """subprocess raising on attempt 1 counts as failed; attempt 2 good → score returned."""
+    from unittest.mock import Mock
+
+    monkeypatch.setattr(judge_mod, "_locate_claude", lambda: "/bin/claude")
+
+    call_count = Mock()
+    attempts: list = [True]  # True = raise on first call
+
+    class _Good:
+        stdout = '{"score": 6, "rationale": "recovered"}'
+
+    def _fake_run(*a, **k):
+        call_count()
+        if attempts:
+            attempts.pop()
+            raise RuntimeError("transient error")
+        return _Good()
+
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    r = judge_run(0, "artifacts", {})
+    assert r.score == 6.0
+    assert call_count.call_count == 2
+
+
+def test_judge_run_early_return_no_subprocess_calls(monkeypatch):
+    """Early-return (no claude / no artifacts) → 0 subprocess calls."""
+    from unittest.mock import Mock
+
+    call_count = Mock()
+
+    # No bridge
+    monkeypatch.setattr(judge_mod, "_locate_claude", lambda: None)
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: call_count())
+    r = judge_run(0, "artifacts", {})
+    assert r.score is None
+    assert call_count.call_count == 0
+
+    # No artifacts
+    monkeypatch.setattr(judge_mod, "_locate_claude", lambda: "/bin/claude")
+    r2 = judge_run(0, "   ", {})
+    assert r2.score is None
+    assert call_count.call_count == 0
+
+
 def test_summarize_trends():
     mk = lambda i, s: JudgeResult(i, s, "")  # noqa: E731
     assert summarize([mk(0, 4), mk(1, 8)])["trend"] == "improving"

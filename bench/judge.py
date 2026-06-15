@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 _JUDGE_TIMEOUT = 180
+_JUDGE_MAX_ATTEMPTS = 3
 # LLM-produced artifacts worth judging (PROJECT.md/ROADMAP.md are deterministic templates).
 _ARTIFACT_FILES = ("research/report.md", "research/strategy.md", "research/brief.md")
 _MAX_ARTIFACT_CHARS = 8000
@@ -104,7 +105,12 @@ def _parse_score(out: str) -> tuple[float | None, str]:
 def judge_run(
     run_index: int, artifacts: str, fixture: dict, *, model: str | None = None
 ) -> JudgeResult:
-    """Score one run's artifacts via ``claude --print``. Never raises."""
+    """Score one run's artifacts via ``claude --print``. Never raises.
+
+    Retries up to _JUDGE_MAX_ATTEMPTS times when the response is unparseable
+    (score is None). Returns the first good score encountered, or a None-score
+    result if all attempts fail.
+    """
     claude = _locate_claude()
     if not claude or not artifacts.strip():
         return JudgeResult(run_index, None, "no judge bridge or no artifacts")
@@ -112,12 +118,17 @@ def judge_run(
     if model:
         cmd += ["--model", model]
     cmd += ["--", _build_prompt(fixture, artifacts)]
-    try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=_JUDGE_TIMEOUT)
-        score, rationale = _parse_score(proc.stdout)
-        return JudgeResult(run_index, score, rationale or "(no rationale parsed)")
-    except Exception as exc:
-        return JudgeResult(run_index, None, f"judge error: {exc}")
+    last_rationale = "(no rationale parsed)"
+    for _ in range(_JUDGE_MAX_ATTEMPTS):
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=_JUDGE_TIMEOUT)
+            score, rationale = _parse_score(proc.stdout)
+            if score is not None:
+                return JudgeResult(run_index, score, rationale or "(no rationale parsed)")
+            last_rationale = rationale or last_rationale
+        except Exception as exc:
+            last_rationale = f"judge error: {exc}"
+    return JudgeResult(run_index, None, last_rationale)
 
 
 def summarize(results: list[JudgeResult]) -> dict:
