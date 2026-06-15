@@ -62,6 +62,7 @@ _LAYERS_MAP: dict[str, frozenset[str] | None] = {
     "none": frozenset(),
     "pack": frozenset({"fixtures", "pack"}),
     "memory": frozenset({"gotchas", "memory", "since_last_run"}),
+    "wiki": frozenset({"fixtures", "wiki"}),
 }
 
 
@@ -73,14 +74,15 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mode", choices=("cheap", "real"), default="cheap")
     parser.add_argument(
         "--layers",
-        choices=("full", "none", "pack", "memory"),
+        choices=("full", "none", "pack", "memory", "wiki"),
         default="full",
         help=(
             "real mode: per-layer context attribution. "
             "full=all layers (default), "
             "none=control arm (empty prefix, isolates compounding), "
             "pack=fixtures+pack (RAG only), "
-            "memory=gotchas+memory+since_last_run (compounding only)."
+            "memory=gotchas+memory+since_last_run (compounding only), "
+            "wiki=fixtures+wiki (distilled-CAG only)."
         ),
     )
     parser.add_argument("--runs", type=int, default=5)

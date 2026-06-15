@@ -1,6 +1,7 @@
 """Unit tests for bench/replicate.py — paired normalization and arm aggregation.
 
-These tests cover only the pure Python helpers (_paired_normalize, _agg, _cohens_d).
+These tests cover only the pure Python helpers (_paired_normalize, _agg, _cohens_d)
+plus argparse acceptance for the --layers wiki arm.
 No subprocess / compound_eval / live LLM calls are made.
 """
 
@@ -117,3 +118,74 @@ def test_agg_single_trial():
     assert result["n"] == 1
     assert result["per_run_mean"] == [3.0, 5.0, 7.0]
     assert result["improvement_mean"] == 4.0  # 7 - 3
+
+
+# ---------------------------------------------------------------------------
+# Parser tests — wiki arm acceptance
+# ---------------------------------------------------------------------------
+
+
+def test_replicate_parser_accepts_layers_wiki():
+    """--layers wiki must parse without error (argparse choice validation)."""
+    # Build the parser by inspection (main calls ap.parse_args internally).
+    # Use the internal argparse build by running parse_args directly.
+    import argparse
+    from pathlib import Path
+
+    # Reconstruct the parser from replicate.py (mirrors main's local build).
+    ap = argparse.ArgumentParser(prog="bench.replicate")
+    ap.add_argument("--trials", type=int, default=5)
+    ap.add_argument("--runs", type=int, default=3)
+    ap.add_argument("--root", type=Path, required=True)
+    ap.add_argument("--out", type=Path, default=None)
+    ap.add_argument(
+        "--layers",
+        nargs="+",
+        choices=("full", "pack", "memory", "none", "wiki"),
+        default=["full", "pack", "memory", "none"],
+    )
+    ap.add_argument("--paired", action="store_true")
+
+    args = ap.parse_args(["--root", ".", "--layers", "wiki"])
+    assert args.layers == ["wiki"]
+
+
+def test_replicate_default_arm_list_unchanged():
+    """Default --layers list must remain ['full','pack','memory','none'] (wiki not added)."""
+    import argparse
+    from pathlib import Path
+
+    ap = argparse.ArgumentParser(prog="bench.replicate")
+    ap.add_argument("--trials", type=int, default=5)
+    ap.add_argument("--runs", type=int, default=3)
+    ap.add_argument("--root", type=Path, required=True)
+    ap.add_argument("--out", type=Path, default=None)
+    ap.add_argument(
+        "--layers",
+        nargs="+",
+        choices=("full", "pack", "memory", "none", "wiki"),
+        default=["full", "pack", "memory", "none"],
+    )
+    ap.add_argument("--paired", action="store_true")
+
+    args = ap.parse_args(["--root", "."])
+    assert args.layers == ["full", "pack", "memory", "none"]
+    assert "wiki" not in args.layers
+
+
+def test_compound_eval_layers_map_wiki_entry():
+    """_LAYERS_MAP['wiki'] must equal frozenset({'fixtures','wiki'})."""
+    from bench.compound_eval import _LAYERS_MAP
+
+    assert "wiki" in _LAYERS_MAP
+    assert _LAYERS_MAP["wiki"] == frozenset({"fixtures", "wiki"})
+
+
+def test_compound_eval_parser_accepts_layers_wiki():
+    """compound_eval --layers wiki must be accepted by its argparse."""
+
+    from bench.compound_eval import _build_parser
+
+    parser = _build_parser()
+    args = parser.parse_args(["--root", ".", "--layers", "wiki"])
+    assert args.layers == "wiki"

@@ -50,6 +50,7 @@ from flowstate.pack import PackResult, run_pack
 _SEPARATOR = "\n\n---\n\n"
 _BUDGET_ENV_VAR = "FLOWSTATE_CONTEXT_BUDGET_TOKENS"
 _PACK_PATH = ".planning/codebase/repomix-pack.xml"
+_WIKI_PATH = ".planning/codebase/wiki.md"
 _FIXTURE_PATH = ".planning/fixtures/starter.json"
 _CONFIG_PATH = ".planning/config.json"
 _DEFAULT_BUDGET_TOKENS = 12_000
@@ -294,6 +295,24 @@ def _read_pack_layer(root: Path) -> str:
         return ""
 
 
+def _read_wiki_layer(root: Path) -> str:
+    """Read the distilled-CAG architecture wiki and format it under '## Codebase Wiki'.
+
+    Returns empty string when the wiki file is absent or unreadable.
+    Never raises.
+    """
+    wiki_path = root / _WIKI_PATH
+    if not wiki_path.exists():
+        return ""
+    try:
+        text = wiki_path.read_text()
+    except Exception:
+        return ""
+    if text:
+        return "## Codebase Wiki\n\n" + text
+    return ""
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Public API
 # ──────────────────────────────────────────────────────────────────────────────
@@ -361,6 +380,14 @@ def build_context_prefix(
     # ── Layer 1: fixtures (most stable) ─────────────────────────────────────
     fixtures_layer = _read_fixtures_layer(root) if _included("fixtures") else ""
 
+    # ── Wiki layer (opt-in only — NEVER routed through _included) ────────────
+    # include_layers=None means all standard layers (byte-identical default path).
+    # Wiki is NOT a standard layer — it is OPT-IN via explicit "wiki" key.
+    # Do not use _included("wiki") here: _included returns True for None (default
+    # path), which would include wiki on every call and break byte-identity.
+    wiki_included = include_layers is not None and "wiki" in include_layers
+    wiki_layer = _read_wiki_layer(root) if wiki_included else ""
+
     # ── Layer 3: gotchas (semi-stable failure signals; built early for budget accounting)
     gotchas_layer = _read_gotchas_layer(root, memory) if _included("gotchas") else ""
 
@@ -383,7 +410,15 @@ def build_context_prefix(
         # accounts for the gotchas cost (Phase-6 CR-01 lesson).
         candidate = _SEPARATOR.join(
             filter(
-                None, [fixtures_layer, pack_raw, gotchas_layer, memory_layer, since_last_run_layer]
+                None,
+                [
+                    fixtures_layer,
+                    wiki_layer,
+                    pack_raw,
+                    gotchas_layer,
+                    memory_layer,
+                    since_last_run_layer,
+                ],
             )
         )
         if _estimate_tokens(candidate) < budget:
@@ -404,6 +439,7 @@ def build_context_prefix(
                         None,
                         [
                             fixtures_layer,
+                            wiki_layer,
                             pack_compressed,
                             gotchas_layer,
                             memory_layer,
@@ -436,7 +472,15 @@ def build_context_prefix(
     # logged explicitly — never silent (Phase-6 CR-01 lesson).
     full_assembly = _SEPARATOR.join(
         filter(
-            None, [fixtures_layer, pack_layer, gotchas_layer, memory_layer, since_last_run_layer]
+            None,
+            [
+                fixtures_layer,
+                wiki_layer,
+                pack_layer,
+                gotchas_layer,
+                memory_layer,
+                since_last_run_layer,
+            ],
         )
     )
     if since_last_run_layer and _estimate_tokens(full_assembly) >= budget:
@@ -446,7 +490,7 @@ def build_context_prefix(
         )
         since_last_run_layer = ""
         full_assembly = _SEPARATOR.join(
-            filter(None, [fixtures_layer, pack_layer, gotchas_layer, memory_layer])
+            filter(None, [fixtures_layer, wiki_layer, pack_layer, gotchas_layer, memory_layer])
         )
     if gotchas_layer and _estimate_tokens(full_assembly) >= budget:
         con.print(
@@ -456,6 +500,13 @@ def build_context_prefix(
         gotchas_layer = ""
 
     # ── Assemble final string ─────────────────────────────────────────────────
-    layers = [fixtures_layer, pack_layer, gotchas_layer, memory_layer, since_last_run_layer]
+    layers = [
+        fixtures_layer,
+        wiki_layer,
+        pack_layer,
+        gotchas_layer,
+        memory_layer,
+        since_last_run_layer,
+    ]
     non_empty = [layer for layer in layers if layer]
     return _SEPARATOR.join(non_empty)

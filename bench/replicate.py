@@ -100,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--layers",
         nargs="+",
-        choices=("full", "pack", "memory", "none"),
+        choices=("full", "pack", "memory", "none", "wiki"),
         default=["full", "pack", "memory", "none"],
         help="Layer arms to replicate. Default: all four arms.",
     )

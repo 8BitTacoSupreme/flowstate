@@ -1086,3 +1086,159 @@ class TestIncludeLayers:
             )
 
         assert result == "", f"Expected empty string, got: {result!r}"
+
+
+# ---------------------------------------------------------------------------
+# Wiki layer (opt-in via include_layers)
+# ---------------------------------------------------------------------------
+
+
+def _make_wiki_file(root: Path, content: str = "# Codebase Wiki\n\nmodule overview\n") -> Path:
+    """Write a fake wiki.md and return its path."""
+    wiki_path = root / ".planning" / "codebase" / "wiki.md"
+    wiki_path.parent.mkdir(parents=True, exist_ok=True)
+    wiki_path.write_text(content)
+    return wiki_path
+
+
+class TestWikiLayer:
+    def test_include_layers_none_excludes_wiki_even_when_present(self, tmp_path: Path):
+        """include_layers=None must NOT include wiki even when wiki.md exists on disk."""
+        _make_fixture_file(tmp_path)
+        _make_wiki_file(tmp_path)
+        memory = _make_memory_stub("")
+
+        with patch("flowstate.context_prefix.run_pack"):
+            result = build_context_prefix(tmp_path, memory, "q", budget_tokens=50000)
+
+        assert "## Codebase Wiki" not in result, (
+            "include_layers=None must not emit wiki (wiki is opt-in only)"
+        )
+
+    def test_no_kwarg_excludes_wiki_even_when_present(self, tmp_path: Path):
+        """Default (no include_layers kwarg) must not include wiki — byte-identical guard."""
+        _make_fixture_file(tmp_path)
+        _make_wiki_file(tmp_path)
+        memory = _make_memory_stub("")
+
+        with patch("flowstate.context_prefix.run_pack"):
+            result_default = build_context_prefix(tmp_path, memory, "q", budget_tokens=50000)
+            result_none = build_context_prefix(
+                tmp_path, memory, "q", budget_tokens=50000, include_layers=None
+            )
+
+        assert "## Codebase Wiki" not in result_default
+        assert result_default == result_none, (
+            "no-kwarg and include_layers=None must remain byte-identical with wiki.md present"
+        )
+
+    def test_include_layers_with_wiki_emits_heading(self, tmp_path: Path):
+        """include_layers=frozenset({'fixtures','wiki'}) + wiki.md present → '## Codebase Wiki' in output."""
+        _make_fixture_file(tmp_path)
+        _make_wiki_file(tmp_path, "# Architecture\n\nAll the modules.\n")
+        memory = _make_memory_stub("")
+
+        with patch("flowstate.context_prefix.run_pack"):
+            result = build_context_prefix(
+                tmp_path,
+                memory,
+                "q",
+                budget_tokens=50000,
+                include_layers=frozenset({"fixtures", "wiki"}),
+            )
+
+        assert "## Codebase Wiki" in result
+        assert "All the modules." in result
+
+    def test_include_layers_with_wiki_includes_fixtures_too(self, tmp_path: Path):
+        """include_layers=frozenset({'fixtures','wiki'}) → both fixtures and wiki present."""
+        _make_fixture_file(tmp_path)
+        _make_wiki_file(tmp_path)
+        memory = _make_memory_stub("## Prior Knowledge\n\nfact\n")
+
+        with patch("flowstate.context_prefix.run_pack"):
+            result = build_context_prefix(
+                tmp_path,
+                memory,
+                "q",
+                budget_tokens=50000,
+                include_layers=frozenset({"fixtures", "wiki"}),
+            )
+
+        assert "## Eval Fixtures" in result
+        assert "## Codebase Wiki" in result
+        # pack/gotchas/memory/since_last_run must be absent
+        assert "<pack>" not in result
+        assert "## Prior Knowledge" not in result
+        assert "## Since Last Run" not in result
+        assert "## Gotchas" not in result
+
+    def test_wiki_before_pack_when_both_present(self, tmp_path: Path):
+        """When wiki + pack both present (via include_layers), wiki precedes pack."""
+        _make_fixture_file(tmp_path)
+        _make_pack_file(tmp_path, "<pack>pack-body</pack>")
+        _make_wiki_file(tmp_path, "wiki body\n")
+        memory = _make_memory_stub("")
+
+        with patch("flowstate.context_prefix.run_pack"):
+            result = build_context_prefix(
+                tmp_path,
+                memory,
+                "q",
+                budget_tokens=50000,
+                include_layers=frozenset({"fixtures", "wiki", "pack"}),
+            )
+
+        wiki_idx = result.find("## Codebase Wiki")
+        pack_idx = result.find("<pack>pack-body</pack>")
+        assert wiki_idx != -1, "## Codebase Wiki not found"
+        assert pack_idx != -1, "pack body not found"
+        assert wiki_idx < pack_idx, "wiki must precede pack"
+
+    def test_wiki_absent_no_exception(self, tmp_path: Path):
+        """include_layers={'fixtures','wiki'} with wiki.md absent → wiki omitted, no exception."""
+        _make_fixture_file(tmp_path)
+        # No wiki.md written
+        memory = _make_memory_stub("")
+
+        with patch("flowstate.context_prefix.run_pack"):
+            result = build_context_prefix(
+                tmp_path,
+                memory,
+                "q",
+                budget_tokens=50000,
+                include_layers=frozenset({"fixtures", "wiki"}),
+            )
+
+        assert "## Codebase Wiki" not in result
+        assert "## Eval Fixtures" in result
+
+    def test_read_wiki_layer_absent_file_returns_empty(self, tmp_path: Path):
+        """_read_wiki_layer on an absent file returns '' and never raises."""
+        from flowstate.context_prefix import _read_wiki_layer
+
+        result = _read_wiki_layer(tmp_path / "no_such_dir")
+        assert result == ""
+
+    def test_read_wiki_layer_empty_file_returns_empty(self, tmp_path: Path):
+        """_read_wiki_layer on an empty wiki.md file returns ''."""
+        from flowstate.context_prefix import _read_wiki_layer
+
+        wiki_path = tmp_path / ".planning" / "codebase" / "wiki.md"
+        wiki_path.parent.mkdir(parents=True, exist_ok=True)
+        wiki_path.write_text("")
+
+        result = _read_wiki_layer(tmp_path)
+        assert result == ""
+
+    def test_read_wiki_layer_with_content_returns_heading_wrapped(self, tmp_path: Path):
+        """_read_wiki_layer with content returns '## Codebase Wiki\n\n' + content."""
+        from flowstate.context_prefix import _read_wiki_layer
+
+        wiki_path = tmp_path / ".planning" / "codebase" / "wiki.md"
+        wiki_path.parent.mkdir(parents=True, exist_ok=True)
+        wiki_path.write_text("module map here\n")
+
+        result = _read_wiki_layer(tmp_path)
+        assert result.startswith("## Codebase Wiki\n\n")
+        assert "module map here" in result
