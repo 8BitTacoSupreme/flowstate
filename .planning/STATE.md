@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-06)
 Phase: Milestone v0.5.0 complete
 Plan: —
 Status: Awaiting next milestone
-Last activity: 2026-06-13 — Completed quick task 260613-m60: research-adapter call resilience (max_turns + retry)
+Last activity: 2026-06-15 — Completed quick task 260615-d4p: wiki arm (distilled-CAG) + judge retry
 
 ## Performance Metrics
 
@@ -140,6 +140,7 @@ None at roadmap start. Implementation order matters: MemoryKind.RUN must be adde
 | 260613-ga5 | Per-layer context-prefix toggle + paired-design bench wiring (runbook Phase 1) — additive `include_layers` kwarg (assembly-time gating, byte-identical default); `--inject on\|off`→`--layers {full,none,pack,memory}`; replicate multi-arm + `--paired` run-0 normalization + per-arm Cohen's d vs `none`; 622 tests @ 92% | 2026-06-13 | 6a7f03a | [260613-ga5-per-layer-context-prefix-toggle-paired-d](./quick/260613-ga5-per-layer-context-prefix-toggle-paired-d/) |
 | 260613-hk2 | Real-repo scaffold preservation (Phase 3 prereq) — `scaffold(root, *, synthetic=True)`; `synthetic=False` preserves kickoff prep (config/budget, real fixtures, pack, PROJECT/ROADMAP, research/, .claude/) and only resets memory.db; `_real_loop` now uses synthetic=False. Unblocks real-repo runs (synthetic scaffold was wiping budget→pack-drop + replacing the judge rubric); 626 tests @ 92% | 2026-06-13 | 7e2e768 | [260613-hk2-real-repo-scaffold-preservation-for-the-](./quick/260613-hk2-real-repo-scaffold-preservation-for-the-/) |
 | 260613-m60 | Research-adapter call resilience — `max_turns` 3→6 + bounded 3-attempt retry per topic in `ResearchAdapter.execute` (success = `br.success and br.output.strip()`; placeholder only after all attempts fail). Fixes flaky "Error: Reached max turns (3)" (~40% rate w/ WebSearch) that gutted reports and made the bench's no-context arm spuriously out-score pack/full; 635 tests @ 92% | 2026-06-13 | 0daf044 | [260613-m60-research-adapter-call-resilience-raise-m](./quick/260613-m60-research-adapter-call-resilience-raise-m/) |
+| 260615-d4p | Wiki arm (distilled-CAG) + judge retry — opt-in `wiki` layer in context_prefix (fixtures→wiki→pack; byte-identical default preserved via separate gate), `--layers wiki` in compound_eval/replicate, `_JUDGE_MAX_ATTEMPTS=3` retry in judge_run (fixes trial-voiding at source, preserves paired alignment), new `bench/wikigen.py` opus digest generator. Enables raw-pack vs distilled-wiki head-to-head; 664 tests @ 92% | 2026-06-15 | 5f189d2 | [260615-d4p-wiki-arm-distilled-cag-in-bench-judge-re](./quick/260615-d4p-wiki-arm-distilled-cag-in-bench-judge-re/) |
 
 ## Session Continuity
 
