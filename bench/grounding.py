@@ -17,6 +17,7 @@ import json
 import math
 import os
 import re
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -36,6 +37,62 @@ _JUDGE_TIMEOUT = 60
 
 # Matches the first YES or NO token in a response (case-insensitive).
 _YESNO_RE = re.compile(r"\b(yes|no)\b", re.IGNORECASE)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# FTS5 retrieval helpers
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def _sanitize_fts_query(query: str) -> str:
+    """Escape a raw string for FTS5 MATCH.
+
+    FTS5 interprets bare words as column names if they match a column,
+    and operators like AND/OR/NOT/NEAR have special meaning.  Wrapping
+    each token in double-quotes forces literal matching.  Embedded
+    double-quotes are stripped from each token so a query like 'bar"'
+    cannot break out of the quoted FTS5 string.
+    """
+    tokens = query.split()
+    if not tokens:
+        return query
+    return " ".join(f'"{t.replace(chr(34), "")}"' for t in tokens)
+
+
+def _retrieve_wiki(wiki_dir: Path, query: str, k: int) -> list[tuple[str, str]]:
+    """Return up to k (path, content) pairs from wiki_dir, most-relevant first via FTS5/BM25.
+
+    Never raises — any exception is caught, printed, and [] is returned.
+    Missing or empty wiki_dir and blank queries also return [].
+    """
+    try:
+        if not wiki_dir or not wiki_dir.is_dir():
+            return []
+        safe = _sanitize_fts_query(query)
+        if not safe.strip():
+            return []
+        conn = sqlite3.connect(":memory:")
+        try:
+            conn.execute(
+                "CREATE VIRTUAL TABLE docs USING fts5("
+                "path UNINDEXED, content, tokenize='porter unicode61')"
+            )
+            for p in sorted(wiki_dir.glob("**/*.md")):
+                try:
+                    text = p.read_text(errors="ignore")
+                    conn.execute("INSERT INTO docs (path, content) VALUES (?, ?)", (str(p), text))
+                except Exception:
+                    continue
+            rows = conn.execute(
+                "SELECT path, content FROM docs WHERE docs MATCH ? ORDER BY rank LIMIT ?",
+                (safe, k),
+            ).fetchall()
+        finally:
+            conn.close()
+        return [(r[0], r[1]) for r in rows]
+    except Exception as exc:
+        print(f"note: wiki retrieval failed: {exc}")
+        return []
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -156,7 +213,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--layers",
         nargs="+",
-        choices=("full", "none", "pack", "memory", "wiki"),
+        choices=("full", "none", "pack", "memory", "wiki", "wikirag"),
         default=["none", "pack", "wiki"],
     )
     parser.add_argument("--trials", type=int, default=2)
@@ -164,6 +221,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--judge-models", default="sonnet,sonnet,opus")
     parser.add_argument("--budget-tokens", type=int, default=50000)
     parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument("--wiki-dir", type=Path, default=None)
+    parser.add_argument("--rag-k", type=int, default=3)
     return parser
 
 
@@ -189,19 +248,35 @@ def main(argv: list[str] | None = None) -> int:
         judge_models = [m.strip() for m in args.judge_models.split(",") if m.strip()]
         root = args.root
 
+        # Budget in chars for wikirag prefix truncation (4 chars ≈ 1 token).
+        budget_chars = args.budget_tokens * 4
+
         # Collect per-arm records across all trials x probes.
         arm_records: dict[str, list[dict]] = {arm: [] for arm in args.layers}
 
         for trial in range(args.trials):
             for arm in args.layers:
+                # wikirag guard: requires --wiki-dir; skip arm if absent.
+                if arm == "wikirag" and args.wiki_dir is None:
+                    print("wikirag arm requires --wiki-dir; skipping")
+                    continue
+
                 for probe in probes:
-                    with MemoryStore(root=root) as mem:
-                        prefix = build_context_prefix(
-                            root,
-                            mem,
-                            query=probe["question"],
-                            include_layers=_LAYERS_MAP[arm],
-                        )
+                    if arm == "wikirag":
+                        # Retrieval arm: FTS5/BM25 over wiki dir — no MemoryStore, no build_context_prefix.
+                        hits = _retrieve_wiki(args.wiki_dir, probe["question"], args.rag_k)
+                        prefix = ("\n\n---\n\n".join(content for _, content in hits))[:budget_chars]
+                        retrieved = [path for path, _ in hits]
+                    else:
+                        with MemoryStore(root=root) as mem:
+                            prefix = build_context_prefix(
+                                root,
+                                mem,
+                                query=probe["question"],
+                                include_layers=_LAYERS_MAP[arm],
+                            )
+                        retrieved = []
+
                     answer = _answer(prefix, probe["question"], args.answer_model)
                     if answer == "":
                         votes = [None] * len(judge_models)
@@ -219,8 +294,13 @@ def main(argv: list[str] | None = None) -> int:
                                 "YES" if v is True else "NO" if v is False else "?" for v in votes
                             ],
                             "majority": majority,
+                            "retrieved": retrieved,
                         }
                     )
+
+        # Guard: if every arm produced zero records (e.g. wikirag-only without --wiki-dir), exit non-zero.
+        if all(len(v) == 0 for v in arm_records.values()):
+            return 1
 
         # Aggregate per arm.
         arms: dict[str, dict] = {}

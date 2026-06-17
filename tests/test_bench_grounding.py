@@ -428,3 +428,156 @@ def test_arm_prefix_uses_layers_map(monkeypatch, tmp_path: Path):
     assert rc == 0
     assert g._LAYERS_MAP["none"] in seen_layers
     assert g._LAYERS_MAP["wiki"] in seen_layers
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# _retrieve_wiki tests — real temp FTS5 corpus; no subprocess
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def test_retrieve_wiki_ranks_match_first(tmp_path: Path):
+    """doc with unique query terms ranks first; result <=k and non-empty."""
+    (tmp_path / "a.md").write_text("apples and oranges in a fruit basket")
+    (tmp_path / "b.md").write_text("the quantum chromodynamics gluon lagrangian")
+    (tmp_path / "c.md").write_text("weather forecast rain tomorrow")
+
+    results = g._retrieve_wiki(tmp_path, "gluon chromodynamics", 3)
+
+    assert results, "expected non-empty results"
+    assert len(results) <= 3
+    assert results[0][0].endswith("b.md"), f"expected b.md first, got {results[0][0]}"
+
+
+def test_retrieve_wiki_respects_k(tmp_path: Path):
+    """k=2 caps results even when more docs match."""
+    for i in range(5):
+        (tmp_path / f"doc{i}.md").write_text(f"common keyword document {i}")
+
+    results = g._retrieve_wiki(tmp_path, "common keyword", 2)
+
+    assert len(results) <= 2
+
+
+def test_retrieve_wiki_missing_and_empty_dir(tmp_path: Path):
+    """Missing dir -> []; real but empty dir -> []."""
+    assert g._retrieve_wiki(tmp_path / "nope", "q", 3) == []
+
+    empty = tmp_path / "empty_wiki"
+    empty.mkdir()
+    assert g._retrieve_wiki(empty, "q", 3) == []
+
+
+def test_retrieve_wiki_nonsense_query_never_raises(tmp_path: Path):
+    """Special-char query and empty query both return a list and do not raise."""
+    (tmp_path / "doc.md").write_text("some content about things")
+
+    result1 = g._retrieve_wiki(tmp_path, 'foo "bar" AND baz! OR (qux)', 3)
+    assert isinstance(result1, list)
+    assert len(result1) <= 3
+
+    result2 = g._retrieve_wiki(tmp_path, "", 3)
+    assert isinstance(result2, list)
+    assert len(result2) <= 3
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# _sanitize_fts_query tests
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def test_sanitize_fts_query_handles_special_chars():
+    """Sanitized string does not raise and executes against a real in-memory FTS5 table."""
+    import sqlite3
+
+    raw = 'foo "bar" AND baz!'
+    safe = g._sanitize_fts_query(raw)
+
+    assert isinstance(safe, str), "must return a string"
+
+    # Confirm MATCH with the sanitized string executes without OperationalError.
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE VIRTUAL TABLE t USING fts5(content, tokenize='porter unicode61')")
+    conn.execute("INSERT INTO t (content) VALUES (?)", ("foo bar baz sample text",))
+    # Should not raise.
+    rows = conn.execute("SELECT content FROM t WHERE t MATCH ?", (safe,)).fetchall()
+    conn.close()
+    assert isinstance(rows, list)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# wikirag arm integration tests
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def test_wikirag_arm_records_retrieved_and_skips_bcp(monkeypatch, tmp_path: Path):
+    """wikirag arm records retrieved paths; build_context_prefix is NOT called."""
+    wiki_dir = tmp_path / "wiki"
+    wiki_dir.mkdir()
+
+    monkeypatch.setattr(g, "_retrieve_wiki", lambda d, q, k: [("/w/article1.md", "ctx body")])
+
+    bcp_mock = MagicMock(return_value="")
+    monkeypatch.setattr(g, "build_context_prefix", bcp_mock)
+    monkeypatch.setattr(g, "_answer", lambda p, q, m: "ans")
+    monkeypatch.setattr(g, "_factcheck", lambda a, gt, m: True)
+
+    probes_file = tmp_path / "probes.json"
+    probes_file.write_text(json.dumps([{"id": "p1", "question": "Q?", "ground_truth": "GT"}]))
+    out_file = tmp_path / "out.json"
+
+    rc = g.main(
+        [
+            "--root",
+            str(tmp_path),
+            "--probes",
+            str(probes_file),
+            "--layers",
+            "wikirag",
+            "--wiki-dir",
+            str(wiki_dir),
+            "--trials",
+            "1",
+            "--judge-models",
+            "m1",
+            "--out",
+            str(out_file),
+        ]
+    )
+
+    assert rc == 0
+    data = json.loads(out_file.read_text())
+    per_probe = data["arms"]["wikirag"]["per_probe"]
+    assert per_probe[0]["retrieved"] == ["/w/article1.md"]
+    assert per_probe[0]["majority"] is True
+    assert bcp_mock.call_count == 0, "build_context_prefix must NOT be called for wikirag arm"
+
+
+def test_wikirag_no_dir_clear_message_no_subprocess(monkeypatch, tmp_path: Path, capsys):
+    """wikirag-only without --wiki-dir: rc!=0, zero subprocess calls, message mentions wiki-dir."""
+    run_mock = MagicMock()
+    monkeypatch.setattr("subprocess.run", run_mock)
+    monkeypatch.setattr(g, "MemoryStore", _Mem)
+    monkeypatch.setattr(g, "build_context_prefix", _bcp)
+
+    probes_file = tmp_path / "probes.json"
+    probes_file.write_text(json.dumps([{"id": "p1", "question": "Q?", "ground_truth": "GT"}]))
+
+    rc = g.main(
+        [
+            "--root",
+            str(tmp_path),
+            "--probes",
+            str(probes_file),
+            "--layers",
+            "wikirag",
+            "--trials",
+            "1",
+            "--judge-models",
+            "m1",
+        ]
+    )
+
+    assert rc != 0
+    assert run_mock.call_count == 0
+    out = capsys.readouterr().out
+    assert "wiki-dir" in out, f"expected 'wiki-dir' in output, got: {out!r}"
