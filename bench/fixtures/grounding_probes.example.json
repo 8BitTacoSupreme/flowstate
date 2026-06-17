@@ -1,0 +1,20 @@
+[
+  {
+    "id": "q1",
+    "question": "What is the name of the CLI entry point for this project?",
+    "ground_truth": "flowstate",
+    "source": "pyproject.toml entry_points"
+  },
+  {
+    "id": "q2",
+    "question": "What is the minimum test coverage percentage enforced by the project?",
+    "ground_truth": "80%",
+    "source": "pyproject.toml cov-fail-under"
+  },
+  {
+    "id": "q3",
+    "question": "Which SQLite extension does the memory store use for full-text search?",
+    "ground_truth": "FTS5",
+    "source": "flowstate/memory.py schema"
+  }
+]
