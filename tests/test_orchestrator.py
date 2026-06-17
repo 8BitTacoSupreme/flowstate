@@ -169,6 +169,27 @@ class TestMakeBridgeAllowedTools:
         bridge = _make_bridge(tmp_path, dry_run=True, preferences=state.preferences)
         assert "mcp__repomix" in bridge.config.allowed_tools
 
+    def test_prompt_caching_true_threads_into_bridge(self, tmp_path: Path):
+        """preferences.enable_prompt_caching_1h=True is reflected in bridge config."""
+        state = FlowStateModel()
+        state.preferences.enable_prompt_caching_1h = True
+
+        bridge = _make_bridge(tmp_path, dry_run=True, preferences=state.preferences)
+        assert bridge.config.enable_prompt_caching_1h is True
+
+    def test_prompt_caching_false_threads_into_bridge(self, tmp_path: Path):
+        """preferences.enable_prompt_caching_1h=False is reflected in bridge config."""
+        state = FlowStateModel()
+        state.preferences.enable_prompt_caching_1h = False
+
+        bridge = _make_bridge(tmp_path, dry_run=True, preferences=state.preferences)
+        assert bridge.config.enable_prompt_caching_1h is False
+
+    def test_no_preferences_leaves_bridge_default_false(self, tmp_path: Path):
+        """_make_bridge with no preferences leaves BridgeConfig at its default False."""
+        bridge = _make_bridge(tmp_path, dry_run=True)
+        assert bridge.config.enable_prompt_caching_1h is False
+
 
 def test_build_context_prefix_called_once_and_byte_identical_across_adapters(
     tmp_path: Path, monkeypatch

@@ -110,6 +110,8 @@ def _make_bridge(root: Path, dry_run: bool, preferences=None) -> ClaudeBridge:
             kwargs["max_budget_usd"] = preferences.max_budget_usd
         if preferences.effort:
             kwargs["effort"] = preferences.effort
+        # Unconditional: False is meaningful (opt out of 1h cache TTL).
+        kwargs["enable_prompt_caching_1h"] = preferences.enable_prompt_caching_1h
     config = BridgeConfig(**kwargs)
     return ClaudeBridge(config=config, dry_run=dry_run)
 

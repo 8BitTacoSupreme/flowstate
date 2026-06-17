@@ -138,6 +138,12 @@ def test_preferences_model_fields():
     assert state.preferences.effort == ""
 
 
+def test_preferences_enable_prompt_caching_1h_default():
+    """enable_prompt_caching_1h defaults to True."""
+    prefs = FlowStateModel().preferences
+    assert prefs.enable_prompt_caching_1h is True
+
+
 def test_preferences_model_roundtrip(tmp_path: Path):
     """Model preferences survive save/load."""
     state = FlowStateModel()
@@ -150,6 +156,44 @@ def test_preferences_model_roundtrip(tmp_path: Path):
     assert loaded.preferences.model == "haiku"
     assert loaded.preferences.max_budget_usd == 0.50
     assert loaded.preferences.effort == "low"
+
+
+def test_preferences_prompt_caching_roundtrip_false(tmp_path: Path):
+    """enable_prompt_caching_1h=False survives save/load."""
+    state = FlowStateModel()
+    state.preferences.enable_prompt_caching_1h = False
+    save_state(state, tmp_path)
+
+    loaded = load_state(tmp_path)
+    assert loaded.preferences.enable_prompt_caching_1h is False
+
+
+def test_load_state_without_caching_field_defaults_true(tmp_path: Path):
+    """Existing flowstate.json without enable_prompt_caching_1h loads with default True."""
+    raw = {
+        "version": "0.4.0",
+        "preferences": {
+            "project_name": "legacy-proj",
+            "dry_run": False,
+            "auto_branch_on_hardening": True,
+            "model": "",
+            "max_budget_usd": None,
+            "effort": "",
+            # enable_prompt_caching_1h intentionally absent
+        },
+        "tools": {
+            "research": {"status": "ready"},
+            "strategy": {"status": "ready"},
+            "gsd": {"status": "ready"},
+            "discipline": {"status": "ready"},
+        },
+        "install_manifest": [],
+    }
+    import json as _json
+
+    (tmp_path / "flowstate.json").write_text(_json.dumps(raw))
+    loaded = load_state(tmp_path)
+    assert loaded.preferences.enable_prompt_caching_1h is True
 
 
 def test_load_v010_state_file(tmp_path: Path):

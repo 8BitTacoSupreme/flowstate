@@ -42,6 +42,10 @@ class ProjectPreferences(BaseModel):
     model: str = ""
     max_budget_usd: float | None = None
     effort: str = ""
+    # Raise Anthropic prompt-cache TTL 5m -> 1h so cache survives between pipeline
+    # steps (research can run minutes). Trades higher 1h cache-write cost for
+    # cross-step retention on eligible API-key accounts; harmless no-op otherwise.
+    enable_prompt_caching_1h: bool = True
 
 
 class InstallEntry(BaseModel):
