@@ -177,95 +177,102 @@ def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
 
     # Set budget env var FIRST so build_context_prefix/_load_budget can honor it.
+    # Save and restore so test suites running main() are not polluted.
+    _prev_budget = os.environ.get("FLOWSTATE_CONTEXT_BUDGET_TOKENS")
     os.environ["FLOWSTATE_CONTEXT_BUDGET_TOKENS"] = str(args.budget_tokens)
+    try:
+        probes = _load_probes(args.probes)
+        if probes is None:
+            print(f"no usable probes in {args.probes}")
+            return 1
 
-    probes = _load_probes(args.probes)
-    if probes is None:
-        print(f"no usable probes in {args.probes}")
-        return 1
+        judge_models = [m.strip() for m in args.judge_models.split(",") if m.strip()]
+        root = args.root
 
-    judge_models = [m.strip() for m in args.judge_models.split(",") if m.strip()]
-    root = args.root
+        # Collect per-arm records across all trials x probes.
+        arm_records: dict[str, list[dict]] = {arm: [] for arm in args.layers}
 
-    # Collect per-arm records across all trials x probes.
-    arm_records: dict[str, list[dict]] = {arm: [] for arm in args.layers}
-
-    for trial in range(args.trials):
-        for arm in args.layers:
-            for probe in probes:
-                with MemoryStore(root=root) as mem:
-                    prefix = build_context_prefix(
-                        root,
-                        mem,
-                        query=probe["question"],
-                        include_layers=_LAYERS_MAP[arm],
+        for trial in range(args.trials):
+            for arm in args.layers:
+                for probe in probes:
+                    with MemoryStore(root=root) as mem:
+                        prefix = build_context_prefix(
+                            root,
+                            mem,
+                            query=probe["question"],
+                            include_layers=_LAYERS_MAP[arm],
+                        )
+                    answer = _answer(prefix, probe["question"], args.answer_model)
+                    if answer == "":
+                        votes = [None] * len(judge_models)
+                    else:
+                        votes = [_factcheck(answer, probe["ground_truth"], m) for m in judge_models]
+                    yes = sum(1 for v in votes if v is True)
+                    majority = yes > len(judge_models) / 2
+                    arm_records[arm].append(
+                        {
+                            "arm": arm,
+                            "trial": trial,
+                            "probe_id": probe["id"],
+                            "answer_chars": len(answer),
+                            "votes": [
+                                "YES" if v is True else "NO" if v is False else "?" for v in votes
+                            ],
+                            "majority": majority,
+                        }
                     )
-                answer = _answer(prefix, probe["question"], args.answer_model)
-                if answer == "":
-                    votes = [None] * len(judge_models)
-                else:
-                    votes = [_factcheck(answer, probe["ground_truth"], m) for m in judge_models]
-                yes = sum(1 for v in votes if v is True)
-                majority = yes > len(judge_models) / 2
-                arm_records[arm].append(
-                    {
-                        "arm": arm,
-                        "trial": trial,
-                        "probe_id": probe["id"],
-                        "answer_chars": len(answer),
-                        "votes": [
-                            "YES" if v is True else "NO" if v is False else "?" for v in votes
-                        ],
-                        "majority": majority,
-                    }
-                )
 
-    # Aggregate per arm.
-    arms: dict[str, dict] = {}
-    for arm, records in arm_records.items():
-        n = len(records)
-        successes = sum(1 for r in records if r["majority"])
-        accuracy = successes / n if n else 0.0
-        wilson_low, wilson_high = _wilson(successes, n)
-        arms[arm] = {
-            "accuracy": accuracy,
-            "n": n,
-            "wilson_low": wilson_low,
-            "wilson_high": wilson_high,
-            "per_probe": records,
+        # Aggregate per arm.
+        arms: dict[str, dict] = {}
+        for arm, records in arm_records.items():
+            n = len(records)
+            successes = sum(1 for r in records if r["majority"])
+            accuracy = successes / n if n else 0.0
+            wilson_low, wilson_high = _wilson(successes, n)
+            arms[arm] = {
+                "accuracy": accuracy,
+                "n": n,
+                "wilson_low": wilson_low,
+                "wilson_high": wilson_high,
+                "per_probe": records,
+            }
+
+        # Delta vs none arm (only when "none" arm was evaluated).
+        accuracy_delta_vs_none: dict[str, float] = {}
+        if "none" in arms:
+            accuracy_delta_vs_none = {
+                a: round(arms[a]["accuracy"] - arms["none"]["accuracy"], 3) for a in arms
+            }
+
+        output = {
+            "probes_file": str(args.probes),
+            "n_probes": len(probes),
+            "trials": args.trials,
+            "answer_model": args.answer_model,
+            "judge_models": judge_models,
+            "arms": arms,
+            "accuracy_delta_vs_none": accuracy_delta_vs_none,
         }
 
-    # Delta vs none arm (only when "none" arm was evaluated).
-    accuracy_delta_vs_none: dict[str, float] = {}
-    if "none" in arms:
-        accuracy_delta_vs_none = {
-            a: round(arms[a]["accuracy"] - arms["none"]["accuracy"], 3) for a in arms
-        }
+        if args.out is not None:
+            try:
+                args.out.write_text(json.dumps(output, indent=2))
+            except Exception as exc:
+                print(f"warning: could not write results to {args.out}: {exc}")
 
-    output = {
-        "probes_file": str(args.probes),
-        "n_probes": len(probes),
-        "trials": args.trials,
-        "answer_model": args.answer_model,
-        "judge_models": judge_models,
-        "arms": arms,
-        "accuracy_delta_vs_none": accuracy_delta_vs_none,
-    }
+        # Console summary table.
+        print(f"\n{'arm':<10} {'accuracy':>10} {'wilson_ci':>20} {'n':>6}")
+        print("-" * 50)
+        for arm, data in arms.items():
+            ci = f"[{data['wilson_low']:.3f}, {data['wilson_high']:.3f}]"
+            print(f"{arm:<10} {data['accuracy']:>10.3f} {ci:>20} {data['n']:>6}")
 
-    if args.out is not None:
-        try:
-            args.out.write_text(json.dumps(output, indent=2))
-        except Exception as exc:
-            print(f"warning: could not write results to {args.out}: {exc}")
-
-    # Console summary table.
-    print(f"\n{'arm':<10} {'accuracy':>10} {'wilson_ci':>20} {'n':>6}")
-    print("-" * 50)
-    for arm, data in arms.items():
-        ci = f"[{data['wilson_low']:.3f}, {data['wilson_high']:.3f}]"
-        print(f"{arm:<10} {data['accuracy']:>10.3f} {ci:>20} {data['n']:>6}")
-
-    return 0
+        return 0
+    finally:
+        if _prev_budget is None:
+            os.environ.pop("FLOWSTATE_CONTEXT_BUDGET_TOKENS", None)
+        else:
+            os.environ["FLOWSTATE_CONTEXT_BUDGET_TOKENS"] = _prev_budget
 
 
 if __name__ == "__main__":
