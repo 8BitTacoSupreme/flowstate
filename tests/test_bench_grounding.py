@@ -7,6 +7,8 @@ import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 import bench.grounding as g
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -581,3 +583,225 @@ def test_wikirag_no_dir_clear_message_no_subprocess(monkeypatch, tmp_path: Path,
     assert run_mock.call_count == 0
     out = capsys.readouterr().out
     assert "wiki-dir" in out, f"expected 'wiki-dir' in output, got: {out!r}"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# wikivec arm tests — injected fake embed_fn; no fastembed/network
+# ──────────────────────────────────────────────────────────────────────────────
+
+try:
+    import sqlite_vec  # noqa: F401
+
+    _HAS_VEC = True
+except Exception:
+    _HAS_VEC = False
+
+
+def _fake_embed_factory(keyword: str, match_vec: list[float], default_vec: list[float]):
+    """Return a fake embed_fn that maps texts containing keyword to match_vec, others to default_vec."""
+
+    def embed_fn(texts: list[str]) -> list[list[float]]:
+        result = []
+        for t in texts:
+            result.append(match_vec[:] if keyword in t else default_vec[:])
+        return result
+
+    return embed_fn
+
+
+@pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
+def test_retrieve_vec_ranks_semantic_match_first(tmp_path: Path):
+    """Fake embed_fn maps compliance doc + query to same vector; compliance doc ranks first."""
+    (tmp_path / "compliance.md").write_text("compliance audit requirements regulatory framework")
+    (tmp_path / "producer.md").write_text("producer throughput acks lz4 compression settings")
+    (tmp_path / "consumer.md").write_text("consumer group rebalance offset commit strategy")
+
+    # compliance doc and query share [1,0,0,0]; others get [0,1,0,0] (far away by L2)
+    embed_fn = _fake_embed_factory("compliance", [1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0])
+
+    results = g._retrieve_vec(tmp_path, "compliance audit query", 3, embed_fn)
+
+    assert results, "expected non-empty results"
+    assert len(results) <= 3
+    assert results[0][0].endswith("compliance.md"), (
+        f"expected compliance.md first, got {results[0][0]}"
+    )
+
+
+@pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
+def test_retrieve_vec_respects_k(tmp_path: Path):
+    """k=2 caps results even when more docs exist."""
+    for i in range(5):
+        (tmp_path / f"doc{i}.md").write_text(f"common content document number {i}")
+
+    embed_fn = _fake_embed_factory("common", [1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0])
+    results = g._retrieve_vec(tmp_path, "common content query", 2, embed_fn)
+
+    assert len(results) <= 2
+
+
+def test_retrieve_vec_missing_and_empty_dir(tmp_path: Path):
+    """Missing dir -> []; empty dir -> []; blank query -> []."""
+    embed_fn = _fake_embed_factory("x", [1.0, 0.0], [0.0, 1.0])
+
+    assert g._retrieve_vec(tmp_path / "nope", "q", 3, embed_fn) == []
+
+    empty = tmp_path / "empty_wiki"
+    empty.mkdir()
+    assert g._retrieve_vec(empty, "q", 3, embed_fn) == []
+
+    (tmp_path / "doc.md").write_text("some content")
+    assert g._retrieve_vec(tmp_path, "", 3, embed_fn) == []
+
+
+def test_retrieve_vec_never_raises_on_bad_embed_fn(tmp_path: Path):
+    """embed_fn that raises -> returns [] (does not propagate exception)."""
+    (tmp_path / "doc.md").write_text("some content")
+
+    def bad_embed_fn(texts):
+        raise RuntimeError("embedding service unavailable")
+
+    result = g._retrieve_vec(tmp_path, "query", 3, bad_embed_fn)
+    assert result == []
+
+
+@pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
+def test_wikivec_arm_records_retrieved_and_skips_bcp(monkeypatch, tmp_path: Path):
+    """wikivec arm records retrieved paths; build_context_prefix NOT called; embed_model in output."""
+    wiki_dir = tmp_path / "wiki"
+    wiki_dir.mkdir()
+
+    monkeypatch.setattr(g, "_retrieve_vec", lambda d, q, k, fn: [("/w/x.md", "wiki body")])
+    monkeypatch.setattr(g, "_default_embedder", lambda model: lambda texts: [[1.0, 0.0]])
+
+    bcp_mock = MagicMock(return_value="")
+    monkeypatch.setattr(g, "build_context_prefix", bcp_mock)
+    monkeypatch.setattr(g, "_answer", lambda p, q, m: "ans")
+    monkeypatch.setattr(g, "_factcheck", lambda a, gt, m: True)
+
+    probes_file = tmp_path / "probes.json"
+    probes_file.write_text(json.dumps([{"id": "p1", "question": "Q?", "ground_truth": "GT"}]))
+    out_file = tmp_path / "out.json"
+
+    rc = g.main(
+        [
+            "--root",
+            str(tmp_path),
+            "--probes",
+            str(probes_file),
+            "--layers",
+            "wikivec",
+            "--wiki-dir",
+            str(wiki_dir),
+            "--trials",
+            "1",
+            "--judge-models",
+            "m1",
+            "--out",
+            str(out_file),
+        ]
+    )
+
+    assert rc == 0
+    data = json.loads(out_file.read_text())
+    per_probe = data["arms"]["wikivec"]["per_probe"]
+    assert per_probe[0]["retrieved"] == ["/w/x.md"]
+    assert per_probe[0]["majority"] is True
+    assert bcp_mock.call_count == 0, "build_context_prefix must NOT be called for wikivec arm"
+    assert "embed_model" in data
+
+
+def test_wikivec_no_dir_clear_message_no_subprocess(monkeypatch, tmp_path: Path, capsys):
+    """wikivec-only without --wiki-dir: rc!=0, zero subprocess calls, message mentions wiki-dir."""
+    run_mock = MagicMock()
+    monkeypatch.setattr("subprocess.run", run_mock)
+    monkeypatch.setattr(g, "MemoryStore", _Mem)
+    monkeypatch.setattr(g, "build_context_prefix", _bcp)
+
+    probes_file = tmp_path / "probes.json"
+    probes_file.write_text(json.dumps([{"id": "p1", "question": "Q?", "ground_truth": "GT"}]))
+
+    rc = g.main(
+        [
+            "--root",
+            str(tmp_path),
+            "--probes",
+            str(probes_file),
+            "--layers",
+            "wikivec",
+            "--trials",
+            "1",
+            "--judge-models",
+            "m1",
+        ]
+    )
+
+    assert rc != 0
+    assert run_mock.call_count == 0
+    out = capsys.readouterr().out
+    assert "wiki-dir" in out, f"expected 'wiki-dir' in output, got: {out!r}"
+
+
+def test_default_embedder_raises_when_fastembed_missing(monkeypatch):
+    """_default_embedder raises RuntimeError when fastembed import fails."""
+    import builtins
+
+    real_import = builtins.__import__
+
+    def patched_import(name, *args, **kwargs):
+        if name == "fastembed":
+            raise ImportError("No module named 'fastembed'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", patched_import)
+
+    # Remove cached module if present so our patched import is triggered.
+    import sys
+
+    sys.modules.pop("fastembed", None)
+
+    import pytest as _pytest
+
+    with _pytest.raises(RuntimeError, match="fastembed"):
+        g._default_embedder("any-model")
+
+
+def test_default_embedder_unavailable_degrades_gracefully(monkeypatch, tmp_path: Path, capsys):
+    """When _default_embedder raises, wikivec arm is skipped; other arms still produce records."""
+    monkeypatch.setattr(
+        g,
+        "_default_embedder",
+        lambda m: (_ for _ in ()).throw(RuntimeError("fastembed not found")),
+    )
+    monkeypatch.setattr(g, "build_context_prefix", _bcp)
+    monkeypatch.setattr(g, "MemoryStore", _Mem)
+    monkeypatch.setattr(g, "_answer", lambda p, q, m: "ans")
+    monkeypatch.setattr(g, "_factcheck", lambda a, gt, m: True)
+
+    wiki_dir = tmp_path / "wiki"
+    wiki_dir.mkdir()
+
+    probes_file = tmp_path / "probes.json"
+    probes_file.write_text(json.dumps([{"id": "p1", "question": "Q?", "ground_truth": "GT"}]))
+
+    rc = g.main(
+        [
+            "--root",
+            str(tmp_path),
+            "--probes",
+            str(probes_file),
+            "--layers",
+            "wikivec",
+            "none",
+            "--wiki-dir",
+            str(wiki_dir),
+            "--trials",
+            "1",
+            "--judge-models",
+            "m1",
+        ]
+    )
+
+    assert rc == 0, "harness must not crash when fastembed is unavailable"
+    out = capsys.readouterr().out
+    assert "wikivec arm unavailable" in out, f"expected degradation message, got: {out!r}"
