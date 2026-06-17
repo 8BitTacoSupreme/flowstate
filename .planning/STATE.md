@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-06)
 Phase: Milestone v0.5.0 complete
 Plan: —
 Status: Awaiting next milestone
-Last activity: 2026-06-17 — Completed quick task 260617-dv6: checkable grounding-eval harness
+Last activity: 2026-06-17 — Completed quick task 260617-idb: wikirag retrieval arm
 
 ## Performance Metrics
 
@@ -143,6 +143,7 @@ None at roadmap start. Implementation order matters: MemoryKind.RUN must be adde
 | 260615-d4p | Wiki arm (distilled-CAG) + judge retry — opt-in `wiki` layer in context_prefix (fixtures→wiki→pack; byte-identical default preserved via separate gate), `--layers wiki` in compound_eval/replicate, `_JUDGE_MAX_ATTEMPTS=3` retry in judge_run (fixes trial-voiding at source, preserves paired alignment), new `bench/wikigen.py` opus digest generator. Enables raw-pack vs distilled-wiki head-to-head; 664 tests @ 92% | 2026-06-15 | 5f189d2 | [260615-d4p-wiki-arm-distilled-cag-in-bench-judge-re](./quick/260615-d4p-wiki-arm-distilled-cag-in-bench-judge-re/) |
 | 260616-x15 | Expose `enable_prompt_caching_1h` preference (default True) + thread through `_make_bridge` — keeps Anthropic prompt-cache hits past the 5-min TTL across pipeline steps (cross-step eviction fix). Additive field, no migration; bridge.py already injects the env. Recovered after executor died on API socket error (tests salvaged, 2-line source completed manually); 670 tests @ 92% | 2026-06-17 | 3ee0d29 | [260616-x15-expose-enable-prompt-caching-1h-via-pref](./quick/260616-x15-expose-enable-prompt-caching-1h-via-pref/) |
 | 260617-dv6 | Checkable grounding-eval harness (`bench/grounding.py`) — binary multi-judge fact-check across context arms (build prefix per arm via `_LAYERS_MAP` → answer probe → K judges YES/NO majority → per-arm grounding accuracy + Wilson CI). Sharper than the 0-10 vibe judge; add-only; 682 tests @ 92% | 2026-06-17 | b710cd8 | [260617-dv6-checkable-grounding-eval-harness-bench-g](./quick/260617-dv6-checkable-grounding-eval-harness-bench-g/) |
+| 260617-idb | wikirag retrieval arm — per-probe FTS5/BM25 top-k retrieval over a wiki dir (`--wiki-dir`/`--rag-k`), vs the hand-placed `wiki` oracle. Tests whether the grounding lift survives RETRIEVAL (not hand-placed). Mirrors memory.py FTS5; add-only; 689 tests @ 92% | 2026-06-17 | (merge) | [260617-idb-add-wikirag-retrieval-arm-fts5-bm25-over](./quick/260617-idb-add-wikirag-retrieval-arm-fts5-bm25-over/) |
 
 ## Session Continuity
 
