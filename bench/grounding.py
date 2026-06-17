@@ -8,6 +8,10 @@ score confidence intervals — lower variance than a 0-10 vibe judge.
 ADD-ONLY: do NOT modify pipeline, judge, replicate, compound_eval, or context_prefix.
 Research tooling only — no UI, never-raises throughout, stdlib only
 (math/json/subprocess/argparse/re/os/sys).
+
+fastembed is a bench-only OPTIONAL dependency (``pip install fastembed``). It is imported
+lazily inside ``_default_embedder`` and is used ONLY by the ``wikivec`` arm. Importing
+``bench.grounding`` works without fastembed installed.
 """
 
 from __future__ import annotations
@@ -92,6 +96,83 @@ def _retrieve_wiki(wiki_dir: Path, query: str, k: int) -> list[tuple[str, str]]:
         return [(r[0], r[1]) for r in rows]
     except Exception as exc:
         print(f"note: wiki retrieval failed: {exc}")
+        return []
+
+
+def _default_embedder(model_name: str):
+    """Return an embed_fn(texts) -> list[list[float]] backed by fastembed.
+
+    fastembed is imported lazily here; importing bench.grounding does NOT require it.
+    Raises RuntimeError (with an install hint) if fastembed is unavailable.
+    """
+    try:
+        from fastembed import TextEmbedding  # lazy import — intentional
+
+        model = TextEmbedding(model_name)
+    except Exception as exc:
+        raise RuntimeError(
+            "fastembed is required for the wikivec arm (pip install fastembed): " + str(exc)
+        ) from exc
+
+    def embed_fn(texts: list[str]) -> list[list[float]]:
+        return [[float(x) for x in vec] for vec in model.embed(texts)]
+
+    return embed_fn
+
+
+def _retrieve_vec(wiki_dir: Path, query: str, k: int, embed_fn) -> list[tuple[str, str]]:
+    """Return up to k (path, content) pairs from wiki_dir, most-similar first via sqlite-vec KNN.
+
+    Never raises — any exception is caught, printed, and [] is returned.
+    Missing or empty wiki_dir and blank queries also return [].
+    """
+    try:
+        if not wiki_dir or not wiki_dir.is_dir():
+            return []
+        if not query.strip():
+            return []
+
+        paths: list[str] = []
+        contents: list[str] = []
+        for p in sorted(wiki_dir.glob("**/*.md")):
+            try:
+                text = p.read_text(errors="ignore")
+                if not text.strip():
+                    continue
+                paths.append(str(p))
+                contents.append(text)
+            except Exception:
+                continue
+
+        if not contents:
+            return []
+
+        vectors = embed_fn(contents)
+        qvec = embed_fn([query])[0]
+        dim = len(qvec)
+
+        import sqlite_vec  # local import — runtime dep already confirmed
+
+        conn = sqlite3.connect(":memory:")
+        try:
+            conn.enable_load_extension(True)
+            sqlite_vec.load(conn)
+            conn.execute(f"CREATE VIRTUAL TABLE vec_docs USING vec0(embedding float[{dim}])")
+            for i, vec in enumerate(vectors):
+                conn.execute(
+                    "INSERT INTO vec_docs(rowid, embedding) VALUES (?, ?)",
+                    (i, sqlite_vec.serialize_float32(vec)),
+                )
+            rows = conn.execute(
+                "SELECT rowid, distance FROM vec_docs WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
+                (sqlite_vec.serialize_float32(qvec), k),
+            ).fetchall()
+        finally:
+            conn.close()
+
+        return [(paths[r[0]], contents[r[0]]) for r in rows]
+    except Exception as exc:
+        print(f"note: wikivec retrieval failed: {exc}")
         return []
 
 
@@ -213,7 +294,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--layers",
         nargs="+",
-        choices=("full", "none", "pack", "memory", "wiki", "wikirag"),
+        choices=("full", "none", "pack", "memory", "wiki", "wikirag", "wikivec"),
         default=["none", "pack", "wiki"],
     )
     parser.add_argument("--trials", type=int, default=2)
@@ -223,6 +304,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--wiki-dir", type=Path, default=None)
     parser.add_argument("--rag-k", type=int, default=3)
+    parser.add_argument("--embed-model", default="BAAI/bge-small-en-v1.5")
     return parser
 
 
@@ -248,8 +330,16 @@ def main(argv: list[str] | None = None) -> int:
         judge_models = [m.strip() for m in args.judge_models.split(",") if m.strip()]
         root = args.root
 
-        # Budget in chars for wikirag prefix truncation (4 chars ≈ 1 token).
+        # Budget in chars for wikirag/wikivec prefix truncation (4 chars ≈ 1 token).
         budget_chars = args.budget_tokens * 4
+
+        # Build default embedder once if wikivec is requested with a wiki-dir.
+        embed_fn = None
+        if "wikivec" in args.layers and args.wiki_dir is not None:
+            try:
+                embed_fn = _default_embedder(args.embed_model)
+            except Exception as exc:
+                print(f"wikivec arm unavailable: {exc}")
 
         # Collect per-arm records across all trials x probes.
         arm_records: dict[str, list[dict]] = {arm: [] for arm in args.layers}
@@ -261,10 +351,20 @@ def main(argv: list[str] | None = None) -> int:
                     print("wikirag arm requires --wiki-dir; skipping")
                     continue
 
+                # wikivec guard: requires --wiki-dir and a working embedder.
+                if arm == "wikivec" and (args.wiki_dir is None or embed_fn is None):
+                    print("wikivec arm requires --wiki-dir and fastembed; skipping")
+                    continue
+
                 for probe in probes:
                     if arm == "wikirag":
                         # Retrieval arm: FTS5/BM25 over wiki dir — no MemoryStore, no build_context_prefix.
                         hits = _retrieve_wiki(args.wiki_dir, probe["question"], args.rag_k)
+                        prefix = ("\n\n---\n\n".join(content for _, content in hits))[:budget_chars]
+                        retrieved = [path for path, _ in hits]
+                    elif arm == "wikivec":
+                        # Retrieval arm: sqlite-vec KNN — no MemoryStore, no build_context_prefix.
+                        hits = _retrieve_vec(args.wiki_dir, probe["question"], args.rag_k, embed_fn)
                         prefix = ("\n\n---\n\n".join(content for _, content in hits))[:budget_chars]
                         retrieved = [path for path, _ in hits]
                     else:
@@ -329,6 +429,7 @@ def main(argv: list[str] | None = None) -> int:
             "n_probes": len(probes),
             "trials": args.trials,
             "answer_model": args.answer_model,
+            "embed_model": args.embed_model,
             "judge_models": judge_models,
             "arms": arms,
             "accuracy_delta_vs_none": accuracy_delta_vs_none,
