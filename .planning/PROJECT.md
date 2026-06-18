@@ -12,7 +12,11 @@ Lives at `/Users/jhogan/frameworx`, package `flowstate`, Python 3.12+, Flox-mana
 
 If everything else fails, that compounding loop is what FlowState exists to deliver.
 
-## Current Milestone: v0.6.0 Semantic Retrieval
+## Current Milestone: v0.6.0 Semantic Retrieval — COMPLETE (Phases 9–11)
+
+**Shipped 2026-06-18.** Replaced lexical FTS5/BM25 with sqlite-vec semantic KNN across the memory and wiki layers, opt-in via the optional `[semantic]` embedder extra with byte-identical FTS5 fallback when absent. Phase 9 built the embedding provider + vec0 store (EMB/VEC); Phase 10 wired semantic KNN into `MemoryStore.get_context()` with a distance-floor no-match guard (MEM); Phase 11 added per-run semantic top-k retrieval to the opt-in `context_prefix` wiki layer (WIKI). The wiki retrieval mechanism is production-ready and awaits a curated corpus (deferred WIKI-F1). 749 tests at 92.19% coverage; every phase passed independent verification + adversarial code review (review caught a Critical FTS5-gate regression in Phase 10 and a Critical extension-load window in Phase 9, both fixed before close). Next milestone not yet scoped (`/gsd-complete-milestone` to archive, then `/gsd-new-milestone`).
+
+<details><summary>Original milestone goal + target features</summary>
 
 **Goal:** Replace lexical FTS5/BM25 retrieval with sqlite-vec semantic KNN across the memory and wiki layers, recovering the proven ~0.82 grounding accuracy (≈ oracle) that naive BM25 lost — opt-in via an optional embedder, with byte-identical fallback when absent.
 
@@ -24,6 +28,8 @@ If everything else fails, that compounding loop is what FlowState exists to deli
 - Optional `[semantic]` pip extra (fastembed); graceful degrade to today's lexical path when not installed.
 
 **Key context:** Embedder is an **optional dependency with FTS5 fallback** (settled) — core install stays dep-free, semantic retrieval is opt-in. The default (no-embedder) path must stay **byte-identical** (golden `context_prefix` tests stay green). Tests must NOT require the model/network (inject fake `embed_fn`, `skipif` on `sqlite_vec`). `sqlite-vec` is already a core dep (unused); only the embedder is new (and optional). Proven by the bench arc: `wikivec` (sqlite-vec KNN over fastembed bge-small-en-v1.5, 384-dim) hit **0.825 ≈ oracle 0.800**, surfacing the correct article **17/20** at k=3 vs BM25's 3/20. Authoritative spec: `bench/SEMANTIC_RETRIEVAL_HANDOFF.md`.
+
+</details>
 
 ## Requirements
 
@@ -57,12 +63,13 @@ If everything else fails, that compounding loop is what FlowState exists to deli
 - ✓ **EMB-01..04**: optional embedding provider (`flowstate/embeddings.py`) — lazy fastembed seam (`embed`/`dim`/`configured_dim`/`available`), env>config>default model precedence (`bge-small-en-v1.5`/384-dim), `[semantic]` pip extra; core install stays dep-free — v0.6 / Phase 9
 - ✓ **VEC-01..03**: `memories_vec` vec0 store in `memory.db` keyed to rowid — embed-on-add/update/add_many (savepoint-atomic), lazy batch-capped backfill, dim-mismatch + load-failure degrade to FTS5; opening a store never loads the model or blocks startup — v0.6 / Phase 9
 - ✓ **MEM-01..02**: semantic KNN in `MemoryStore.get_context()` — pure-semantic ranking over `memories_vec` with an L2 distance floor (`_SEMANTIC_MAX_DISTANCE`≈cosine 0.6) for the no-match case (NOT lexical fusion); byte-identical FTS5 fallback when no embedder/vectors; surfaces lexically-disjoint-but-semantically-relevant memories (the proven bench win) — v0.6 / Phase 10
+- ✓ **WIKI-01..02**: per-run semantic top-k retrieval in the opt-in `context_prefix` wiki layer (`_semantic_wiki_layer`, ephemeral in-memory vec0 KNN over a `.planning/codebase/wiki/` corpus, k default 3); byte-identical default path + static `_read_wiki_layer` fallback when embedder/corpus absent; mechanism ready, corpus curation deferred (WIKI-F1) — v0.6 / Phase 11
 
 ### Active
 
-<!-- v0.6.0 Semantic Retrieval — Phases 9–10 shipped; wiki seam is the last phase. -->
+<!-- v0.6.0 Semantic Retrieval complete (Phases 9–11). Next milestone not yet scoped. -->
 
-- ⧗ **WIKI-01..02**: Per-run semantic wiki retrieval in `context_prefix` (byte-identical default path) — v0.6 / Phase 11
+(None — v0.6.0 shipped; run /gsd-complete-milestone to archive, then /gsd-new-milestone.)
 
 ### Out of Scope
 
@@ -129,4 +136,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-18 — v0.6.0 Phase 10 (Semantic Memory Retrieval) complete*
+*Last updated: 2026-06-18 — v0.6.0 Semantic Retrieval milestone complete (Phases 9–11)*
