@@ -18,6 +18,14 @@ from uuid import uuid4
 
 from flowstate.embeddings import Embedder, get_embedder
 
+# Default k for semantic KNN retrieval in get_context.
+# Set to 10 to match the existing FTS5 limit=10 so the char-budget loop
+# sees the same candidate set size — parity preserves token-count growth
+# in the compound-eval enrichment axis. The bench handoff recommends
+# k~3-5 for grounding precision, but get_context is a candidate-retrieval
+# step whose char budget already limits what actually appears in the block.
+_SEMANTIC_K = 10
+
 SCHEMA_SQL = """\
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY
@@ -479,13 +487,60 @@ class MemoryStore:
         self._conn.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
         self._conn.commit()
 
-    def get_context(self, query: str, *, max_tokens: int = 2000) -> str:
+    def _semantic_results(self, query: str, k: int) -> list[SearchResult] | None:
+        """Return KNN-ranked SearchResults for query against memories_vec, or None to fall back.
+
+        Returns None when:
+        - _vec_ready is False or embedder is unavailable
+        - embedder returns an empty list for the query
+        - memories_vec has zero rows (no vectors to rank)
+        - FTS5 finds no lexical match (ensures "no-match → empty" contract is preserved)
+        - any exception (degradation contract: never raises)
+
+        Security: serialized blob and k are bound parameters — query text is
+        never interpolated into SQL (T-10-01).
+        """
+        try:
+            if not self._vec_ready or not self._embedder.available():
+                return None
+            # FTS5 relevance gate: if the query has no lexical match at all,
+            # fall back so "no-match" queries still return "" (preserves golden tests).
+            if not self.search(query, limit=1):
+                return None
+            vecs = self._embedder.embed([query])
+            if not vecs:
+                return None
+            import sqlite_vec  # local import — must be loaded on this conn already
+
+            serialized = sqlite_vec.serialize_float32(vecs[0])
+            knn_rows = self._conn.execute(
+                "SELECT rowid, distance FROM memories_vec "
+                "WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
+                (serialized, k),
+            ).fetchall()
+            if not knn_rows:
+                return None
+            results = []
+            for knn_row in knn_rows:
+                mem_row = self._conn.execute(
+                    "SELECT * FROM memories WHERE rowid=?", (knn_row[0],)
+                ).fetchone()
+                if mem_row is not None:
+                    results.append(SearchResult(entry=_row_to_entry(mem_row), score=knn_row[1]))
+            return results if results else None
+        except Exception:
+            return None
+
+    def get_context(self, query: str, *, max_tokens: int = 2000, k: int = _SEMANTIC_K) -> str:
         """Return markdown-formatted context for prompt injection.
 
-        Searches for relevant memories and formats them as a markdown section.
+        Uses semantic KNN retrieval (memories_vec) when _vec_ready and embedder
+        are both available; falls back to FTS5/BM25 search() otherwise.
         Approximate token budget via character count (1 token ~ 4 chars).
         """
-        results = self.search(query, limit=10)
+        results = self._semantic_results(query, k)
+        if results is None:
+            results = self.search(query, limit=10)
         if not results:
             return ""
 
