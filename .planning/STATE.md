@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.5.0
-milestone_name: Compounding Loop
-status: Awaiting next milestone
-stopped_at: Completed 08-01-PLAN.md — VerifyResult + checker registry + run_verify; 19 tests at 92% coverage
-last_updated: "2026-06-09T15:06:03.914Z"
-last_activity: 2026-06-09 — Milestone v0.5.0 completed and archived
+milestone: v0.6.0
+milestone_name: Semantic Retrieval
+status: planning
+last_updated: "2026-06-18T13:31:17.397Z"
+last_activity: 2026-06-18
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 10
-  completed_plans: 10
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-06)
 
 ## Current Position
 
-Phase: Milestone v0.5.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-17 — Completed quick task 260617-oos: wikivec semantic-retrieval arm
+Status: Defining requirements
+Last activity: 2026-06-18 — Milestone v0.6.0 started
 
 ## Performance Metrics
 

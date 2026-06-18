@@ -12,9 +12,18 @@ Lives at `/Users/jhogan/frameworx`, package `flowstate`, Python 3.12+, Flox-mana
 
 If everything else fails, that compounding loop is what FlowState exists to deliver.
 
-## Current Milestone: Planning next (v0.5.0 shipped)
+## Current Milestone: v0.6.0 Semantic Retrieval
 
-**v0.5.0 Compounding Loop shipped 2026-06-09** — the core value is now a concrete, inspectable mechanism: runs leave a delta trail the next run reads first (`## Since Last Run`), structured failures from four bounded sources become a deduped/capped `## Gotchas` injected layer, and `flowstate verify` turns eval fixtures into runnable checks that feed both — closing the loop. Built on the v0.4 `build_context_prefix()` CAG architecture. Next milestone not yet scoped (`/gsd:new-milestone`).
+**Goal:** Replace lexical FTS5/BM25 retrieval with sqlite-vec semantic KNN across the memory and wiki layers, recovering the proven ~0.82 grounding accuracy (≈ oracle) that naive BM25 lost — opt-in via an optional embedder, with byte-identical fallback when absent.
+
+**Target features:**
+- New `flowstate/embeddings.py` — lazy embedding provider (`embed(texts)`, `dim`, `available()`), porting `bench/grounding.py::_default_embedder`.
+- `vec0` virtual table in `memory.db` + embed-on-`add()`/`update()`; one-time lazy backfill on open (never blocks startup; degrades to FTS5 if the embedder is absent).
+- Seam (a): `MemoryStore.get_context()` gains semantic KNN with FTS5/BM25 fallback.
+- Seam (b): `context_prefix` wiki layer gains per-run semantic retrieval over an embedded wiki corpus.
+- Optional `[semantic]` pip extra (fastembed); graceful degrade to today's lexical path when not installed.
+
+**Key context:** Embedder is an **optional dependency with FTS5 fallback** (settled) — core install stays dep-free, semantic retrieval is opt-in. The default (no-embedder) path must stay **byte-identical** (golden `context_prefix` tests stay green). Tests must NOT require the model/network (inject fake `embed_fn`, `skipif` on `sqlite_vec`). `sqlite-vec` is already a core dep (unused); only the embedder is new (and optional). Proven by the bench arc: `wikivec` (sqlite-vec KNN over fastembed bge-small-en-v1.5, 384-dim) hit **0.825 ≈ oracle 0.800**, surfacing the correct article **17/20** at k=3 vs BM25's 3/20. Authoritative spec: `bench/SEMANTIC_RETRIEVAL_HANDOFF.md`.
 
 ## Requirements
 
@@ -48,9 +57,12 @@ If everything else fails, that compounding loop is what FlowState exists to deli
 
 ### Active
 
-<!-- Next milestone not yet scoped — run /gsd:new-milestone. -->
+<!-- v0.6.0 Semantic Retrieval — requirements defined in REQUIREMENTS.md, mapped in ROADMAP.md. -->
 
-(None — v0.5.0 shipped; next milestone pending scoping.)
+- ⧗ **EMB-01..**: Optional embedding provider (`flowstate/embeddings.py`) + `[semantic]` pip extra — v0.6
+- ⧗ **VEC-01..**: `vec0` vector store in `memory.db` (embed-on-add/update, lazy backfill) — v0.6
+- ⧗ **MEM-01..**: Semantic KNN in `MemoryStore.get_context()` with FTS5 fallback — v0.6
+- ⧗ **WIKI-01..**: Per-run semantic wiki retrieval in `context_prefix` — v0.6
 
 ### Out of Scope
 
@@ -75,10 +87,10 @@ If everything else fails, that compounding loop is what FlowState exists to deli
 
 ## Constraints
 
-- **Tech stack:** Python 3.12+, Click for CLI, Pydantic for state, SQLite + FTS5 for memory, subprocess for the Claude bridge. No new runtime dependencies in this milestone.
+- **Tech stack:** Python 3.12+, Click for CLI, Pydantic for state, SQLite + FTS5 for memory, subprocess for the Claude bridge. No new **core** runtime dependencies; v0.6.0 adds the embedder strictly as an **optional `[semantic]` extra** with a lexical FTS5/BM25 fallback, so the default install stays dep-free.
 - **Coverage:** ≥80% enforced by `pyproject.toml` (`--cov-fail-under=80`). Pre-commit runs ruff (legacy + format), trailing-whitespace, EOF, large-file, merge-conflict, debug-statement checks.
 - **Bridge:** Claude Code CLI v2+ must be locatable; FlowState invokes `claude --print` non-interactively. No direct Anthropic API calls.
-- **Compatibility:** State migration must work from v0.1.0 → v0.2.0 → v0.3.0 → v0.4.0 → v0.5.0 (each milestone bumps minor; `_migrate_state` ladder + early-exit guard kept in sync). v0.5 added journal/gotchas to `memory.db` only — `flowstate.json` schema unchanged.
+- **Compatibility:** State migration must work from v0.1.0 → v0.2.0 → v0.3.0 → v0.4.0 → v0.5.0 → v0.6.0 (each milestone bumps minor; `_migrate_state` ladder + early-exit guard kept in sync). v0.5 added journal/gotchas to `memory.db` only. v0.6 adds a `vec0` table to `memory.db` additively (one-time lazy backfill on open, never blocking) — existing `memory.db` files and the `flowstate.json` schema stay valid; no embedder → degrade to FTS5.
 
 ## Key Decisions
 
@@ -117,4 +129,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-09 after v0.5.0 milestone completion (Compounding Loop) — archived, tagged*
+*Last updated: 2026-06-18 — v0.6.0 Semantic Retrieval milestone started*
