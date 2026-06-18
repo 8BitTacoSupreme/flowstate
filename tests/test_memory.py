@@ -8,6 +8,31 @@ import pytest
 
 from flowstate.memory import MemoryEntry, MemoryKind, MemoryStore
 
+# ---------------------------------------------------------------------------
+# sqlite_vec availability guard — mirrors bench/grounding.py test pattern
+# ---------------------------------------------------------------------------
+try:
+    import sqlite_vec  # noqa: F401
+
+    _HAS_VEC = True
+except Exception:
+    _HAS_VEC = False
+
+
+def _fake_embedder(dim: int = 4):
+    """Return a get_embedder-compatible Embedder backed by a deterministic fake embed_fn."""
+    from flowstate.embeddings import get_embedder
+
+    def embed_fn(texts: list[str]) -> list[list[float]]:
+        result = []
+        for t in texts:
+            # Deterministic: hash the text mod dim to produce a unit-ish vector
+            base = [float((hash(t) >> i) & 0xFF) / 255.0 for i in range(dim)]
+            result.append(base)
+        return result
+
+    return get_embedder(embed_fn=embed_fn)
+
 
 @pytest.fixture()
 def store(tmp_path: Path) -> MemoryStore:
@@ -367,3 +392,199 @@ class TestMemoryStoreUpdate:
         """delete() on a non-existent id does not raise."""
         store.delete("nonexistent000")  # must not raise
         assert store.count() == 0
+
+
+# ---------------------------------------------------------------------------
+# Task 1 tests: sqlite-vec load, memories_vec creation, embed-on-write
+# ---------------------------------------------------------------------------
+
+
+class TestMemoriesVecTable:
+    """memories_vec table creation and sqlite-vec load behavior."""
+
+    @pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
+    def test_memories_vec_created_on_open(self, tmp_path: Path):
+        """Opening a fresh store creates memories_vec when sqlite_vec loads."""
+        with MemoryStore(root=tmp_path) as store:
+            assert store._vec_ready is True
+            row = store._conn.execute(
+                "SELECT name FROM sqlite_master WHERE name='memories_vec'"
+            ).fetchone()
+            assert row is not None, "memories_vec table missing despite _vec_ready=True"
+
+    @pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
+    def test_store_opens_on_existing_db_without_migration(self, tmp_path: Path):
+        """Opening an existing db does not raise and does not require a migration command."""
+        with MemoryStore(root=tmp_path) as s1:
+            s1.add(MemoryEntry.create(MemoryKind.RESEARCH, "content", "summary"))
+        # Reopen — must not raise
+        with MemoryStore(root=tmp_path) as s2:
+            assert s2.count() == 1
+
+    @pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
+    def test_add_returns_entry_id_unchanged(self, tmp_path: Path):
+        """add() still returns entry.id (return type unchanged)."""
+        embedder = _fake_embedder(dim=4)
+        with MemoryStore(root=tmp_path, embedder=embedder) as store:
+            entry = MemoryEntry.create(MemoryKind.RESEARCH, "content", "summary")
+            returned = store.add(entry)
+            assert returned == entry.id
+
+    @pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
+    def test_add_with_embedder_writes_one_vec_row(self, tmp_path: Path):
+        """add() with a fake embedder writes exactly one memories_vec row keyed to the memory rowid."""
+        embedder = _fake_embedder(dim=4)
+        with MemoryStore(root=tmp_path, embedder=embedder) as store:
+            entry = MemoryEntry.create(MemoryKind.RESEARCH, "content", "summary")
+            store.add(entry)
+
+            mem_rowid = store._conn.execute(
+                "SELECT rowid FROM memories WHERE id=?", (entry.id,)
+            ).fetchone()[0]
+
+            vec_count = store._conn.execute(
+                "SELECT COUNT(*) FROM memories_vec WHERE rowid=?", (mem_rowid,)
+            ).fetchone()[0]
+            assert vec_count == 1
+
+    def test_add_without_embedder_writes_zero_vec_rows(self, tmp_path: Path):
+        """add() with no embedder writes zero vec rows and does not raise."""
+        with MemoryStore(root=tmp_path) as store:
+            entry = MemoryEntry.create(MemoryKind.RESEARCH, "content", "summary")
+            store.add(entry)  # must not raise
+
+            if store._vec_ready:
+                count = store._conn.execute("SELECT COUNT(*) FROM memories_vec").fetchone()[0]
+                assert count == 0
+
+    @pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
+    def test_add_many_with_embedder_writes_one_row_per_entry(self, tmp_path: Path):
+        """add_many() with a fake embedder writes one memories_vec row per entry."""
+        embedder = _fake_embedder(dim=4)
+        with MemoryStore(root=tmp_path, embedder=embedder) as store:
+            entries = [
+                MemoryEntry.create(MemoryKind.RESEARCH, f"content {i}", f"summary {i}")
+                for i in range(3)
+            ]
+            store.add_many(entries)
+
+            count = store._conn.execute("SELECT COUNT(*) FROM memories_vec").fetchone()[0]
+            assert count == 3
+
+    @pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
+    def test_add_many_without_embedder_writes_zero_vec_rows(self, tmp_path: Path):
+        """add_many() with no embedder writes zero vec rows and does not raise."""
+        with MemoryStore(root=tmp_path) as store:
+            entries = [
+                MemoryEntry.create(MemoryKind.RESEARCH, f"content {i}", f"summary {i}")
+                for i in range(2)
+            ]
+            store.add_many(entries)  # must not raise
+
+            if store._vec_ready:
+                count = store._conn.execute("SELECT COUNT(*) FROM memories_vec").fetchone()[0]
+                assert count == 0
+
+    @pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
+    def test_update_replaces_vec_row(self, tmp_path: Path):
+        """update() with a fake embedder replaces the memories_vec row (still exactly one row)."""
+        embedder = _fake_embedder(dim=4)
+        with MemoryStore(root=tmp_path, embedder=embedder) as store:
+            entry = MemoryEntry.create(MemoryKind.RESEARCH, "original content", "original summary")
+            store.add(entry)
+
+            mem_rowid = store._conn.execute(
+                "SELECT rowid FROM memories WHERE id=?", (entry.id,)
+            ).fetchone()[0]
+
+            # Update the entry
+            entry.content = "updated content"
+            entry.summary = "updated summary"
+            store.update(entry)
+
+            vec_count = store._conn.execute(
+                "SELECT COUNT(*) FROM memories_vec WHERE rowid=?", (mem_rowid,)
+            ).fetchone()[0]
+            assert vec_count == 1  # still exactly one row, not duplicated
+
+    @pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
+    def test_load_extension_disabled_after_load(self, tmp_path: Path):
+        """enable_load_extension is called False after sqlite_vec loads (security re-scope)."""
+        import sqlite3
+
+        # Verify store opens without error and _vec_ready is True when sqlite_vec available
+        with MemoryStore(root=tmp_path) as store:
+            assert store._vec_ready is True
+            # Attempting to re-enable extension loading should raise OperationalError
+            # because enable_load_extension(False) was called after the vec load
+            with pytest.raises((sqlite3.OperationalError, AttributeError)):
+                store._conn.enable_load_extension(True)
+
+    @pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
+    def test_vec_ready_flag_present(self, tmp_path: Path):
+        """_vec_ready attribute is set on MemoryStore."""
+        with MemoryStore(root=tmp_path) as store:
+            assert hasattr(store, "_vec_ready")
+
+
+# ---------------------------------------------------------------------------
+# Task 2 tests: lazy backfill on open
+# ---------------------------------------------------------------------------
+
+
+class TestLazyBackfill:
+    """Lazy vector backfill on MemoryStore open."""
+
+    @pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
+    def test_backfill_on_reopen_with_embedder(self, tmp_path: Path):
+        """Pre-populate memories without embedder; reopen with embedder → all rows backfilled."""
+        # Populate without embedder — no vec rows
+        with MemoryStore(root=tmp_path) as store:
+            entries = [
+                MemoryEntry.create(MemoryKind.RESEARCH, f"content {i}", f"summary {i}")
+                for i in range(3)
+            ]
+            store.add_many(entries)
+            if store._vec_ready:
+                assert store._conn.execute("SELECT COUNT(*) FROM memories_vec").fetchone()[0] == 0
+
+        # Reopen with embedder — backfill should run
+        embedder = _fake_embedder(dim=4)
+        with MemoryStore(root=tmp_path, embedder=embedder) as store2:
+            assert store2._vec_ready is True
+            vec_count = store2._conn.execute("SELECT COUNT(*) FROM memories_vec").fetchone()[0]
+            mem_count = store2.count()
+            assert vec_count == mem_count, (
+                f"expected {mem_count} vec rows after backfill, got {vec_count}"
+            )
+
+    @pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
+    def test_backfill_is_idempotent(self, tmp_path: Path):
+        """Reopening a fully-backfilled store adds zero duplicate vec rows."""
+        embedder = _fake_embedder(dim=4)
+
+        # First open with embedder — rows embed on add
+        with MemoryStore(root=tmp_path, embedder=embedder) as store:
+            entries = [
+                MemoryEntry.create(MemoryKind.RESEARCH, f"content {i}", f"summary {i}")
+                for i in range(2)
+            ]
+            store.add_many(entries)
+
+        # Second open with embedder — backfill is a no-op; no duplicates
+        with MemoryStore(root=tmp_path, embedder=_fake_embedder(dim=4)) as store2:
+            vec_count = store2._conn.execute("SELECT COUNT(*) FROM memories_vec").fetchone()[0]
+            assert vec_count == 2  # same count, no duplicates
+
+    def test_backfill_without_embedder_is_noop(self, tmp_path: Path):
+        """Opening a store with no embedder is a no-op and does not raise."""
+        with MemoryStore(root=tmp_path) as store:
+            entries = [
+                MemoryEntry.create(MemoryKind.RESEARCH, f"content {i}", f"summary {i}")
+                for i in range(2)
+            ]
+            store.add_many(entries)
+
+        # Reopen without embedder — must not raise
+        with MemoryStore(root=tmp_path) as store2:
+            assert store2.count() == 2  # FTS5 path unaffected
