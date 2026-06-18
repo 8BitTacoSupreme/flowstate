@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from flowstate.embeddings import Embedder, get_embedder
+
 SCHEMA_SQL = """\
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY
@@ -135,11 +137,91 @@ def _row_to_entry(row: sqlite3.Row) -> MemoryEntry:
 class MemoryStore:
     """SQLite-backed memory store with FTS5 full-text search."""
 
-    def __init__(self, root: Path | None = None) -> None:
+    def __init__(self, root: Path | None = None, *, embedder: Embedder | None = None) -> None:
         db_path = (root or Path.cwd()) / "memory.db"
         self._conn = sqlite3.connect(str(db_path))
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(SCHEMA_SQL)
+        # Embedding provider — use injected instance or create one via factory.
+        # Default (embedder=None) produces an Embedder whose available() is False
+        # when fastembed is absent, leaving all FTS5 behavior unchanged.
+        self._embedder: Embedder = embedder if embedder is not None else get_embedder(root)
+        self._vec_ready: bool = False
+        self._init_vec()
+        self._backfill_vectors()
+
+    # ------------------------------------------------------------------
+    # Private vec0 helpers
+    # ------------------------------------------------------------------
+
+    def _init_vec(self) -> None:
+        """Load sqlite-vec, create memories_vec vec0 table. Never raises.
+
+        Sets self._vec_ready = True on success; False on any failure (sqlite-vec
+        absent, vec0 create error, etc.). Calls enable_load_extension(False)
+        immediately after load to re-scope the extension surface (T-09-03).
+        """
+        try:
+            self._conn.enable_load_extension(True)
+            import sqlite_vec  # local import — loads only after enable_load_extension(True)
+
+            sqlite_vec.load(self._conn)
+            self._conn.enable_load_extension(False)
+            dim = self._embedder.dim
+            self._conn.execute(
+                f"CREATE VIRTUAL TABLE IF NOT EXISTS memories_vec USING vec0(embedding float[{dim}])"
+            )
+            self._conn.commit()
+            self._vec_ready = True
+        except Exception:
+            self._vec_ready = False
+
+    def _embed_rowid(self, rowid: int, text: str) -> None:
+        """Embed text and upsert a memories_vec row for rowid. Never raises.
+
+        Guarded by _vec_ready and embedder.available(). Deletes any existing
+        row first (delete-then-insert = idempotent replace without a REPLACE
+        or ON CONFLICT clause, which vec0 may not support).
+        """
+        if not self._vec_ready or not self._embedder.available():
+            return
+        try:
+            import sqlite_vec  # local import — sqlite_vec must be loaded on this conn first
+
+            vec = self._embedder.embed([text])
+            if not vec:
+                return
+            serialized = sqlite_vec.serialize_float32(vec[0])
+            self._conn.execute("DELETE FROM memories_vec WHERE rowid=?", (rowid,))
+            self._conn.execute(
+                "INSERT INTO memories_vec(rowid, embedding) VALUES (?, ?)",
+                (rowid, serialized),
+            )
+        except Exception:
+            pass
+
+    def _backfill_vectors(self) -> None:
+        """Embed all memories rows that lack a memories_vec row. Never raises.
+
+        Runs on open, guarded by _vec_ready and embedder.available(). Commits
+        once after all inserts for efficiency. Idempotent: rows already present
+        in memories_vec are skipped via the NOT IN subquery.
+        """
+        if not self._vec_ready or not self._embedder.available():
+            return
+        try:
+            rows = self._conn.execute(
+                "SELECT rowid, summary, content FROM memories "
+                "WHERE rowid NOT IN (SELECT rowid FROM memories_vec)"
+            ).fetchall()
+            if not rows:
+                return
+            for row in rows:
+                text = row["summary"] + "\n" + row["content"]
+                self._embed_rowid(row["rowid"], text)
+            self._conn.commit()
+        except Exception:
+            pass
 
     def close(self) -> None:
         self._conn.close()
@@ -167,6 +249,11 @@ class MemoryStore:
             ),
         )
         self._conn.commit()
+        # Resolve rowid and embed — rowid via SELECT (not cursor.lastrowid) per plan contract
+        row = self._conn.execute("SELECT rowid FROM memories WHERE id=?", (entry.id,)).fetchone()
+        if row is not None:
+            self._embed_rowid(row[0], entry.summary + "\n" + entry.content)
+            self._conn.commit()
         return entry.id
 
     def update(self, entry: MemoryEntry) -> None:
@@ -194,6 +281,11 @@ class MemoryStore:
             ),
         )
         self._conn.commit()
+        # Re-embed: resolve rowid (row may not exist if id was not in db)
+        row = self._conn.execute("SELECT rowid FROM memories WHERE id=?", (entry.id,)).fetchone()
+        if row is not None:
+            self._embed_rowid(row[0], entry.summary + "\n" + entry.content)
+            self._conn.commit()
 
     def add_many(self, entries: list[MemoryEntry]) -> list[str]:
         ids = []
@@ -214,6 +306,14 @@ class MemoryStore:
                 ),
             )
             ids.append(entry.id)
+        self._conn.commit()
+        # Embed per entry — rowid resolved via SELECT after the bulk INSERT+commit
+        for entry in entries:
+            row = self._conn.execute(
+                "SELECT rowid FROM memories WHERE id=?", (entry.id,)
+            ).fetchone()
+            if row is not None:
+                self._embed_rowid(row[0], entry.summary + "\n" + entry.content)
         self._conn.commit()
         return ids
 

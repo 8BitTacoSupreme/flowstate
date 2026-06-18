@@ -34,6 +34,15 @@ def _fake_embedder(dim: int = 4):
     return get_embedder(embed_fn=embed_fn)
 
 
+def _unavailable_embedder():
+    """Return an Embedder whose available() is False (simulates fastembed absent)."""
+    from flowstate.embeddings import Embedder
+
+    e = Embedder(model_name="none")
+    e._unavailable = True  # mark as permanently unavailable
+    return e
+
+
 @pytest.fixture()
 def store(tmp_path: Path) -> MemoryStore:
     with MemoryStore(root=tmp_path) as s:
@@ -448,8 +457,8 @@ class TestMemoriesVecTable:
             assert vec_count == 1
 
     def test_add_without_embedder_writes_zero_vec_rows(self, tmp_path: Path):
-        """add() with no embedder writes zero vec rows and does not raise."""
-        with MemoryStore(root=tmp_path) as store:
+        """add() with embedder absent (available()==False) writes zero vec rows and does not raise."""
+        with MemoryStore(root=tmp_path, embedder=_unavailable_embedder()) as store:
             entry = MemoryEntry.create(MemoryKind.RESEARCH, "content", "summary")
             store.add(entry)  # must not raise
 
@@ -473,8 +482,8 @@ class TestMemoriesVecTable:
 
     @pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
     def test_add_many_without_embedder_writes_zero_vec_rows(self, tmp_path: Path):
-        """add_many() with no embedder writes zero vec rows and does not raise."""
-        with MemoryStore(root=tmp_path) as store:
+        """add_many() with embedder absent (available()==False) writes zero vec rows and does not raise."""
+        with MemoryStore(root=tmp_path, embedder=_unavailable_embedder()) as store:
             entries = [
                 MemoryEntry.create(MemoryKind.RESEARCH, f"content {i}", f"summary {i}")
                 for i in range(2)
@@ -509,16 +518,18 @@ class TestMemoriesVecTable:
 
     @pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
     def test_load_extension_disabled_after_load(self, tmp_path: Path):
-        """enable_load_extension is called False after sqlite_vec loads (security re-scope)."""
+        """enable_load_extension(False) re-scopes extension surface after sqlite_vec loads.
+
+        After the re-scope, load_extension() should raise OperationalError because
+        the load-extension permission has been withdrawn.
+        """
         import sqlite3
 
-        # Verify store opens without error and _vec_ready is True when sqlite_vec available
         with MemoryStore(root=tmp_path) as store:
             assert store._vec_ready is True
-            # Attempting to re-enable extension loading should raise OperationalError
-            # because enable_load_extension(False) was called after the vec load
-            with pytest.raises((sqlite3.OperationalError, AttributeError)):
-                store._conn.enable_load_extension(True)
+            # load_extension should now raise — the load-extension permission was disabled
+            with pytest.raises(sqlite3.OperationalError):
+                store._conn.load_extension("nonexistent_extension_xyz")
 
     @pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
     def test_vec_ready_flag_present(self, tmp_path: Path):
@@ -537,20 +548,25 @@ class TestLazyBackfill:
 
     @pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
     def test_backfill_on_reopen_with_embedder(self, tmp_path: Path):
-        """Pre-populate memories without embedder; reopen with embedder → all rows backfilled."""
-        # Populate without embedder — no vec rows
-        with MemoryStore(root=tmp_path) as store:
+        """Pre-populate memories without vec rows; reopen with embedder → all rows backfilled.
+
+        Strategy: add with a fake dim=4 embedder (table created as float[4]), then delete
+        all vec rows to simulate an un-vectored store, then reopen to trigger backfill.
+        """
+        embedder = _fake_embedder(dim=4)
+        with MemoryStore(root=tmp_path, embedder=embedder) as store:
             entries = [
                 MemoryEntry.create(MemoryKind.RESEARCH, f"content {i}", f"summary {i}")
                 for i in range(3)
             ]
             store.add_many(entries)
-            if store._vec_ready:
-                assert store._conn.execute("SELECT COUNT(*) FROM memories_vec").fetchone()[0] == 0
+            # Simulate un-vectored state by clearing the vec table
+            store._conn.execute("DELETE FROM memories_vec")
+            store._conn.commit()
+            assert store._conn.execute("SELECT COUNT(*) FROM memories_vec").fetchone()[0] == 0
 
-        # Reopen with embedder — backfill should run
-        embedder = _fake_embedder(dim=4)
-        with MemoryStore(root=tmp_path, embedder=embedder) as store2:
+        # Reopen with same-dim embedder — backfill should restore all vec rows
+        with MemoryStore(root=tmp_path, embedder=_fake_embedder(dim=4)) as store2:
             assert store2._vec_ready is True
             vec_count = store2._conn.execute("SELECT COUNT(*) FROM memories_vec").fetchone()[0]
             mem_count = store2.count()
