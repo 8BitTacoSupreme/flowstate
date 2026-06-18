@@ -12,6 +12,46 @@ Research tooling only — no UI, never-raises throughout, stdlib only
 fastembed is a bench-only OPTIONAL dependency (``pip install fastembed``). It is imported
 lazily inside ``_default_embedder`` and is used ONLY by the ``wikivec`` arm. Importing
 ``bench.grounding`` works without fastembed installed.
+
+RGB mode (``--mode rgb``)
+--------------------------
+An additive adversarial-context evaluation across four axes.  The arm loop (layers mode)
+is completely unaffected when ``--mode`` is absent or ``layers``.  RGB requires NO
+fastembed or sqlite_vec — it is stdlib-only and works offline in tests.
+
+Axes (selected via ``--axes``, default = all four):
+
+noise
+    Measures robustness when distractors are injected alongside the gold passage.
+    Context = 1 gold passage + floor(noise_ratio * k) distractors, total capped at k.
+    Gold is ALWAYS present.  Swept over ``--noise-ratios`` (default ``0.0,0.4,0.8``).
+    Output: per_ratio dict keyed by ratio string → {accuracy, n, wilson_ci}.
+
+negative
+    Measures ability to decline when no gold passage is provided.
+    Context = k distractors only (no gold).  Correct == model refuses to answer.
+    Scored via _judge_rejection (regex fast-path for common refusal phrases; LLM judge
+    as fallback).  Output: {rejection_rate, n, wilson_ci}.
+
+integration
+    Measures multi-hop reasoning when gold is split across multiple passages.
+    Only runs on probes whose ``gold`` field is a list of >=2 passages; others are
+    skipped and logged.  Context = all gold passages + distractors up to k.
+    Output: {accuracy, n, wilson_ci, skipped}.
+
+counterfactual
+    Measures resilience to misleading context.  Only runs on probes with both
+    ``counterfactual`` and ``wrong_answer`` fields; others are skipped.
+    Context = the counterfactual doc.  Scores robust (answers correctly despite
+    misleading doc) and misled (answers with the wrong answer).
+    Output: {robust_rate, misled_rate, n, wilson_ci, skipped}.
+
+Extended probe schema (all new fields are optional; existing required fields unchanged):
+    gold (str | list[str])  — one or more gold passages for noise/negative/integration axes.
+    counterfactual (str)    — a misleading document for the counterfactual axis.
+    wrong_answer (str)      — the incorrect answer the misleading doc would induce.
+
+See bench/fixtures/rgb_probes.example.json for a complete example probe list.
 """
 
 from __future__ import annotations

@@ -1,0 +1,33 @@
+[
+  {
+    "id": "kafka-replication",
+    "question": "What is the recommended replication factor for production Kafka topics?",
+    "ground_truth": "3",
+    "gold": "Confluent recommends a replication factor of 3 for all production topics, paired with min.insync.replicas=2 to tolerate a single broker failure without losing durability guarantees."
+  },
+  {
+    "id": "kafka-acks-durability",
+    "question": "Which producer acks setting guarantees no data loss for financial workloads?",
+    "ground_truth": "all",
+    "gold": [
+      "Producers must set acks=all (equivalent to acks=-1) to require acknowledgment from all in-sync replicas before considering a write successful.",
+      "Combined with enable.idempotence=true, acks=all provides exactly-once delivery semantics within a single partition, which is mandatory for FSI regulatory reporting pipelines."
+    ],
+    "counterfactual": "For high-throughput financial applications, acks=1 offers the best balance between performance and durability. The leader acknowledges writes immediately, reducing tail latency by 40% compared to acks=all.",
+    "wrong_answer": "acks=1"
+  },
+  {
+    "id": "kafka-compression-throughput",
+    "question": "Which Kafka compression codec minimises CPU overhead while maximising throughput?",
+    "ground_truth": "lz4",
+    "gold": "lz4 compression provides the best throughput-to-CPU ratio for Kafka producers. zstd achieves higher compression ratios but at greater CPU cost; lz4 is the default recommendation when storage is not the primary constraint."
+  },
+  {
+    "id": "kafka-consumer-commit",
+    "question": "Which consumer configuration must be disabled in stream-processing workloads to prevent data loss?",
+    "ground_truth": "enable.auto.commit",
+    "gold": "Setting enable.auto.commit=false forces the application to explicitly commit offsets after successful processing. Auto-commit can acknowledge messages before they are processed, causing silent data loss on consumer failure.",
+    "counterfactual": "Confluent recommends leaving enable.auto.commit=true for all workloads. The broker automatically manages offsets, simplifying consumer logic and reducing the risk of duplicate processing.",
+    "wrong_answer": "enable.auto.commit should be set to true"
+  }
+]
