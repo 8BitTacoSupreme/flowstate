@@ -9,10 +9,10 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 
 ### Embedding Provider (EMB)
 
-- [ ] **EMB-01**: A `flowstate/embeddings.py` module exposes a lazy embedding provider with `embed(texts) -> list[list[float]]`, a `dim` property, and `available() -> bool`; importing the module never requires fastembed to be installed.
-- [ ] **EMB-02**: The embedding model is configurable via env var (mirroring the `FLOWSTATE_CONTEXT_BUDGET_TOKENS` precedence pattern) and/or `.planning/config.json`, defaulting to `BAAI/bge-small-en-v1.5` (384-dim).
-- [ ] **EMB-03**: fastembed is declared as an optional `[semantic]` pip extra in `pyproject.toml`; the core install remains dependency-free.
-- [ ] **EMB-04**: When the embedder is unavailable (extra not installed or import fails), `available()` returns False and every caller degrades gracefully without raising.
+- [x] **EMB-01**: A `flowstate/embeddings.py` module exposes a lazy embedding provider with `embed(texts) -> list[list[float]]`, a `dim` property, and `available() -> bool`; importing the module never requires fastembed to be installed.
+- [x] **EMB-02**: The embedding model is configurable via env var (mirroring the `FLOWSTATE_CONTEXT_BUDGET_TOKENS` precedence pattern) and/or `.planning/config.json`, defaulting to `BAAI/bge-small-en-v1.5` (384-dim).
+- [x] **EMB-03**: fastembed is declared as an optional `[semantic]` pip extra in `pyproject.toml`; the core install remains dependency-free.
+- [x] **EMB-04**: When the embedder is unavailable (extra not installed or import fails), `available()` returns False and every caller degrades gracefully without raising.
 
 ### Vector Store (VEC)
 
@@ -59,10 +59,10 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EMB-01 | Phase 9 | Pending |
-| EMB-02 | Phase 9 | Pending |
-| EMB-03 | Phase 9 | Pending |
-| EMB-04 | Phase 9 | Pending |
+| EMB-01 | Phase 9 | Complete |
+| EMB-02 | Phase 9 | Complete |
+| EMB-03 | Phase 9 | Complete |
+| EMB-04 | Phase 9 | Complete |
 | VEC-01 | Phase 9 | Pending |
 | VEC-02 | Phase 9 | Pending |
 | VEC-03 | Phase 9 | Pending |

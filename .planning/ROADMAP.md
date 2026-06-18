@@ -62,7 +62,7 @@ Full detail: [`milestones/v0.5.0-ROADMAP.md`](./milestones/v0.5.0-ROADMAP.md)
   4. `MemoryStore.add()` silently skips vector writes when the embedder is absent; when present, the added entry has a corresponding embedding row in `memories_vec`
   5. Opening a `MemoryStore` with existing rows and an available embedder backfills missing vectors without blocking startup or raising
 **Plans**: 2 plans
-  - [ ] 09-01-PLAN.md — Embedding provider module (`flowstate/embeddings.py`) + `[semantic]` pip extra (EMB-01..04)
+  - [x] 09-01-PLAN.md — Embedding provider module (`flowstate/embeddings.py`) + `[semantic]` pip extra (EMB-01..04)
   - [ ] 09-02-PLAN.md — vec0 store on `MemoryStore`: load sqlite-vec, `memories_vec` table, embed-on-write + lazy backfill (VEC-01..03)
 
 ### Phase 10: Semantic Memory Retrieval
@@ -99,6 +99,6 @@ Full detail: [`milestones/v0.5.0-ROADMAP.md`](./milestones/v0.5.0-ROADMAP.md)
 | 6. Run Journal | v0.5.0 | 3/3 | Complete | 2026-06-08 |
 | 7. Gotchas Accumulator | v0.5.0 | 4/4 | Complete | 2026-06-08 |
 | 8. Runnable Verification | v0.5.0 | 3/3 | Complete | 2026-06-09 |
-| 9. Embedding Provider + Vector Store Foundation | v0.6.0 | 0/2 | Not started | - |
+| 9. Embedding Provider + Vector Store Foundation | v0.6.0 | 1/2 | In Progress|  |
 | 10. Semantic Memory Retrieval | v0.6.0 | 0/TBD | Not started | - |
 | 11. Semantic Wiki Retrieval | v0.6.0 | 0/TBD | Not started | - |
