@@ -56,12 +56,12 @@ If everything else fails, that compounding loop is what FlowState exists to deli
 - ✓ **VER-01..02**: `flowstate verify` runs fixture gates against produced artifacts (bounded checker registry, CI-composable non-zero exit) + failures feed gotchas/journal, closing the loop — v0.5 / Phase 8
 - ✓ **EMB-01..04**: optional embedding provider (`flowstate/embeddings.py`) — lazy fastembed seam (`embed`/`dim`/`configured_dim`/`available`), env>config>default model precedence (`bge-small-en-v1.5`/384-dim), `[semantic]` pip extra; core install stays dep-free — v0.6 / Phase 9
 - ✓ **VEC-01..03**: `memories_vec` vec0 store in `memory.db` keyed to rowid — embed-on-add/update/add_many (savepoint-atomic), lazy batch-capped backfill, dim-mismatch + load-failure degrade to FTS5; opening a store never loads the model or blocks startup — v0.6 / Phase 9
+- ✓ **MEM-01..02**: semantic KNN in `MemoryStore.get_context()` — pure-semantic ranking over `memories_vec` with an L2 distance floor (`_SEMANTIC_MAX_DISTANCE`≈cosine 0.6) for the no-match case (NOT lexical fusion); byte-identical FTS5 fallback when no embedder/vectors; surfaces lexically-disjoint-but-semantically-relevant memories (the proven bench win) — v0.6 / Phase 10
 
 ### Active
 
-<!-- v0.6.0 Semantic Retrieval — Phase 9 (foundation) shipped; retrieval seams next. -->
+<!-- v0.6.0 Semantic Retrieval — Phases 9–10 shipped; wiki seam is the last phase. -->
 
-- ⧗ **MEM-01..02**: Semantic KNN in `MemoryStore.get_context()` with byte-compatible FTS5 fallback — v0.6 / Phase 10
 - ⧗ **WIKI-01..02**: Per-run semantic wiki retrieval in `context_prefix` (byte-identical default path) — v0.6 / Phase 11
 
 ### Out of Scope
@@ -129,4 +129,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-18 — v0.6.0 Phase 9 (Embedding Provider + Vector Store Foundation) complete*
+*Last updated: 2026-06-18 — v0.6.0 Phase 10 (Semantic Memory Retrieval) complete*
