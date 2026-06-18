@@ -840,7 +840,7 @@ class TestGetContextSemantic:
         Design:
           - query_text has NO token overlap with beta_entry content/summary
           - fake embedder places beta_entry nearest to query_text (L2 ≈ 0.14,
-            well within _SEMANTIC_MAX_DISTANCE = 0.95)
+            well within _SEMANTIC_MAX_DISTANCE = 0.89)
           - alpha_entry has high keyword overlap with query_text so BM25 prefers it
           - semantic path returns beta first; BM25 path returns alpha first (or empty
             if no lexical match, demonstrating the case the gate was suppressing)
@@ -1024,12 +1024,12 @@ class TestGetContextSemantic:
         """Populated store + truly unrelated query returns '' via the distance threshold.
 
         This exercises the _SEMANTIC_MAX_DISTANCE path: with a fake embedder that
-        places the query far from all stored vectors (L2 >> 0.95), _semantic_results
+        places the query far from all stored vectors (L2 >> 0.89), _semantic_results
         filters out all KNN hits and returns None → FTS5 fallback also finds nothing
         (no lexical match) → get_context returns "".
 
         The fake embedder uses two orthogonal vectors (L2 = sqrt(2) ≈ 1.414, well
-        beyond _SEMANTIC_MAX_DISTANCE = 0.95) for the query vs stored content,
+        beyond _SEMANTIC_MAX_DISTANCE = 0.89) for the query vs stored content,
         so all KNN rows are rejected by the threshold filter.
         """
         import math
