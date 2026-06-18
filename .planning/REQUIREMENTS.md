@@ -22,8 +22,8 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 
 ### Memory Retrieval (MEM)
 
-- [ ] **MEM-01**: `MemoryStore.get_context()` returns semantic-KNN-ranked memories (default k≈3–5) when vectors and an embedder are available.
-- [ ] **MEM-02**: `get_context()` falls back to the existing FTS5/BM25 path when no embedder/vectors are present, producing a `## Prior Knowledge` block byte-compatible with today's output.
+- [x] **MEM-01**: `MemoryStore.get_context()` returns semantic-KNN-ranked memories (default k≈3–5) when vectors and an embedder are available.
+- [x] **MEM-02**: `get_context()` falls back to the existing FTS5/BM25 path when no embedder/vectors are present, producing a `## Prior Knowledge` block byte-compatible with today's output.
 
 ### Wiki Retrieval (WIKI)
 
@@ -66,8 +66,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 | VEC-01 | Phase 9 | Complete |
 | VEC-02 | Phase 9 | Complete |
 | VEC-03 | Phase 9 | Complete |
-| MEM-01 | Phase 10 | Pending |
-| MEM-02 | Phase 10 | Pending |
+| MEM-01 | Phase 10 | Complete |
+| MEM-02 | Phase 10 | Complete |
 | WIKI-01 | Phase 11 | Pending |
 | WIKI-02 | Phase 11 | Pending |
 
