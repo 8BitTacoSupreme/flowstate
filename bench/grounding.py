@@ -42,6 +42,19 @@ _JUDGE_TIMEOUT = 60
 # Matches the first YES or NO token in a response (case-insensitive).
 _YESNO_RE = re.compile(r"\b(yes|no)\b", re.IGNORECASE)
 
+# Substring phrases that indicate a refusal without calling the LLM judge.
+# Checked case-insensitively against the answer string.
+_REFUSAL_PHRASES: frozenset[str] = frozenset(
+    {
+        "cannot answer",
+        "insufficient information",
+        "no information",
+        "don't know",
+        "unable to",
+        "not enough",
+    }
+)
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # FTS5 retrieval helpers
@@ -224,21 +237,27 @@ def _wilson(successes: int, n: int) -> tuple[float, float]:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def _answer(prefix: str, question: str, model: str) -> str:
+def _answer(
+    prefix: str,
+    question: str,
+    model: str,
+    *,
+    instruction: str = "Answer concisely and specifically.",
+) -> str:
     """Ask a question via ``claude --print`` with an optional context prefix. Never raises.
 
     Returns the answer string, or "" when no claude binary is found or all attempts fail.
     Retries up to _ANSWER_MAX_ATTEMPTS times, skipping empty stdout or non-zero returncode
     (mirrors the research.py empty-then-good retry idiom).
+
+    The optional keyword-only ``instruction`` parameter replaces the trailing prompt trailer.
+    The default reproduces today's exact prompt byte-for-byte; existing callers are unaffected.
     """
     claude = _locate_claude()
     if claude is None:
         return ""
     prompt = (
-        (prefix + "\n\n---\n\n" if prefix else "")
-        + "Question: "
-        + question
-        + "\nAnswer concisely and specifically."
+        (prefix + "\n\n---\n\n" if prefix else "") + "Question: " + question + "\n" + instruction
     )
     cmd = [claude, "--print", "--max-turns", "1", "--model", model, "--", prompt]
     for _ in range(_ANSWER_MAX_ATTEMPTS):
@@ -278,6 +297,229 @@ def _factcheck(answer: str, ground_truth: str, model: str) -> bool | None:
         if m is None:
             return None
         return m.group(1).lower() == "yes"
+    except Exception:
+        return None
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Rejection judge helper
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def _judge_rejection(answer: str, model: str) -> bool | None:
+    """Does the answer decline to answer / say it lacks info? Never raises.
+
+    Fast-path: if the answer contains a known refusal phrase (case-insensitive substring
+    match against _REFUSAL_PHRASES), return True immediately with no subprocess call.
+    Fall-through: one-shot YES/NO claude --print call ("did the model decline?").
+    Returns True (declined), False (answered), or None (no claude binary / parse error).
+    """
+    try:
+        lower = answer.lower()
+        if any(phrase in lower for phrase in _REFUSAL_PHRASES):
+            return True
+    except Exception:
+        return None
+
+    claude = _locate_claude()
+    if claude is None:
+        return None
+    prompt = (
+        "Did the following answer decline to respond or say it lacks sufficient information "
+        "to answer? Reply with ONLY 'YES' or 'NO'.\n\nANSWER: " + answer
+    )
+    cmd = [claude, "--print", "--max-turns", "1", "--model", model, "--", prompt]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=_JUDGE_TIMEOUT)
+        if proc.returncode != 0:
+            return None
+        m = _YESNO_RE.search(proc.stdout or "")
+        if m is None:
+            return None
+        return m.group(1).lower() == "yes"
+    except Exception:
+        return None
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# RGB axes helpers
+# ──────────────────────────────────────────────────────────────────────────────
+
+_RGB_SEP = "\n\n---\n\n"
+
+# Instruction variant for the negative axis that permits the model to decline.
+_RGB_NEGATIVE_INSTRUCTION = (
+    "Answer concisely and specifically. "
+    "If the provided documents do not contain enough information to answer, "
+    "say so explicitly rather than guessing."
+)
+
+# Instruction variant for the counterfactual axis, warning about possible errors.
+_RGB_COUNTERFACTUAL_INSTRUCTION = (
+    "Answer concisely and specifically. "
+    "Note: the provided document may contain errors or outdated information."
+)
+
+
+def _rgb_distractors(probe: dict, probes: list[dict], n: int) -> list[str]:
+    """Return up to n distractor passages from other probes' gold fields. Never raises.
+
+    Selection is deterministic: probes sorted by id, excluding self.
+    A string gold contributes one passage; a list gold contributes each item individually.
+    Probes with no gold field contribute nothing. Returns [] when no others have gold.
+    """
+    try:
+        self_id = probe.get("id")
+        passages: list[str] = []
+        for p in sorted(probes, key=lambda x: x.get("id", "")):
+            if p.get("id") == self_id:
+                continue
+            gold = p.get("gold")
+            if gold is None:
+                continue
+            if isinstance(gold, str):
+                passages.append(gold)
+            elif isinstance(gold, list):
+                passages.extend(str(item) for item in gold)
+        return passages[:n]
+    except Exception:
+        return []
+
+
+def _rgb_noise(
+    probe: dict,
+    probes: list[dict],
+    noise_ratio: float,
+    k: int,
+    answer_model: str,
+    judge_models: list[str],
+) -> dict | None:
+    """Noise robustness axis for one probe. Never raises.
+
+    Context = first gold passage + floor(noise_ratio * k) distractors, total docs capped at k.
+    Gold is always present. Returns a record dict or None on error.
+    """
+    try:
+        gold = probe.get("gold")
+        if gold is None:
+            return None
+        gold_passage = gold if isinstance(gold, str) else gold[0]
+        n_distractors = min(int(noise_ratio * k), k - 1)
+        distractors = _rgb_distractors(probe, probes, n=n_distractors)
+        docs = [gold_passage, *distractors]
+        # Cap total at k.
+        docs = docs[:k]
+        prefix = _RGB_SEP.join(docs)
+        answer = _answer(prefix, probe["question"], answer_model)
+        if answer == "":
+            votes = [None] * len(judge_models)
+        else:
+            votes = [_factcheck(answer, probe["ground_truth"], m) for m in judge_models]
+        yes = sum(1 for v in votes if v is True)
+        majority = yes > len(judge_models) / 2
+        return {
+            "probe_id": probe.get("id"),
+            "noise_ratio": noise_ratio,
+            "n_distractors": len(distractors),
+            "majority": majority,
+        }
+    except Exception:
+        return None
+
+
+def _rgb_negative(
+    probe: dict,
+    probes: list[dict],
+    k: int,
+    answer_model: str,
+    judge_models: list[str],
+) -> dict | None:
+    """Negative rejection axis for one probe. Never raises.
+
+    Context = k distractors ONLY (no gold). Correct == model declines to answer.
+    Scored via _judge_rejection majority (fast-path regex first, then LLM judge).
+    Returns a record dict or None on error.
+    """
+    try:
+        distractors = _rgb_distractors(probe, probes, n=k)
+        prefix = _RGB_SEP.join(distractors) if distractors else ""
+        answer = _answer(
+            prefix, probe["question"], answer_model, instruction=_RGB_NEGATIVE_INSTRUCTION
+        )
+        votes = [_judge_rejection(answer, m) for m in judge_models]
+        yes = sum(1 for v in votes if v is True)
+        rejected = yes > len(judge_models) / 2
+        return {
+            "probe_id": probe.get("id"),
+            "rejected": rejected,
+        }
+    except Exception:
+        return None
+
+
+def _rgb_integration(
+    probe: dict,
+    probes: list[dict],
+    k: int,
+    answer_model: str,
+    judge_models: list[str],
+) -> dict | None:
+    """Information integration axis for one probe. Never raises.
+
+    Only runs when probe.gold is a list of >=2 passages; returns None (skip) otherwise.
+    Context = all gold passages + distractors up to k total. Scored via _factcheck majority.
+    """
+    try:
+        gold = probe.get("gold")
+        if not isinstance(gold, list) or len(gold) < 2:
+            return None
+        n_distractors = max(0, k - len(gold))
+        distractors = _rgb_distractors(probe, probes, n=n_distractors)
+        docs = list(gold) + distractors
+        docs = docs[:k]
+        prefix = _RGB_SEP.join(docs)
+        answer = _answer(prefix, probe["question"], answer_model)
+        if answer == "":
+            votes = [None] * len(judge_models)
+        else:
+            votes = [_factcheck(answer, probe["ground_truth"], m) for m in judge_models]
+        yes = sum(1 for v in votes if v is True)
+        majority = yes > len(judge_models) / 2
+        return {
+            "probe_id": probe.get("id"),
+            "majority": majority,
+        }
+    except Exception:
+        return None
+
+
+def _rgb_counterfactual(
+    probe: dict,
+    answer_model: str,
+    judge_models: list[str],
+) -> dict | None:
+    """Counterfactual robustness axis for one probe. Never raises.
+
+    Only runs when probe has both 'counterfactual' and 'wrong_answer'; returns None otherwise.
+    Context = the counterfactual doc. Scores robust (answers correctly) and misled (gives wrong answer).
+    """
+    try:
+        cf = probe.get("counterfactual")
+        wrong = probe.get("wrong_answer")
+        if cf is None or wrong is None:
+            return None
+        answer = _answer(
+            cf, probe["question"], answer_model, instruction=_RGB_COUNTERFACTUAL_INSTRUCTION
+        )
+        robust_votes = [_factcheck(answer, probe["ground_truth"], m) for m in judge_models]
+        misled_votes = [_factcheck(answer, wrong, m) for m in judge_models]
+        robust = sum(1 for v in robust_votes if v is True) > len(judge_models) / 2
+        misled = sum(1 for v in misled_votes if v is True) > len(judge_models) / 2
+        return {
+            "probe_id": probe.get("id"),
+            "robust": robust,
+            "misled": misled,
+        }
     except Exception:
         return None
 
