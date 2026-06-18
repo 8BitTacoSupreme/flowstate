@@ -17,7 +17,9 @@ FlowState is a CLI-first orchestrator that prepares context files for agentic fr
 ```
 ┌──────────────────────────────────────────────────┐
 │                   flowstate CLI                   │
-│  init · status · launch · context · memory · check│
+│  init · kickoff · status · run · launch · context│
+│  memory · journal · gotchas · verify · pack      │
+│  doctor · repair · fresh · check · config        │
 └─────────────────────┬────────────────────────────┘
                       │
 ┌─────────────────────▼────────────────────────────┐
@@ -44,7 +46,7 @@ Generator  Adapter    Adapter   Adapter     Audit
 
 **State flow:** All pipeline state is persisted to `flowstate.json` — a Pydantic-validated file tracking tool status (Ready/Running/Completed/Blocked), artifact paths, context files, and user preferences.
 
-**Memory:** Research findings, strategy decisions, and failure context are stored in `memory.db` (SQLite FTS5) and automatically injected into subsequent pipeline runs. See [Persistent Memory](#persistent-memory) below.
+**Memory:** Research findings, strategy decisions, and failure context are stored in `memory.db` (SQLite FTS5, with optional `sqlite-vec` semantic retrieval) and automatically injected into subsequent pipeline runs. See [Persistent Memory](#persistent-memory) below.
 
 ## Prerequisites
 
@@ -84,6 +86,9 @@ cd flowstate
 python3.12 -m venv .venv   # or python3.13
 source .venv/bin/activate
 pip install -e .
+
+# Optional: enable semantic memory retrieval (adds fastembed; downloads a ~130MB model on first use)
+pip install -e ".[semantic]"
 ```
 
 You'll also need to install [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview) separately.
@@ -92,7 +97,7 @@ You'll also need to install [Claude Code](https://docs.anthropic.com/en/docs/cla
 
 ```bash
 flowstate --version
-# flowstate, version 0.2.0
+# flowstate, version 0.3.0
 
 flowstate check
 # claude CLI found: /Users/you/.local/bin/claude
@@ -198,6 +203,24 @@ flowstate check
 
 Confirms the `claude` CLI is detected and shows configuration.
 
+### 8. Other commands
+
+Beyond the core pipeline, FlowState ships commands for fast scaffolding, the compounding loop, context packing, and operate-safely health:
+
+| Command | Purpose |
+|---------|---------|
+| `flowstate kickoff` | Scaffold a project (interview + context files + pack) with **no** LLM pipeline |
+| `flowstate journal` | List recent run-journal entries (the `## Since Last Run` deltas) newest-first |
+| `flowstate gotchas` | List accumulated failure signals (the `## Gotchas` layer); `--prune` to trim |
+| `flowstate verify` | Run fixture acceptance-gates against produced artifacts (CI-composable exit code) |
+| `flowstate pack` | Generate/refresh the repomix codebase pack used by the CAG context layer |
+| `flowstate doctor` | Pure-Python health checks (manifest, memory schema, root, claude CLI, orphans) |
+| `flowstate repair` | Apply safe fixes for `doctor` findings (`--apply-destructive` gates risky ones) |
+| `flowstate fresh` | Remove FlowState-owned files per the install manifest (orphans reported, not nuked) |
+| `flowstate config` | Manage global configuration (e.g. default project root) |
+
+Together, `journal` + `gotchas` + `verify` form the **compounding loop**: each run leaves a delta trail and structured failure signals that the next run reads first, so work compounds instead of repeating.
+
 ## Project structure
 
 ```
@@ -211,15 +234,23 @@ flowstate/
 │   ├── context.py          # Deterministic context file generator
 │   ├── launcher.py         # Native session launch helpers
 │   ├── discipline.py       # Pure Python project audit
-│   ├── memory.py           # SQLite FTS5 memory store
+│   ├── memory.py           # SQLite FTS5 + optional sqlite-vec semantic memory store
+│   ├── embeddings.py       # Lazy optional embedding provider ([semantic] extra)
 │   ├── memory_handlers.py  # EventBus handlers for auto-storing results
+│   ├── context_prefix.py   # Layered CAG context-prefix assembler
+│   ├── gotchas.py          # Accumulated failure-signal layer
+│   ├── journal.py          # Append-only run-delta journal
+│   ├── verify.py           # Runnable fixture-gate verification
+│   ├── pack.py             # repomix codebase-pack integration
+│   ├── doctor.py           # Pure-Python health checks + repair
 │   ├── events/             # Event-driven infrastructure
 │   └── tools/
 │       ├── base.py         # ToolAdapter base class + ToolResult
 │       ├── research.py     # Research adapter (split-topic)
 │       ├── strategy.py     # Strategy adapter (pressure-test)
 │       └── gsd_adapter.py  # Management adapter (context files)
-├── tests/                  # 155 tests, 90% coverage
+├── tests/                  # 758 tests, 92% coverage
+├── bench/                  # research harness (grounding eval, RGB axes, arms)
 ├── research/               # Generated research artifacts
 ├── flowstate.json          # Pipeline state (gitignored)
 ├── memory.db               # Persistent memory (gitignored)
@@ -293,11 +324,23 @@ Each pipeline run stores research findings, strategy assessments, interview deci
 4. On failure, the error is stored as a `tool_run` memory for future reference
 5. Before each bridge call, the adapter calls `get_memory_context(topic)` — if relevant prior knowledge exists, it's prepended to the prompt as a `## Prior Knowledge` section
 
-**Memory kinds:** `research`, `strategy`, `decision`, `tool_run`, `insight`
+**Memory kinds:** `research`, `strategy`, `decision`, `tool_run`, `insight`, `run`
 
-**Search:** FTS5 with BM25 ranking. Queries use porter stemming so "streaming" matches "streams". Results are ranked by relevance and truncated to a configurable token budget before prompt injection.
+**Search:** FTS5 with BM25 ranking by default (porter stemming, so "streaming" matches "streams"), or semantic KNN when the `[semantic]` extra is installed (see [Semantic retrieval](#semantic-retrieval-optional)). Results are ranked by relevance and truncated to a configurable token budget before prompt injection.
 
-**Storage:** Single `memory.db` file in the project root. Portable, inspectable with `sqlite3`, gitignored by default. The `sqlite-vec` dependency is included for future vector search but dormant in v1.
+**Storage:** Single `memory.db` file in the project root. Portable, inspectable with `sqlite3`, gitignored by default.
+
+### Semantic retrieval (optional)
+
+By default, `get_context()` retrieves via FTS5/BM25. With the optional `[semantic]` extra installed, FlowState upgrades retrieval to **semantic KNN** over a `sqlite-vec` vector store (`memories_vec`) embedded with [fastembed](https://github.com/qdrant/fastembed) (`BAAI/bge-small-en-v1.5`, 384-dim):
+
+- Embeddings are computed on write (`add`/`update`/`add_many`) and existing rows are lazily backfilled on open — never blocking startup.
+- Retrieval ranks by vector distance with an L2 relevance floor (≈ cosine 0.60); queries with no relevant match fall back to the same empty result as before.
+- **Graceful by design:** if the `[semantic]` extra is absent (or `sqlite-vec`/the model can't load), every path degrades to the existing FTS5/BM25 behavior — byte-identical output, no errors. The core install stays dependency-free.
+
+Why it matters: on a checkable grounding benchmark, naive BM25 surfaced the correct article 3/20 while semantic KNN hit 17/20 (≈ oracle), recovering grounding accuracy lexical retrieval loses. Enable it with `pip install -e ".[semantic]"`.
+
+The embedding model is configurable via `FLOWSTATE_EMBED_MODEL` or `.planning/config.json`.
 
 ## Acknowledgments
 
@@ -310,6 +353,7 @@ FlowState was inspired by and designed to integrate with these projects:
 - **[ECC](https://github.com/affaan-m/ECC)** (`affaan-m`) — An agent-harness performance system. FlowState borrowed several patterns from it: the install-manifest plus `doctor`/`repair` model and env-var hook profiles (v0.3), and the eval-fixture contract format — retrieval questions, acceptance gates, forbidden actions — that `flowstate init` / `flowstate kickoff` scaffold (v0.4). FlowState deliberately did *not* adopt ECC's multi-harness packaging or Rust control-plane.
 - **[Andrej Karpathy Skills](https://github.com/multica-ai/andrej-karpathy-skills)** — Behavioral coding guidelines (Think Before Coding, Simplicity First, Surgical Changes, Goal-Driven Execution) distilled from Andrej Karpathy's notes on LLM coding pitfalls. FlowState ships these as the `CANON` constant prepended to every `claude --print` system prompt (v0.4).
 - **[Repomix](https://github.com/yamadashy/repomix)** by Kazuki Yamada — Packs a codebase into a single AI-friendly file. `flowstate pack` shells out to the Repomix CLI to produce the codebase pack that FlowState's CAG context layer injects, and registers the Repomix MCP server for retrieval-on-top (v0.4).
+- **[sqlite-vec](https://github.com/asg017/sqlite-vec)** by Alex Garcia & **[fastembed](https://github.com/qdrant/fastembed)** by Qdrant — A SQLite vector-search extension and an ONNX-based local embedding library. Together they back FlowState's optional semantic memory retrieval (`[semantic]` extra): `sqlite-vec` stores the `memories_vec` KNN index inside `memory.db`, and `fastembed` (`bge-small-en-v1.5`) produces the embeddings — both fully local, no network at query time (v0.6).
 
 ## License
 
