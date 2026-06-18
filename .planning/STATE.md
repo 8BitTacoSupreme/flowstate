@@ -85,6 +85,12 @@ None yet.
 
 None at roadmap start. Key implementation constraint: every caller path must check embedder.available() before computing vectors — the FTS5 fallback is the correctness gate, not an afterthought. Confirm sqlite-vec loads cleanly on the existing MemoryStore._conn before Phase 9 planning.
 
+## Quick Tasks Completed
+
+| Task ID | Name | Status | Completed | Commits |
+|---------|------|--------|-----------|---------|
+| 260618-p97 | Wire RGB four axes into bench/grounding.py | complete | 2026-06-18 | 5f56e6d, a194431, 137595e, da6a9d6, 32a0df7 |
+
 ## Session Continuity
 
 Last session: 2026-06-18T20:03:35.708Z
