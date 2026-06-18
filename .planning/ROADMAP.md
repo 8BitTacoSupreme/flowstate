@@ -86,7 +86,8 @@ Full detail: [`milestones/v0.5.0-ROADMAP.md`](./milestones/v0.5.0-ROADMAP.md)
   2. When the `wiki` layer is active and the embedder is absent, `build_context_prefix()` falls back to the existing `_read_wiki_layer` static-read behavior without raising
   3. The default `build_context_prefix()` call (no `include_layers`) produces output that is byte-identical to pre-Phase-11 output — golden tests pass unmodified
   4. Tests cover the semantic retrieval path with a fake embed_fn and a small in-memory wiki corpus (no network/model required)
-**Plans**: TBD
+**Plans**: 1 plan
+  - [ ] 11-01-PLAN.md — Semantic top-k wiki retrieval helper + opt-in wiki-branch wiring with byte-identical default path and embedder-absent static fallback + offline tests (WIKI-01, WIKI-02)
 
 ## Progress
 
@@ -102,4 +103,4 @@ Full detail: [`milestones/v0.5.0-ROADMAP.md`](./milestones/v0.5.0-ROADMAP.md)
 | 8. Runnable Verification | v0.5.0 | 3/3 | Complete | 2026-06-09 |
 | 9. Embedding Provider + Vector Store Foundation | v0.6.0 | 2/2 | Complete   | 2026-06-18 |
 | 10. Semantic Memory Retrieval | v0.6.0 | 1/1 | Complete    | 2026-06-18 |
-| 11. Semantic Wiki Retrieval | v0.6.0 | 0/TBD | Not started | - |
+| 11. Semantic Wiki Retrieval | v0.6.0 | 0/1 | Not started | - |
