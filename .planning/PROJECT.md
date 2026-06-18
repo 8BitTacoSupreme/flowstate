@@ -54,15 +54,15 @@ If everything else fails, that compounding loop is what FlowState exists to deli
 - ✓ **RUN-01..03**: append-only delta run journal (`MemoryKind.RUN` + `.planning/RUNLOG.md`) + `## Since Last Run` prefix layer + `flowstate journal` viewer — v0.5 / Phase 6
 - ✓ **GOT-01..03**: gotchas accumulator from doctor/repair/executor + harvested VERIFICATION.md/REVIEW.md findings, `## Gotchas` prefix layer (before memory), signature dedup/cap/prune + `flowstate gotchas` — v0.5 / Phase 7
 - ✓ **VER-01..02**: `flowstate verify` runs fixture gates against produced artifacts (bounded checker registry, CI-composable non-zero exit) + failures feed gotchas/journal, closing the loop — v0.5 / Phase 8
+- ✓ **EMB-01..04**: optional embedding provider (`flowstate/embeddings.py`) — lazy fastembed seam (`embed`/`dim`/`configured_dim`/`available`), env>config>default model precedence (`bge-small-en-v1.5`/384-dim), `[semantic]` pip extra; core install stays dep-free — v0.6 / Phase 9
+- ✓ **VEC-01..03**: `memories_vec` vec0 store in `memory.db` keyed to rowid — embed-on-add/update/add_many (savepoint-atomic), lazy batch-capped backfill, dim-mismatch + load-failure degrade to FTS5; opening a store never loads the model or blocks startup — v0.6 / Phase 9
 
 ### Active
 
-<!-- v0.6.0 Semantic Retrieval — requirements defined in REQUIREMENTS.md, mapped in ROADMAP.md. -->
+<!-- v0.6.0 Semantic Retrieval — Phase 9 (foundation) shipped; retrieval seams next. -->
 
-- ⧗ **EMB-01..**: Optional embedding provider (`flowstate/embeddings.py`) + `[semantic]` pip extra — v0.6
-- ⧗ **VEC-01..**: `vec0` vector store in `memory.db` (embed-on-add/update, lazy backfill) — v0.6
-- ⧗ **MEM-01..**: Semantic KNN in `MemoryStore.get_context()` with FTS5 fallback — v0.6
-- ⧗ **WIKI-01..**: Per-run semantic wiki retrieval in `context_prefix` — v0.6
+- ⧗ **MEM-01..02**: Semantic KNN in `MemoryStore.get_context()` with byte-compatible FTS5 fallback — v0.6 / Phase 10
+- ⧗ **WIKI-01..02**: Per-run semantic wiki retrieval in `context_prefix` (byte-identical default path) — v0.6 / Phase 11
 
 ### Out of Scope
 
@@ -129,4 +129,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-18 — v0.6.0 Semantic Retrieval milestone started*
+*Last updated: 2026-06-18 — v0.6.0 Phase 9 (Embedding Provider + Vector Store Foundation) complete*
