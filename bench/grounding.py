@@ -525,6 +525,158 @@ def _rgb_counterfactual(
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# RGB dispatcher
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def _run_rgb(args: argparse.Namespace, probes: list[dict]) -> int:
+    """Dispatch the RGB four-axes evaluation. Never raises. Returns 0 on success.
+
+    Sweeps noise_ratios for the noise axis; all other axes run once per probe.
+    Emits JSON to args.out when provided; always prints a console summary table.
+    Returns 1 only when every axis produced zero usable records.
+    """
+    try:
+        axes = {a.strip() for a in args.axes.split(",") if a.strip()}
+        noise_ratios = [float(r.strip()) for r in args.noise_ratios.split(",") if r.strip()]
+        judge_models = [m.strip() for m in args.judge_models.split(",") if m.strip()]
+        k = args.rgb_k
+
+        output: dict = {}
+
+        # Noise axis: sweep ratios.
+        if "noise" in axes:
+            per_ratio: dict[str, dict] = {}
+            per_probe_noise: list[dict] = []
+            for ratio in noise_ratios:
+                records = []
+                for probe in probes:
+                    rec = _rgb_noise(probe, probes, ratio, k, args.answer_model, judge_models)
+                    if rec is not None:
+                        records.append(rec)
+                        per_probe_noise.append({**rec, "ratio": ratio})
+                n = len(records)
+                successes = sum(1 for r in records if r.get("majority"))
+                accuracy = successes / n if n else 0.0
+                low, high = _wilson(successes, n)
+                per_ratio[str(ratio)] = {
+                    "accuracy": accuracy,
+                    "n": n,
+                    "wilson_ci": [low, high],
+                }
+            output["noise"] = {"per_ratio": per_ratio, "per_probe": per_probe_noise}
+
+        # Negative axis.
+        if "negative" in axes:
+            records = []
+            for probe in probes:
+                rec = _rgb_negative(probe, probes, k, args.answer_model, judge_models)
+                if rec is not None:
+                    records.append(rec)
+            n = len(records)
+            rejections = sum(1 for r in records if r.get("rejected"))
+            rejection_rate = rejections / n if n else 0.0
+            low, high = _wilson(rejections, n)
+            output["negative"] = {
+                "rejection_rate": rejection_rate,
+                "n": n,
+                "wilson_ci": [low, high],
+                "per_probe": records,
+            }
+
+        # Integration axis.
+        if "integration" in axes:
+            records = []
+            skipped = 0
+            for probe in probes:
+                rec = _rgb_integration(probe, probes, k, args.answer_model, judge_models)
+                if rec is None:
+                    skipped += 1
+                    print(f"integration: skipped {probe.get('id')} (needs >=2 gold)")
+                else:
+                    records.append(rec)
+            n = len(records)
+            successes = sum(1 for r in records if r.get("majority"))
+            accuracy = successes / n if n else 0.0
+            low, high = _wilson(successes, n)
+            output["integration"] = {
+                "accuracy": accuracy,
+                "n": n,
+                "wilson_ci": [low, high],
+                "skipped": skipped,
+                "per_probe": records,
+            }
+
+        # Counterfactual axis.
+        if "counterfactual" in axes:
+            records = []
+            skipped = 0
+            for probe in probes:
+                rec = _rgb_counterfactual(probe, args.answer_model, judge_models)
+                if rec is None:
+                    skipped += 1
+                else:
+                    records.append(rec)
+            n = len(records)
+            robust_count = sum(1 for r in records if r.get("robust"))
+            misled_count = sum(1 for r in records if r.get("misled"))
+            robust_rate = robust_count / n if n else 0.0
+            misled_rate = misled_count / n if n else 0.0
+            low, high = _wilson(robust_count, n)
+            output["counterfactual"] = {
+                "robust_rate": robust_rate,
+                "misled_rate": misled_rate,
+                "n": n,
+                "wilson_ci": [low, high],
+                "skipped": skipped,
+                "per_probe": records,
+            }
+
+        if args.out is not None:
+            try:
+                args.out.write_text(json.dumps(output, indent=2))
+            except Exception as exc:
+                print(f"warning: could not write results to {args.out}: {exc}")
+
+        # Console summary table.
+        print(f"\n{'axis':<16} {'metric':>12} {'wilson_ci':>20} {'n':>6}")
+        print("-" * 58)
+        if "noise" in output:
+            for ratio_str, data in output["noise"]["per_ratio"].items():
+                ci = f"[{data['wilson_ci'][0]:.3f}, {data['wilson_ci'][1]:.3f}]"
+                print(
+                    f"{'noise r=' + ratio_str:<16} {data['accuracy']:>12.3f} {ci:>20} {data['n']:>6}"
+                )
+        if "negative" in output:
+            data = output["negative"]
+            ci = f"[{data['wilson_ci'][0]:.3f}, {data['wilson_ci'][1]:.3f}]"
+            print(f"{'negative':<16} {data['rejection_rate']:>12.3f} {ci:>20} {data['n']:>6}")
+        if "integration" in output:
+            data = output["integration"]
+            ci = f"[{data['wilson_ci'][0]:.3f}, {data['wilson_ci'][1]:.3f}]"
+            print(f"{'integration':<16} {data['accuracy']:>12.3f} {ci:>20} {data['n']:>6}")
+        if "counterfactual" in output:
+            data = output["counterfactual"]
+            ci = f"[{data['wilson_ci'][0]:.3f}, {data['wilson_ci'][1]:.3f}]"
+            robust_str = "r=" + f"{data['robust_rate']:.3f}"
+            print(f"{'counterfactual':<16} {robust_str:>12} {ci:>20} {data['n']:>6}")
+
+        # Return 1 only when every axis has zero records.
+        all_empty = all(
+            (
+                "noise" not in output
+                or all(v["n"] == 0 for v in output["noise"]["per_ratio"].values()),
+                "negative" not in output or output["negative"]["n"] == 0,
+                "integration" not in output or output["integration"]["n"] == 0,
+                "counterfactual" not in output or output["counterfactual"]["n"] == 0,
+            )
+        )
+        return 1 if all_empty else 0
+    except Exception:
+        return 1
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # CLI
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -547,6 +699,11 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--wiki-dir", type=Path, default=None)
     parser.add_argument("--rag-k", type=int, default=3)
     parser.add_argument("--embed-model", default="BAAI/bge-small-en-v1.5")
+    # RGB flags (additive — ignored when --mode layers).
+    parser.add_argument("--mode", choices=("layers", "rgb"), default="layers")
+    parser.add_argument("--axes", default="noise,negative,integration,counterfactual")
+    parser.add_argument("--noise-ratios", default="0.0,0.4,0.8")
+    parser.add_argument("--rgb-k", type=int, default=5)
     return parser
 
 
@@ -568,6 +725,10 @@ def main(argv: list[str] | None = None) -> int:
         if probes is None:
             print(f"no usable probes in {args.probes}")
             return 1
+
+        # RGB mode: dispatch to _run_rgb and return immediately; arm loop does not run.
+        if args.mode == "rgb":
+            return _run_rgb(args, probes)
 
         judge_models = [m.strip() for m in args.judge_models.split(",") if m.strip()]
         root = args.root
