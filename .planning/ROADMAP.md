@@ -74,7 +74,8 @@ Full detail: [`milestones/v0.5.0-ROADMAP.md`](./milestones/v0.5.0-ROADMAP.md)
   2. `get_context(query)` with no embedder or no vectors returns a `## Prior Knowledge` block whose content is byte-identical to the current FTS5 output for the same store state
   3. All existing golden tests for `get_context` output format pass unchanged after this phase ships
   4. Tests cover both the semantic and fallback paths using an injected fake embed_fn (no network/model required)
-**Plans**: TBD
+**Plans**: 1 plan
+  - [ ] 10-01-PLAN.md — Semantic KNN in `get_context()` with byte-identical FTS5 fallback + offline tests (MEM-01, MEM-02)
 
 ### Phase 11: Semantic Wiki Retrieval
 **Goal**: The `context_prefix` wiki layer retrieves the most semantically relevant articles per run rather than reading the full static wiki file — while leaving the default (no `include_layers`) path entirely untouched.
@@ -100,5 +101,5 @@ Full detail: [`milestones/v0.5.0-ROADMAP.md`](./milestones/v0.5.0-ROADMAP.md)
 | 7. Gotchas Accumulator | v0.5.0 | 4/4 | Complete | 2026-06-08 |
 | 8. Runnable Verification | v0.5.0 | 3/3 | Complete | 2026-06-09 |
 | 9. Embedding Provider + Vector Store Foundation | v0.6.0 | 2/2 | Complete   | 2026-06-18 |
-| 10. Semantic Memory Retrieval | v0.6.0 | 0/TBD | Not started | - |
+| 10. Semantic Memory Retrieval | v0.6.0 | 0/1 | Not started | - |
 | 11. Semantic Wiki Retrieval | v0.6.0 | 0/TBD | Not started | - |
