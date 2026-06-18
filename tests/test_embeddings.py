@@ -153,6 +153,27 @@ def test_dim_derived_from_injected_fn():
     assert provider.dim == 7
 
 
+def test_configured_dim_returns_default_without_model_load():
+    """configured_dim returns _DEFAULT_DIM for a plain Embedder (no embed_fn, no model load)."""
+    import flowstate.embeddings as emb
+
+    provider = emb.Embedder(model_name="BAAI/bge-small-en-v1.5")
+    # Must not trigger _ensure_model()
+    assert provider.configured_dim == emb._DEFAULT_DIM
+    assert provider._model is None
+    assert provider._unavailable is False
+
+
+def test_configured_dim_uses_injected_fn():
+    """configured_dim derives dimension from the injected embed_fn, not _DEFAULT_DIM."""
+    import flowstate.embeddings as emb
+
+    fake = _make_fake_embed_fn(dim=6)
+    provider = emb.get_embedder(embed_fn=fake)
+
+    assert provider.configured_dim == 6
+
+
 def test_dim_with_two_element_vector():
     """dim == 2 for a 2-element vector embed_fn."""
     import flowstate.embeddings as emb

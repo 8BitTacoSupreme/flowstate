@@ -550,8 +550,9 @@ class TestLazyBackfill:
     def test_backfill_on_reopen_with_embedder(self, tmp_path: Path):
         """Pre-populate memories without vec rows; reopen with embedder → all rows backfilled.
 
-        Strategy: add with a fake dim=4 embedder (table created as float[4]), then delete
-        all vec rows to simulate an un-vectored store, then reopen to trigger backfill.
+        Backfill is deferred to the first write (VEC-03: open never blocks startup).
+        Strategy: add entries, clear vec rows to simulate un-vectored state, reopen,
+        then trigger a write to kick off backfill and assert all rows are backfilled.
         """
         embedder = _fake_embedder(dim=4)
         with MemoryStore(root=tmp_path, embedder=embedder) as store:
@@ -565,9 +566,11 @@ class TestLazyBackfill:
             store._conn.commit()
             assert store._conn.execute("SELECT COUNT(*) FROM memories_vec").fetchone()[0] == 0
 
-        # Reopen with same-dim embedder — backfill should restore all vec rows
+        # Reopen with same-dim embedder; trigger a write to kick off deferred backfill
         with MemoryStore(root=tmp_path, embedder=_fake_embedder(dim=4)) as store2:
             assert store2._vec_ready is True
+            # Trigger backfill by writing one new entry (backfill runs before insert)
+            store2.add(MemoryEntry.create(MemoryKind.RESEARCH, "trigger", "trigger"))
             vec_count = store2._conn.execute("SELECT COUNT(*) FROM memories_vec").fetchone()[0]
             mem_count = store2.count()
             assert vec_count == mem_count, (
@@ -604,3 +607,240 @@ class TestLazyBackfill:
         # Reopen without embedder — must not raise
         with MemoryStore(root=tmp_path) as store2:
             assert store2.count() == 2  # FTS5 path unaffected
+
+
+# ---------------------------------------------------------------------------
+# Fix-coverage tests: CR-01, WR-01, WR-02, WR-03, WR-04, WR-05
+# ---------------------------------------------------------------------------
+
+
+class TestCR01ExtensionRescope:
+    """CR-01: enable_load_extension(False) must run even when sqlite_vec.load() raises."""
+
+    def test_extension_disabled_after_load_failure(self, tmp_path: Path, monkeypatch):
+        """When sqlite_vec.load() raises, enable_load_extension(False) must still run.
+
+        _vec_ready must be False and the connection must not allow load_extension().
+        Uses sys.modules patching to inject a fake sqlite_vec whose load() raises.
+        """
+        import sqlite3
+        import sys
+        import types
+
+        def failing_load(conn):
+            raise RuntimeError("simulated load failure")
+
+        # Patch sqlite_vec in sys.modules so the local import inside _init_vec
+        # gets our fake module, but .load() raises.
+        fake_vec = types.ModuleType("sqlite_vec")
+        fake_vec.load = failing_load  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "sqlite_vec", fake_vec)
+
+        with MemoryStore(root=tmp_path) as store:
+            # _vec_ready must be False after load failure
+            assert store._vec_ready is False
+            # The connection must NOT allow load_extension (re-scoped off in finally)
+            with pytest.raises(sqlite3.OperationalError):
+                store._conn.load_extension("nonexistent_extension_xyz")
+
+
+class TestWR01NoModelLoadOnOpen:
+    """WR-01: Opening MemoryStore with the default embedder must NOT construct the real model."""
+
+    def test_default_embedder_open_does_not_construct_model(self, tmp_path: Path, monkeypatch):
+        """MemoryStore(root) must not call TextEmbedding() during __init__ (VEC-03)."""
+        import flowstate.embeddings as emb
+
+        constructed = []
+
+        class SentinelTextEmbedding:
+            def __init__(self, *args, **kwargs):
+                constructed.append(args)
+
+            def embed(self, texts):
+                return iter([[0.0] * emb._DEFAULT_DIM])
+
+        # Patch at the module level — _ensure_model() imports from this.
+        monkeypatch.setattr(emb, "TextEmbedding", SentinelTextEmbedding, raising=False)
+        # Also patch the fastembed import inside _ensure_model so it returns our sentinel.
+        import builtins
+
+        real_import = builtins.__import__
+
+        def patched_import(name, *args, **kwargs):
+            if name == "fastembed":
+                import types
+
+                fake = types.ModuleType("fastembed")
+                fake.TextEmbedding = SentinelTextEmbedding  # type: ignore[attr-defined]
+                return fake
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", patched_import)
+
+        # Open the store — must complete without constructing SentinelTextEmbedding.
+        with MemoryStore(root=tmp_path):
+            pass
+
+        assert constructed == [], (
+            "TextEmbedding was constructed during MemoryStore open — startup would block/download"
+        )
+
+    def test_configured_dim_does_not_load_model(self, monkeypatch):
+        """Embedder.configured_dim returns _DEFAULT_DIM without constructing the model."""
+        from flowstate.embeddings import _DEFAULT_DIM, Embedder
+
+        constructed = []
+
+        class SentinelModel:
+            def __init__(self, *args, **kwargs):
+                constructed.append(1)
+
+        e = Embedder(model_name="BAAI/bge-small-en-v1.5")
+        # configured_dim should return _DEFAULT_DIM without ever touching _ensure_model
+        assert e.configured_dim == _DEFAULT_DIM
+        assert constructed == [], "configured_dim triggered model construction"
+        assert e._model is None  # model was never loaded
+        assert e._unavailable is False  # no load was attempted
+
+
+class TestWR02DimMismatch:
+    """WR-02: Dim mismatch on reopen must set _vec_ready=False rather than silently diverging."""
+
+    @pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
+    def test_dim_mismatch_on_reopen_sets_vec_not_ready(self, tmp_path: Path):
+        """If memories_vec was created with dim=4 but embedder now reports dim=8,
+        _vec_ready must be False and add() must not raise (FTS5 path unaffected)."""
+        # First open: create db with dim=4 embedder
+        with MemoryStore(root=tmp_path, embedder=_fake_embedder(dim=4)) as store:
+            store.add(MemoryEntry.create(MemoryKind.RESEARCH, "content", "summary"))
+            assert store._vec_ready is True
+
+        # Reopen with a different dim — must detect mismatch and degrade gracefully
+        with MemoryStore(root=tmp_path, embedder=_fake_embedder(dim=8)) as store2:
+            assert store2._vec_ready is False, "dim mismatch should have set _vec_ready=False"
+            # FTS5 path must be unaffected: add/search still work
+            entry = MemoryEntry.create(MemoryKind.RESEARCH, "new content", "new summary")
+            returned_id = store2.add(entry)  # must not raise
+            assert returned_id == entry.id
+            assert store2.count() == 2
+            assert len(store2.search("content")) >= 1
+
+
+class TestWR03NarrowExcept:
+    """WR-03: sqlite3.Error in embed path must flip _vec_ready=False; FTS5 still works."""
+
+    @pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
+    def test_sqlite_error_in_embed_disables_vec_not_fts5(self, tmp_path: Path):
+        """When INSERT INTO memories_vec raises a dimension error (sqlite3.Error),
+        _vec_ready flips to False and the store degrades to FTS5-only without raising.
+
+        Strategy: create table with dim=4, then swap in a dim=8 embed_fn so that
+        _embed_rowid produces a vector of wrong length, causing sqlite3.Error on INSERT.
+        _vec_ready must be set to False; add() must not raise; FTS5 still works.
+        """
+        # Create the store with dim=4 table, confirm it works
+        embedder = _fake_embedder(dim=4)
+        with MemoryStore(root=tmp_path, embedder=embedder) as store:
+            assert store._vec_ready is True
+            store.add(MemoryEntry.create(MemoryKind.RESEARCH, "first", "first summary"))
+            assert store.count() == 1
+
+            # Swap the embedder's embed_fn to produce dim=8 vectors into a float[4] table.
+            # The INSERT will raise sqlite3.Error (dimension mismatch).
+            store._embedder._embed_fn = _fake_embedder(dim=8)._embed_fn
+
+            entry = MemoryEntry.create(MemoryKind.RESEARCH, "second", "second summary")
+            returned_id = store.add(entry)  # must not raise
+
+            assert returned_id == entry.id  # add() return unchanged
+            assert store._vec_ready is False  # sqlite3.Error flipped the flag
+            assert store.count() == 2  # FTS5 path: row was stored
+            assert len(store.search("second")) >= 1  # FTS5 search still works
+
+
+class TestWR04AddManyAtomicVec:
+    """WR-04: add_many vec writes must be all-or-nothing; failure rolls back vec side."""
+
+    @pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
+    def test_add_many_vec_failure_rolls_back_all_vec_rows(self, tmp_path: Path):
+        """If vec INSERT fails mid-loop in add_many, all vec rows for that call are rolled
+        back (memories rows remain intact); _vec_ready goes False; store reconciles on reopen.
+
+        Strategy: create table with dim=4, add a warm-up entry to confirm vec works,
+        then swap the embed_fn to dim=8 on the SECOND add_many call so that the first
+        INSERT inside add_many succeeds but the second raises (dim mismatch). This
+        exercises the savepoint rollback path.
+        """
+        # Open store with dim=4; add a first entry to confirm vec is working
+        with MemoryStore(root=tmp_path, embedder=_fake_embedder(dim=4)) as store:
+            assert store._vec_ready is True
+            store.add(MemoryEntry.create(MemoryKind.RESEARCH, "warmup", "warmup"))
+            assert store._conn.execute("SELECT COUNT(*) FROM memories_vec").fetchone()[0] == 1
+
+            # Now swap to dim=8 embed_fn — subsequent INSERTs will raise dim error
+            call_count = [0]
+            dim4_fn = _fake_embedder(dim=4)._embed_fn
+            dim8_fn = _fake_embedder(dim=8)._embed_fn
+
+            def mixed_fn(texts):
+                call_count[0] = call_count[0] + 1
+                if call_count[0] >= 2:
+                    return dim8_fn(texts)  # wrong dim → sqlite3.Error on INSERT
+                return dim4_fn(texts)
+
+            store._embedder._embed_fn = mixed_fn
+
+            entries = [
+                MemoryEntry.create(MemoryKind.RESEARCH, f"content {i}", f"summary {i}")
+                for i in range(3)
+            ]
+            ids = store.add_many(entries)  # must not raise
+
+            assert len(ids) == 3  # all memory IDs returned
+            assert store.count() == 4  # 1 warmup + 3 new memories rows committed
+            # Vec writes rolled back — _vec_ready is False; zero vec rows added by add_many
+            assert store._vec_ready is False
+            vec_count = store._conn.execute("SELECT COUNT(*) FROM memories_vec").fetchone()[0]
+            assert vec_count == 1  # only the warmup row; add_many's rows were rolled back
+
+        # Reopen: memories intact; backfill reconciles on first write
+        with MemoryStore(root=tmp_path, embedder=_fake_embedder(dim=4)) as store2:
+            assert store2.count() == 4  # FTS5 path unaffected
+            # Trigger backfill by writing — should reconcile all rows
+            store2.add(MemoryEntry.create(MemoryKind.RESEARCH, "trigger", "trigger"))
+            vec_count = store2._conn.execute("SELECT COUNT(*) FROM memories_vec").fetchone()[0]
+            assert vec_count == store2.count()  # all rows backfilled after reconcile
+
+
+class TestWR05BackfillBatchLimit:
+    """WR-05: backfill must respect _BACKFILL_BATCH and not block startup on large dbs."""
+
+    @pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
+    def test_backfill_batch_limit_respected(self, tmp_path: Path, monkeypatch):
+        """When more than _BACKFILL_BATCH rows are un-vectored, backfill processes at most
+        _BACKFILL_BATCH of them per open (WR-05: no unbounded startup scan)."""
+        import flowstate.memory as mem_mod
+
+        # Set a very small batch for this test
+        monkeypatch.setattr(mem_mod.MemoryStore, "_BACKFILL_BATCH", 2)
+
+        embedder = _fake_embedder(dim=4)
+        # First open: add 5 entries with embedder so table is created at correct dim
+        with MemoryStore(root=tmp_path, embedder=embedder) as store:
+            for i in range(5):
+                store.add(MemoryEntry.create(MemoryKind.RESEARCH, f"content {i}", f"summary {i}"))
+            # Clear vec rows to simulate un-vectored state
+            store._conn.execute("DELETE FROM memories_vec")
+            store._conn.commit()
+
+        # Reopen and trigger backfill via a write — should process at most 2 rows
+        with MemoryStore(root=tmp_path, embedder=_fake_embedder(dim=4)) as store2:
+            assert store2._vec_ready is True
+            store2.add(MemoryEntry.create(MemoryKind.RESEARCH, "trigger", "trigger"))
+            vec_count = store2._conn.execute("SELECT COUNT(*) FROM memories_vec").fetchone()[0]
+            # batch=2 backfill + 1 for the trigger add = 3; never 6 (all at once)
+            assert vec_count <= 3, (
+                f"backfill processed more than _BACKFILL_BATCH rows ({vec_count} > 3)"
+            )
+            assert vec_count >= 1  # at least the trigger entry was embedded
