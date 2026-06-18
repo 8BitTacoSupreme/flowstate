@@ -16,9 +16,9 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 
 ### Vector Store (VEC)
 
-- [ ] **VEC-01**: `memory.db` gains a `vec0` virtual table keyed to memory rows, with sqlite-vec loaded on the existing `MemoryStore` connection.
-- [ ] **VEC-02**: `MemoryStore.add()` and `update()` compute and persist the row embedding when an embedder is available, and are a silent no-op (FTS5-only) when it is absent.
-- [ ] **VEC-03**: On store open, existing rows missing vectors are lazily backfilled when an embedder is available; open never blocks and never fails when the embedder is absent.
+- [x] **VEC-01**: `memory.db` gains a `vec0` virtual table keyed to memory rows, with sqlite-vec loaded on the existing `MemoryStore` connection.
+- [x] **VEC-02**: `MemoryStore.add()` and `update()` compute and persist the row embedding when an embedder is available, and are a silent no-op (FTS5-only) when it is absent.
+- [x] **VEC-03**: On store open, existing rows missing vectors are lazily backfilled when an embedder is available; open never blocks and never fails when the embedder is absent.
 
 ### Memory Retrieval (MEM)
 
@@ -63,9 +63,9 @@ Which phases cover which requirements. Populated during roadmap creation.
 | EMB-02 | Phase 9 | Complete |
 | EMB-03 | Phase 9 | Complete |
 | EMB-04 | Phase 9 | Complete |
-| VEC-01 | Phase 9 | Pending |
-| VEC-02 | Phase 9 | Pending |
-| VEC-03 | Phase 9 | Pending |
+| VEC-01 | Phase 9 | Complete |
+| VEC-02 | Phase 9 | Complete |
+| VEC-03 | Phase 9 | Complete |
 | MEM-01 | Phase 10 | Pending |
 | MEM-02 | Phase 10 | Pending |
 | WIKI-01 | Phase 11 | Pending |
