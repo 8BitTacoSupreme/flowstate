@@ -246,14 +246,12 @@ def _semantic_wiki_layer(root: Path, query: str, embedder: Any) -> str | None:
         if embedder is None or not embedder.available():
             return None
 
-        paths: list[str] = []
         contents: list[str] = []
         for p in sorted(corpus_dir.glob("**/*.md")):
             try:
                 text = p.read_text(errors="ignore")
                 if not text.strip():
                     continue
-                paths.append(str(p))
                 contents.append(text)
             except Exception:
                 continue

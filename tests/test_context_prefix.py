@@ -1394,11 +1394,11 @@ class TestWikiSemantic:
         expected = _read_wiki_layer(tmp_path)
         assert "## Codebase Wiki" in result, "wiki heading must be present via static fallback"
         assert "static wiki article content" in result, "static wiki content must appear"
-        # Extract the wiki section from result and compare to the static read
-        wiki_start = result.find("## Codebase Wiki")
-        wiki_slice = result[wiki_start:]
-        assert wiki_slice == expected or expected in result, (
-            "embedder-absent path must equal _read_wiki_layer output"
+        # The wiki layer is a discrete separator-delimited layer in the assembled
+        # prefix; the embedder-absent path must reproduce _read_wiki_layer output
+        # exactly as that layer (not merely as a loose substring).
+        assert expected in result.split("\n\n---\n\n"), (
+            "embedder-absent wiki layer must be byte-identical to _read_wiki_layer output"
         )
 
     def test_semantic_path_never_raises_on_embed_error(self, tmp_path: Path, monkeypatch):
