@@ -8,6 +8,7 @@ Covers:
   - byte-identical across two calls with identical inputs
   - missing artifacts handled gracefully (no raise, layers omitted)
   - canon NOT in output (no double-inject)
+  - Semantic wiki retrieval: top-k selection, byte-identity default, fallback, never-raises
 """
 
 from __future__ import annotations
@@ -16,8 +17,35 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from flowstate.context_prefix import build_context_prefix
+import pytest
+
+from flowstate.context_prefix import _read_wiki_layer, build_context_prefix
 from flowstate.pack import PackResult
+
+# ──────────────────────────────────────────────────────────────────────────────
+# sqlite_vec availability guard (mirroring bench/test_bench_grounding.py)
+# ──────────────────────────────────────────────────────────────────────────────
+
+try:
+    import sqlite_vec as _sqlite_vec_probe  # noqa: F401
+
+    _HAS_VEC = True
+except Exception:
+    _HAS_VEC = False
+
+
+def _fake_embed_factory(keyword: str, match_vec: list[float], default_vec: list[float]):
+    """Return a fake embed_fn that maps texts containing *keyword* to *match_vec*, others to *default_vec*.
+
+    Deterministic and offline — no model download. Mirrors the pattern in
+    tests/test_bench_grounding.py.
+    """
+
+    def embed_fn(texts: list[str]) -> list[list[float]]:
+        return [match_vec[:] if keyword in t else default_vec[:] for t in texts]
+
+    return embed_fn
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -1242,3 +1270,209 @@ class TestWikiLayer:
         result = _read_wiki_layer(tmp_path)
         assert result.startswith("## Codebase Wiki\n\n")
         assert "module map here" in result
+
+
+# ---------------------------------------------------------------------------
+# Semantic wiki retrieval
+# ---------------------------------------------------------------------------
+
+
+def _make_wiki_corpus(root: Path, articles: dict[str, str]) -> Path:
+    """Write article files to ``.planning/codebase/wiki/<name>.md`` and return the corpus dir."""
+    corpus_dir = root / ".planning" / "codebase" / "wiki"
+    corpus_dir.mkdir(parents=True, exist_ok=True)
+    for name, content in articles.items():
+        (corpus_dir / name).write_text(content)
+    return corpus_dir
+
+
+class TestWikiSemantic:
+    """Offline tests for the semantic wiki retrieval path.
+
+    All embed calls use injected fake embed_fn (no fastembed/network).
+    Vec-dependent tests are guarded with skipif(not _HAS_VEC).
+    """
+
+    def _patch_get_embedder(self, monkeypatch, embed_fn):
+        """Monkeypatch flowstate.context_prefix.get_embedder to return an Embedder with embed_fn."""
+        import flowstate.embeddings as emb_mod
+
+        monkeypatch.setattr(
+            "flowstate.context_prefix.get_embedder",
+            lambda root=None: emb_mod.get_embedder(root, embed_fn=embed_fn),
+        )
+
+    @pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
+    def test_topk_selects_relevant_article_only(self, tmp_path: Path, monkeypatch):
+        """k=1 via env var: relevant article present, irrelevant absent under ## Codebase Wiki."""
+        monkeypatch.setenv("FLOWSTATE_WIKI_K", "1")
+
+        # The relevant article + query share [1,0,0,0]; others are [0,1,0,0]
+        embed_fn = _fake_embed_factory("compliance", [1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0])
+        self._patch_get_embedder(monkeypatch, embed_fn)
+
+        _make_wiki_corpus(
+            tmp_path,
+            {
+                "compliance.md": "compliance audit requirements regulatory framework",
+                "producer.md": "producer throughput acks lz4 compression settings",
+                "consumer.md": "consumer group rebalance offset commit strategy",
+            },
+        )
+        memory = _make_memory_stub("")
+
+        with patch("flowstate.context_prefix.run_pack"):
+            result = build_context_prefix(
+                tmp_path,
+                memory,
+                "compliance audit query",
+                budget_tokens=50000,
+                include_layers=frozenset({"wiki"}),
+            )
+
+        assert "## Codebase Wiki" in result, "wiki heading must be present"
+        assert "compliance audit requirements" in result, "relevant article must be in output"
+        # k=1 → only 1 article; irrelevant content must be absent
+        assert "producer throughput" not in result, "irrelevant article must NOT be in top-1 output"
+        assert "consumer group" not in result, "irrelevant article must NOT be in top-1 output"
+
+    def test_default_path_byte_identical_with_corpus_present(self, tmp_path: Path, monkeypatch):
+        """Default path (no include_layers) must NOT invoke semantic retrieval even with corpus dir.
+
+        Both calls must be byte-identical and must NOT contain ## Codebase Wiki.
+        """
+        embed_fn = _fake_embed_factory("x", [1.0, 0.0], [0.0, 1.0])
+        self._patch_get_embedder(monkeypatch, embed_fn)
+
+        _make_wiki_corpus(
+            tmp_path,
+            {
+                "article.md": "some wiki content about the codebase",
+            },
+        )
+        memory = _make_memory_stub("")
+
+        with patch("flowstate.context_prefix.run_pack"):
+            result_default = build_context_prefix(
+                tmp_path, memory, "any query", budget_tokens=50000
+            )
+            result_none = build_context_prefix(
+                tmp_path, memory, "any query", budget_tokens=50000, include_layers=None
+            )
+
+        assert result_default == result_none, (
+            "no-kwarg and include_layers=None must be byte-identical"
+        )
+        assert "## Codebase Wiki" not in result_default, (
+            "wiki must NOT appear on the default path even with corpus present"
+        )
+
+    def test_embedder_absent_falls_back_to_static_read(self, tmp_path: Path, monkeypatch):
+        """With include_layers={'wiki'}, an unavailable embedder → static _read_wiki_layer output."""
+        import flowstate.embeddings as emb_mod
+
+        # Patch get_embedder to return an Embedder whose available() is always False
+        unavailable_embedder = emb_mod.Embedder(model_name="bogus-model-that-does-not-exist")
+        monkeypatch.setattr(
+            "flowstate.context_prefix.get_embedder",
+            lambda root=None: unavailable_embedder,
+        )
+
+        # Write static wiki.md (fallback source) — no corpus dir
+        _make_wiki_file(tmp_path, "static wiki article content\n")
+        memory = _make_memory_stub("")
+
+        with patch("flowstate.context_prefix.run_pack"):
+            result = build_context_prefix(
+                tmp_path,
+                memory,
+                "any query",
+                budget_tokens=50000,
+                include_layers=frozenset({"wiki"}),
+            )
+
+        expected = _read_wiki_layer(tmp_path)
+        assert "## Codebase Wiki" in result, "wiki heading must be present via static fallback"
+        assert "static wiki article content" in result, "static wiki content must appear"
+        # Extract the wiki section from result and compare to the static read
+        wiki_start = result.find("## Codebase Wiki")
+        wiki_slice = result[wiki_start:]
+        assert wiki_slice == expected or expected in result, (
+            "embedder-absent path must equal _read_wiki_layer output"
+        )
+
+    def test_semantic_path_never_raises_on_embed_error(self, tmp_path: Path, monkeypatch):
+        """A fake embed_fn that raises must not propagate — build_context_prefix returns a str."""
+
+        def exploding_embed_fn(texts):
+            raise RuntimeError("embedding service down")
+
+        self._patch_get_embedder(monkeypatch, exploding_embed_fn)
+
+        _make_wiki_corpus(tmp_path, {"article.md": "some content"})
+        # Also write static wiki.md so the fallback has something to return
+        _make_wiki_file(tmp_path, "fallback static content\n")
+        memory = _make_memory_stub("")
+
+        with patch("flowstate.context_prefix.run_pack"):
+            result = build_context_prefix(
+                tmp_path,
+                memory,
+                "query",
+                budget_tokens=50000,
+                include_layers=frozenset({"wiki"}),
+            )
+
+        assert isinstance(result, str), (
+            "build_context_prefix must return str even when embed raises"
+        )
+        # Should have fallen back to the static read
+        assert "## Codebase Wiki" in result
+
+    def test_load_wiki_k_precedence_and_bad_values(self, tmp_path: Path, monkeypatch):
+        """_load_wiki_k: env > config > default(3); bool/negative/zero → default 3."""
+        from flowstate.context_prefix import _DEFAULT_WIKI_K, _WIKI_K_ENV_VAR, _load_wiki_k
+
+        # Default when nothing set
+        assert _load_wiki_k(tmp_path / "empty") == _DEFAULT_WIKI_K
+
+        # Config value
+        config_dir = tmp_path / "cfg"
+        (config_dir / ".planning").mkdir(parents=True, exist_ok=True)
+        (config_dir / ".planning" / "config.json").write_text('{"wiki_retrieval_k": 5}')
+        assert _load_wiki_k(config_dir) == 5
+
+        # Env overrides config
+        monkeypatch.setenv(_WIKI_K_ENV_VAR, "7")
+        assert _load_wiki_k(config_dir) == 7
+
+        # Invalid env (non-int) falls through to config
+        monkeypatch.setenv(_WIKI_K_ENV_VAR, "nope")
+        assert _load_wiki_k(config_dir) == 5
+
+        # Invalid env (zero) falls through to config
+        monkeypatch.setenv(_WIKI_K_ENV_VAR, "0")
+        assert _load_wiki_k(config_dir) == 5
+
+        # Invalid env (negative) falls through to config
+        monkeypatch.setenv(_WIKI_K_ENV_VAR, "-2")
+        assert _load_wiki_k(config_dir) == 5
+
+        # Boolean in config → falls back to default
+        monkeypatch.delenv(_WIKI_K_ENV_VAR, raising=False)
+        bool_dir = tmp_path / "boolcfg"
+        (bool_dir / ".planning").mkdir(parents=True, exist_ok=True)
+        (bool_dir / ".planning" / "config.json").write_text('{"wiki_retrieval_k": true}')
+        assert _load_wiki_k(bool_dir) == _DEFAULT_WIKI_K
+
+        # Negative in config → falls back to default
+        neg_dir = tmp_path / "negcfg"
+        (neg_dir / ".planning").mkdir(parents=True, exist_ok=True)
+        (neg_dir / ".planning" / "config.json").write_text('{"wiki_retrieval_k": -1}')
+        assert _load_wiki_k(neg_dir) == _DEFAULT_WIKI_K
+
+        # Zero in config → falls back to default
+        zero_dir = tmp_path / "zerocfg"
+        (zero_dir / ".planning").mkdir(parents=True, exist_ok=True)
+        (zero_dir / ".planning" / "config.json").write_text('{"wiki_retrieval_k": 0}')
+        assert _load_wiki_k(zero_dir) == _DEFAULT_WIKI_K
