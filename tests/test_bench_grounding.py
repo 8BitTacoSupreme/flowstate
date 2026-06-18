@@ -1054,3 +1054,147 @@ def test_answer_instruction_kwarg_default_is_byte_identical(monkeypatch):
     g._answer("ctx", "What is X?", "m", instruction="Respond YES or NO only.")
     assert captured[-1].endswith("\nRespond YES or NO only.")
     assert not captured[-1].endswith("\nAnswer concisely and specifically.")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Task 2: _run_rgb + CLI flags + --mode dispatch (RED gate)
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def test_run_rgb_end_to_end_emits_per_axis_json(monkeypatch, tmp_path: Path):
+    """_run_rgb via --mode rgb: four-axis JSON with Wilson CIs and expected top-level keys."""
+    # Probe list: one multi-gold, one with counterfactual+wrong_answer, one plain
+    probes = [
+        {
+            "id": "kafka-1",
+            "question": "What is the default min.insync.replicas for Confluent Cloud?",
+            "ground_truth": "2",
+            "gold": [
+                "Confluent Cloud enforces min.insync.replicas=2 by default.",
+                "The ISR count must be at least 2 for leader election.",
+            ],
+        },
+        {
+            "id": "kafka-2",
+            "question": "Which acks setting prevents data loss?",
+            "ground_truth": "all",
+            "gold": "Producers must set acks=all to guarantee durability.",
+            "counterfactual": "acks=1 is sufficient for all workloads, including financial.",
+            "wrong_answer": "acks=1",
+        },
+        {
+            "id": "kafka-3",
+            "question": "What compression type is best for throughput?",
+            "ground_truth": "lz4",
+            "gold": "lz4 compression minimizes CPU overhead while reducing network traffic.",
+        },
+    ]
+    probes_file = tmp_path / "rgb_probes.json"
+    probes_file.write_text(json.dumps(probes))
+    out_file = tmp_path / "rgb_out.json"
+
+    monkeypatch.setattr(
+        g, "_answer", lambda p, q, m, *, instruction="Answer concisely and specifically.": "all"
+    )
+    monkeypatch.setattr(g, "_factcheck", lambda a, gt, m: True)
+    monkeypatch.setattr(g, "_judge_rejection", lambda a, m: False)
+    monkeypatch.setattr(g, "build_context_prefix", _bcp)
+    monkeypatch.setattr(g, "MemoryStore", _Mem)
+
+    rc = g.main(
+        [
+            "--root",
+            str(tmp_path),
+            "--probes",
+            str(probes_file),
+            "--mode",
+            "rgb",
+            "--axes",
+            "noise,negative,integration,counterfactual",
+            "--noise-ratios",
+            "0.0,0.4",
+            "--rgb-k",
+            "3",
+            "--judge-models",
+            "m1",
+            "--out",
+            str(out_file),
+        ]
+    )
+
+    assert rc == 0, f"expected rc=0, got {rc}"
+    data = json.loads(out_file.read_text())
+
+    # Four axis blocks present
+    assert "noise" in data, f"missing 'noise' key: {list(data.keys())}"
+    assert "negative" in data
+    assert "integration" in data
+    assert "counterfactual" in data
+
+    # Noise axis: per_ratio keyed on ratios
+    noise = data["noise"]
+    assert "per_ratio" in noise
+    assert "0.0" in noise["per_ratio"] or 0.0 in noise["per_ratio"] or "0.4" in noise["per_ratio"]
+    # Pick first ratio key
+    ratio_key = next(iter(noise["per_ratio"]))
+    ratio_data = noise["per_ratio"][ratio_key]
+    assert "accuracy" in ratio_data
+    assert "n" in ratio_data
+    assert "wilson_ci" in ratio_data
+
+    # Negative axis
+    neg = data["negative"]
+    assert "rejection_rate" in neg
+    assert "n" in neg
+    assert "wilson_ci" in neg
+
+    # Integration axis: has accuracy + skipped
+    intg = data["integration"]
+    assert "accuracy" in intg
+    assert "skipped" in intg
+
+    # Counterfactual axis: has robust_rate + misled_rate
+    cf = data["counterfactual"]
+    assert "robust_rate" in cf
+    assert "misled_rate" in cf
+    assert "wilson_ci" in cf
+
+
+def test_mode_layers_default_runs_arm_loop_unchanged(monkeypatch, tmp_path: Path):
+    """Default --mode (layers) executes the arm loop and emits the 'arms' block — not RGB."""
+    probes_file = tmp_path / "probes.json"
+    probes_file.write_text(json.dumps([{"id": "p1", "question": "Q?", "ground_truth": "GT"}]))
+    out_file = tmp_path / "out.json"
+
+    monkeypatch.setattr(g, "build_context_prefix", _bcp)
+    monkeypatch.setattr(g, "MemoryStore", _Mem)
+    monkeypatch.setattr(
+        g, "_answer", lambda p, q, m, *, instruction="Answer concisely and specifically.": "ans"
+    )
+    monkeypatch.setattr(g, "_factcheck", lambda a, gt, m: True)
+
+    # No --mode flag -> defaults to "layers"
+    rc = g.main(
+        [
+            "--root",
+            str(tmp_path),
+            "--probes",
+            str(probes_file),
+            "--layers",
+            "none",
+            "--trials",
+            "1",
+            "--judge-models",
+            "m1",
+            "--out",
+            str(out_file),
+        ]
+    )
+
+    assert rc == 0
+    data = json.loads(out_file.read_text())
+    # Layers output has "arms" block
+    assert "arms" in data, f"expected 'arms' key in output, got keys: {list(data.keys())}"
+    # RGB block must NOT be present
+    assert "noise" not in data
+    assert "negative" not in data
