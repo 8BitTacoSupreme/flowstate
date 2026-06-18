@@ -103,4 +103,4 @@ Full detail: [`milestones/v0.5.0-ROADMAP.md`](./milestones/v0.5.0-ROADMAP.md)
 | 8. Runnable Verification | v0.5.0 | 3/3 | Complete | 2026-06-09 |
 | 9. Embedding Provider + Vector Store Foundation | v0.6.0 | 2/2 | Complete   | 2026-06-18 |
 | 10. Semantic Memory Retrieval | v0.6.0 | 1/1 | Complete    | 2026-06-18 |
-| 11. Semantic Wiki Retrieval | v0.6.0 | 2/1 | Complete   | 2026-06-18 |
+| 11. Semantic Wiki Retrieval | v0.6.0 | 2/1 | Complete    | 2026-06-18 |
