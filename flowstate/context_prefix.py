@@ -40,6 +40,7 @@ from typing import Any
 
 from rich.console import Console
 
+from flowstate.embeddings import get_embedder
 from flowstate.memory import MemoryKind
 from flowstate.pack import PackResult, run_pack
 
@@ -58,6 +59,12 @@ _DEFAULT_JOURNAL_PREFIX_N = 3
 _DEFAULT_GOTCHAS_MAX_ENTRIES = 10
 _DEFAULT_GOTCHAS_BUDGET_TOKENS = 1500
 _CHARS_PER_TOKEN = 4  # consistent with memory.py::get_context approximation
+
+_WIKI_CORPUS_DIR = (
+    ".planning/codebase/wiki"  # article directory (distinct from single-file _WIKI_PATH)
+)
+_DEFAULT_WIKI_K = 3  # bench rag-k that yielded 17/20 semantic hits
+_WIKI_K_ENV_VAR = "FLOWSTATE_WIKI_K"
 
 # Module-level console — callers can inject their own via the ``console`` param
 _console = Console()
@@ -181,6 +188,122 @@ def _load_gotchas_enabled(root: Path) -> bool:
     except Exception:
         pass
     return True
+
+
+def _load_wiki_k(root: Path) -> int:
+    """Resolve the wiki semantic-retrieval top-k value.
+
+    Precedence: ``FLOWSTATE_WIKI_K`` env var → ``.planning/config.json`` key
+    ``wiki_retrieval_k`` → ``_DEFAULT_WIKI_K`` (3).
+
+    Only a positive integer (booleans excluded) is accepted at each tier;
+    invalid values fall through to the next tier.
+    """
+    env_value = os.environ.get(_WIKI_K_ENV_VAR)
+    if env_value is not None:
+        try:
+            parsed = int(env_value)
+            if parsed > 0:
+                return parsed
+        except ValueError:
+            pass
+
+    config_path = root / _CONFIG_PATH
+    if config_path.exists():
+        try:
+            data: dict[str, Any] = json.loads(config_path.read_text())
+            value = data.get("wiki_retrieval_k")
+            if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+                return value
+        except Exception:
+            pass
+
+    return _DEFAULT_WIKI_K
+
+
+def _semantic_wiki_layer(root: Path, query: str, embedder: Any) -> str | None:
+    """Retrieve top-k wiki articles by semantic KNN and return a headed string.
+
+    Returns a ``## Codebase Wiki``-headed string of the top-k articles joined by
+    ``_SEPARATOR``, or ``None`` to signal the caller to fall back to the static
+    ``_read_wiki_layer`` read.
+
+    Returns None when: corpus dir absent/not-a-dir, embedder is None or unavailable,
+    sqlite_vec import fails, no non-blank articles, blank query, KNN yields nothing,
+    or ANY exception. Never raises.
+
+    No relevance/distance threshold is applied. Unlike memory.get_context there is no
+    "must return empty for a garbage query" golden test for the wiki layer — a real run
+    query always wants its k most-relevant articles, so the L2/cosine floor from Phase 10
+    is intentionally omitted here to keep the seam simple.
+    """
+    try:
+        corpus_dir = root / _WIKI_CORPUS_DIR
+        if not corpus_dir.is_dir():
+            return None
+        if not query or not query.strip():
+            return None
+        if embedder is None or not embedder.available():
+            return None
+
+        paths: list[str] = []
+        contents: list[str] = []
+        for p in sorted(corpus_dir.glob("**/*.md")):
+            try:
+                text = p.read_text(errors="ignore")
+                if not text.strip():
+                    continue
+                paths.append(str(p))
+                contents.append(text)
+            except Exception:
+                continue
+
+        if not contents:
+            return None
+
+        vectors = embedder.embed(contents)
+        if not vectors:
+            return None
+        qvec_list = embedder.embed([query])
+        if not qvec_list:
+            return None
+        qvec = qvec_list[0]
+
+        try:
+            import sqlite_vec  # local import — optional dep
+        except ImportError:
+            return None
+
+        dim = len(qvec)
+        conn = __import__("sqlite3").connect(":memory:")
+        try:
+            conn.enable_load_extension(True)
+            sqlite_vec.load(conn)
+            # Re-scope the extension loader OFF immediately after loading (Phase 9 CR-01 /
+            # T-11-01 mitigation): the throwaway :memory: conn does not need further
+            # extension loads; disabling reduces the tamper surface for the conn's lifetime.
+            conn.enable_load_extension(False)
+            conn.execute(f"CREATE VIRTUAL TABLE vec_docs USING vec0(embedding float[{dim}])")
+            for i, vec in enumerate(vectors):
+                conn.execute(
+                    "INSERT INTO vec_docs(rowid, embedding) VALUES (?, ?)",
+                    (i, sqlite_vec.serialize_float32(vec)),
+                )
+            rows = conn.execute(
+                "SELECT rowid, distance FROM vec_docs"
+                " WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
+                (sqlite_vec.serialize_float32(qvec), _load_wiki_k(root)),
+            ).fetchall()
+        finally:
+            conn.close()
+
+        if not rows:
+            return None
+
+        top_k_contents = [contents[r[0]] for r in rows]
+        return "## Codebase Wiki\n\n" + _SEPARATOR.join(top_k_contents)
+    except Exception:
+        return None
 
 
 def _read_gotchas_layer(root: Path, memory: Any) -> str:
@@ -386,7 +509,14 @@ def build_context_prefix(
     # Do not use _included("wiki") here: _included returns True for None (default
     # path), which would include wiki on every call and break byte-identity.
     wiki_included = include_layers is not None and "wiki" in include_layers
-    wiki_layer = _read_wiki_layer(root) if wiki_included else ""
+    if wiki_included:
+        # Attempt semantic retrieval first; fall back to the static single-file read when
+        # the embedder is absent, sqlite-vec is not installed, the corpus dir does not
+        # exist, or any exception occurs.
+        _semantic = _semantic_wiki_layer(root, query, get_embedder(root))
+        wiki_layer = _semantic if _semantic is not None else _read_wiki_layer(root)
+    else:
+        wiki_layer = ""
 
     # ── Layer 3: gotchas (semi-stable failure signals; built early for budget accounting)
     gotchas_layer = _read_gotchas_layer(root, memory) if _included("gotchas") else ""
