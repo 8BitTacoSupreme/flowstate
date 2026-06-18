@@ -59,23 +59,23 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EMB-01 | TBD | Pending |
-| EMB-02 | TBD | Pending |
-| EMB-03 | TBD | Pending |
-| EMB-04 | TBD | Pending |
-| VEC-01 | TBD | Pending |
-| VEC-02 | TBD | Pending |
-| VEC-03 | TBD | Pending |
-| MEM-01 | TBD | Pending |
-| MEM-02 | TBD | Pending |
-| WIKI-01 | TBD | Pending |
-| WIKI-02 | TBD | Pending |
+| EMB-01 | Phase 9 | Pending |
+| EMB-02 | Phase 9 | Pending |
+| EMB-03 | Phase 9 | Pending |
+| EMB-04 | Phase 9 | Pending |
+| VEC-01 | Phase 9 | Pending |
+| VEC-02 | Phase 9 | Pending |
+| VEC-03 | Phase 9 | Pending |
+| MEM-01 | Phase 10 | Pending |
+| MEM-02 | Phase 10 | Pending |
+| WIKI-01 | Phase 11 | Pending |
+| WIKI-02 | Phase 11 | Pending |
 
 **Coverage:**
 - Milestone requirements: 11 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 11 ⚠️
+- Mapped to phases: 11 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-18*
-*Last updated: 2026-06-18 after initial definition*
+*Last updated: 2026-06-18 — traceability populated during roadmap creation*
