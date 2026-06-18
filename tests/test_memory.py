@@ -830,48 +830,64 @@ class TestGetContextSemantic:
 
     @pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
     def test_semantic_ordering_differs_from_bm25(self, tmp_path: Path):
-        """KNN-nearest memory appears first in get_context; BM25 top-result differs.
+        """KNN surfaces a lexically-disjoint memory that BM25 misses entirely.
 
-        Design: construct two memories so that BM25 would rank "alpha" first (query
-        token overlap) but the fake embedder places "beta" nearest to the query vector.
-        Confirm the semantic get_context returns "beta" first while a no-embedder store
-        returns "alpha" first.
+        This is the regression guard for CR-01: a query whose tokens share ZERO
+        overlap with the target memory must still be surfaced by the semantic path
+        — which is exactly the lexically-disjoint-but-semantically-relevant case
+        the milestone exists to serve (bench: 17/20 semantic vs 3/20 lexical).
+
+        Design:
+          - query_text has NO token overlap with beta_entry content/summary
+          - fake embedder places beta_entry nearest to query_text (L2 ≈ 0.14,
+            well within _SEMANTIC_MAX_DISTANCE = 0.95)
+          - alpha_entry has high keyword overlap with query_text so BM25 prefers it
+          - semantic path returns beta first; BM25 path returns alpha first (or empty
+            if no lexical match, demonstrating the case the gate was suppressing)
         """
-        # Fake embed_fn with hand-chosen 4-dim vectors:
+        import re
+
+        from flowstate.embeddings import get_embedder
+
+        # Hand-chosen 4-dim unit-ish vectors.
         # query  -> [1.0, 0.0, 0.0, 0.0]
-        # "beta" -> [0.9, 0.1, 0.0, 0.0]   nearest to query
-        # "alpha" -> [0.0, 0.1, 0.9, 0.9]  far from query
+        # "beta" -> [0.9, 0.1, 0.0, 0.0]  L2 ≈ 0.14, within threshold → surfaced
+        # "alpha" -> [0.0, 0.1, 0.9, 0.9] L2 ≈ 1.62, beyond threshold → filtered out
         query_vec = [1.0, 0.0, 0.0, 0.0]
         beta_vec = [0.9, 0.1, 0.0, 0.0]
         alpha_vec = [0.0, 0.1, 0.9, 0.9]
-        query_text = "kafka streaming"
 
-        from flowstate.embeddings import get_embedder
+        # query_text is LEXICALLY DISJOINT from beta_entry: no shared tokens.
+        # BM25 cannot find beta via "zephyr concept" since beta content is about
+        # "database persistence retrieval" — zero token overlap.
+        query_text = "zephyr concept"
 
         def semantic_embed_fn(texts: list[str]) -> list[list[float]]:
             result = []
             for t in texts:
                 if t == query_text:
                     result.append(query_vec)
-                elif "beta" in t:
+                elif "beta" in t.lower() or "database" in t.lower() or "persist" in t.lower():
                     result.append(beta_vec)
                 else:
                     result.append(alpha_vec)
             return result
 
-        # Memory "alpha": high keyword overlap with query → BM25 prefers this
-        # Memory "beta": low keyword overlap but semantically nearest query vector
+        # Memory "alpha": high keyword overlap with query_text → BM25 prefers it.
+        # "zephyr" appears in alpha content so FTS5 would rank alpha first.
         alpha_entry = MemoryEntry.create(
             MemoryKind.RESEARCH,
-            "kafka kafka streaming kafka kafka streaming event",
-            "alpha memory kafka",
-            tags=["kafka"],
+            "zephyr zephyr concept zephyr concept pattern",
+            "alpha memory zephyr",
+            tags=["zephyr"],
         )
+        # Memory "beta": ZERO token overlap with query_text but nearest KNN neighbor.
+        # FTS5 would NOT match this for "zephyr concept".
         beta_entry = MemoryEntry.create(
             MemoryKind.RESEARCH,
-            "beta content completely different",
-            "beta memory",
-            tags=[],
+            "database persistence retrieval storage",
+            "beta memory database",
+            tags=["database"],
         )
 
         sem_dir = tmp_path / "sem"
@@ -882,7 +898,7 @@ class TestGetContextSemantic:
             sem_store.add(beta_entry)
             ctx_sem = sem_store.get_context(query_text)
 
-        # BM25 reference: same content, no embedder
+        # BM25 reference: same content, no embedder → lexical path only
         bm25_dir = tmp_path / "bm25"
         bm25_dir.mkdir()
         with MemoryStore(root=bm25_dir, embedder=_unavailable_embedder()) as bm25_store:
@@ -890,27 +906,30 @@ class TestGetContextSemantic:
             bm25_store.add(beta_entry)
             ctx_bm25 = bm25_store.get_context(query_text)
 
-        # Semantic: "beta" is KNN-nearest → appears first
+        # Semantic path: beta is KNN-nearest (L2≈0.14) → surfaces beta first.
+        # alpha is beyond _SEMANTIC_MAX_DISTANCE (L2≈1.62) → filtered out.
         assert ctx_sem.startswith("## Prior Knowledge"), (
-            "semantic path should return Prior Knowledge"
+            "semantic path must return Prior Knowledge for beta (lexically disjoint but KNN-near)"
         )
-        # Find the first ### header in each
-        import re
-
         sem_first = re.search(r"### (.+?) \(", ctx_sem)
-        bm25_first = re.search(r"### (.+?) \(", ctx_bm25)
-        assert sem_first is not None and bm25_first is not None
-        # The semantic top result should be the beta memory
+        assert sem_first is not None
         assert "beta" in sem_first.group(1).lower(), (
-            f"Expected 'beta' first in semantic path, got: {sem_first.group(1)}"
+            f"Expected beta first on semantic path (lexically disjoint win), got: {sem_first.group(1)}"
         )
-        # BM25 should prefer alpha (more keyword overlap)
+
+        # BM25 path: only alpha matches "zephyr concept" lexically → returns alpha first.
+        # beta has zero token overlap so BM25 cannot find it.
+        bm25_first = re.search(r"### (.+?) \(", ctx_bm25)
+        assert bm25_first is not None, (
+            "BM25 should find alpha via lexical match on 'zephyr concept'"
+        )
         assert "alpha" in bm25_first.group(1).lower(), (
-            f"Expected 'alpha' first in BM25 path, got: {bm25_first.group(1)}"
+            f"Expected alpha first on BM25 path (keyword match), got: {bm25_first.group(1)}"
         )
-        # And the two orderings differ
+
+        # The two orderings differ: semantic wins on the lexically-disjoint case.
         assert sem_first.group(1) != bm25_first.group(1), (
-            "Semantic and BM25 orderings should differ for this crafted case"
+            "Semantic and BM25 orderings must differ — this is the regression guard for CR-01"
         )
 
     def test_byte_identity_fallback(self, tmp_path: Path):
@@ -1002,31 +1021,53 @@ class TestGetContextSemantic:
 
     @pytest.mark.skipif(not _HAS_VEC, reason="sqlite_vec not installed")
     def test_no_match_returns_empty_string_semantic(self, tmp_path: Path):
-        """No-match query returns '' on the semantic path (KNN returns None → FTS5 returns [])."""
+        """Populated store + truly unrelated query returns '' via the distance threshold.
+
+        This exercises the _SEMANTIC_MAX_DISTANCE path: with a fake embedder that
+        places the query far from all stored vectors (L2 >> 0.95), _semantic_results
+        filters out all KNN hits and returns None → FTS5 fallback also finds nothing
+        (no lexical match) → get_context returns "".
+
+        The fake embedder uses two orthogonal vectors (L2 = sqrt(2) ≈ 1.414, well
+        beyond _SEMANTIC_MAX_DISTANCE = 0.95) for the query vs stored content,
+        so all KNN rows are rejected by the threshold filter.
+        """
+        import math
+
         from flowstate.embeddings import get_embedder
 
-        # Simple fake embedder: all vectors are identical — no semantic signal needed
+        # Two orthogonal 4-dim unit vectors — L2 distance = sqrt(2) ≈ 1.414
+        stored_vec = [1.0, 0.0, 0.0, 0.0]
+        query_vec = [0.0, 1.0, 0.0, 0.0]
+
         def embed_fn(texts: list[str]) -> list[list[float]]:
-            return [[0.5, 0.5, 0.5, 0.5] for _ in texts]
+            # Stored memory content maps to stored_vec; query maps to query_vec.
+            # "xyzzy_nomatch_far" is the query token not present in stored content.
+            return [query_vec if "xyzzy_nomatch_far" in t else stored_vec for t in texts]
 
         embedder = get_embedder(embed_fn=embed_fn)
         with MemoryStore(root=tmp_path, embedder=embedder) as store:
             store.add(
                 MemoryEntry.create(
                     MemoryKind.RESEARCH,
-                    "kafka streaming",
+                    "kafka streaming event driven architecture",
                     "kafka summary",
                 )
             )
-            # A query that FTS5 won't match either — semantic path may return a hit
-            # (since all vecs are identical), so test an empty store variant instead.
-            pass
+            # Verify the expected L2 distance exceeds the threshold so the test
+            # is self-documenting about WHY this returns "".
+            expected_l2 = math.sqrt(
+                sum((a - b) ** 2 for a, b in zip(stored_vec, query_vec, strict=True))
+            )
+            from flowstate.memory import _SEMANTIC_MAX_DISTANCE
 
-        # Use an empty store directly
-        empty_dir = tmp_path / "empty2"
-        empty_dir.mkdir()
-        with MemoryStore(root=empty_dir, embedder=embedder) as empty_store:
-            assert empty_store.get_context("xyzzy_no_match") == ""
+            assert expected_l2 > _SEMANTIC_MAX_DISTANCE, (
+                f"test design: L2={expected_l2:.3f} must exceed threshold={_SEMANTIC_MAX_DISTANCE}"
+            )
+            # The query is far from all stored vectors → threshold filters all KNN hits
+            # → _semantic_results returns None → FTS5 fallback finds no lexical match
+            # → get_context returns "".
+            assert store.get_context("xyzzy_nomatch_far") == ""
 
 
 class TestWR05BackfillBatchLimit:

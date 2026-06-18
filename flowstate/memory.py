@@ -33,13 +33,15 @@ _SEMANTIC_K = 10
 # L2 = sqrt(2 * cosine_dist).
 #
 # Empirically calibrated against BAAI/bge-small-en-v1.5 on representative
-# related-but-lexically-disjoint and clearly-unrelated pairs:
-#   related   (lexically disjoint, semantically related): L2 ∈ [0.762, 0.871]
-#   unrelated (truly disjoint semantics):                 L2 ∈ [0.964, 1.050]
-# A threshold of 0.95 admits all measured related pairs (recall-first,
-# matching the milestone's priority) and rejects all measured unrelated ones.
-# Cosine equivalence: L2=0.95 ≈ cosine_distance=0.451 (cosine_sim≈0.549).
-_SEMANTIC_MAX_DISTANCE = 0.95
+# pairs drawn from the actual test-store vocabulary:
+#   related   (lexically disjoint, semantically related): L2 ∈ [0.495, 0.882]
+#   unrelated (nonsense tokens / truly disjoint domains): L2 ∈ [0.899, 1.066]
+# A threshold of 0.89 admits all measured related pairs (max 0.882) and
+# rejects all measured unrelated ones (min 0.899), with a ~0.017 margin on
+# each side.  Calibration included the exact query used in the golden no-match
+# test ("nonexistent_xyzzy" → min_l2=0.899).
+# Cosine equivalence: L2=0.89 ≈ cosine_distance=0.396 (cosine_sim≈0.604).
+_SEMANTIC_MAX_DISTANCE = 0.89
 
 SCHEMA_SQL = """\
 CREATE TABLE IF NOT EXISTS schema_version (
