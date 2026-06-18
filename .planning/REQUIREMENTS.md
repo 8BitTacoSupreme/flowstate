@@ -27,8 +27,8 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 
 ### Wiki Retrieval (WIKI)
 
-- [ ] **WIKI-01**: The `context_prefix` wiki layer retrieves the top-k most-relevant wiki articles semantically per run (by the run's query) over an embedded wiki corpus, replacing the static full-file read when semantic mode is active.
-- [ ] **WIKI-02**: The default (no `include_layers`) context-prefix path stays byte-identical (wiki remains opt-in, golden tests stay green); semantic wiki retrieval degrades to the existing static `_read_wiki_layer` read when the embedder is absent.
+- [x] **WIKI-01**: The `context_prefix` wiki layer retrieves the top-k most-relevant wiki articles semantically per run (by the run's query) over an embedded wiki corpus, replacing the static full-file read when semantic mode is active.
+- [x] **WIKI-02**: The default (no `include_layers`) context-prefix path stays byte-identical (wiki remains opt-in, golden tests stay green); semantic wiki retrieval degrades to the existing static `_read_wiki_layer` read when the embedder is absent.
 
 ## Future Requirements
 
@@ -68,8 +68,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 | VEC-03 | Phase 9 | Complete |
 | MEM-01 | Phase 10 | Complete |
 | MEM-02 | Phase 10 | Complete |
-| WIKI-01 | Phase 11 | Pending |
-| WIKI-02 | Phase 11 | Pending |
+| WIKI-01 | Phase 11 | Complete |
+| WIKI-02 | Phase 11 | Complete |
 
 **Coverage:**
 - Milestone requirements: 11 total
