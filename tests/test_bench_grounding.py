@@ -805,3 +805,252 @@ def test_default_embedder_unavailable_degrades_gracefully(monkeypatch, tmp_path:
     assert rc == 0, "harness must not crash when fastembed is unavailable"
     out = capsys.readouterr().out
     assert "wikivec arm unavailable" in out, f"expected degradation message, got: {out!r}"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# RGB helpers — Task 1 tests (all offline; no claude binary / network)
+# ──────────────────────────────────────────────────────────────────────────────
+
+_RGB_PROBES_FIXTURE = [
+    {
+        "id": "p1",
+        "question": "What is the default replication factor for Confluent Cloud?",
+        "ground_truth": "3",
+        "gold": "Confluent Cloud uses a default replication factor of 3 for all topics.",
+    },
+    {
+        "id": "p2",
+        "question": "What compression codec does Confluent recommend for throughput?",
+        "ground_truth": "lz4",
+        "gold": [
+            "lz4 compression is recommended for high-throughput Kafka producers.",
+            "zstd is preferred when storage efficiency matters more than CPU cost.",
+        ],
+    },
+    {
+        "id": "p3",
+        "question": "Which consumer setting should be disabled in processing workloads?",
+        "ground_truth": "enable.auto.commit",
+        # No gold — intentionally absent to test skips
+        "counterfactual": "Confluent recommends always enabling auto-commit for simplicity.",
+        "wrong_answer": "enable.auto.commit should be enabled",
+    },
+    {
+        "id": "p4",
+        "question": "What is the recommended acks setting for durable producers?",
+        "ground_truth": "all",
+        "gold": "Producers must use acks=all for durable, loss-free delivery.",
+    },
+]
+
+
+def test_rgb_distractors_excludes_self_deterministic_and_count():
+    """_rgb_distractors returns gold from OTHER probes, excludes self, is deterministic."""
+    probes = _RGB_PROBES_FIXTURE
+    # p1 has string gold, p2 has list gold (2 items), p3 has no gold, p4 has string gold
+    # Distractors for p1: gold from p2 (2 items) + p4 (1 item) => up to n=3 total
+    result = g._rgb_distractors(probes[0], probes, n=5)
+    # Must not include p1's own gold
+    assert probes[0]["gold"] not in result
+    # Must be deterministic
+    result2 = g._rgb_distractors(probes[0], probes, n=5)
+    assert result == result2
+    # All returned items are strings
+    assert all(isinstance(d, str) for d in result)
+    # p3 has no gold, so result comes only from p2 and p4
+    assert len(result) <= 3  # 2 from p2 list + 1 from p4
+
+    # For p2 (multi-gold): distractors should be from p1 and p4 (not p3 which has no gold)
+    result_p2 = g._rgb_distractors(probes[1], probes, n=10)
+    assert probes[1]["gold"][0] not in result_p2
+    assert probes[1]["gold"][1] not in result_p2
+
+    # n=1 cap: only 1 distractor max
+    result_capped = g._rgb_distractors(probes[0], probes, n=1)
+    assert len(result_capped) <= 1
+
+
+def test_rgb_noise_context_has_gold_and_floor_distractors(monkeypatch):
+    """_rgb_noise: context has gold + floor(ratio*k) distractors; gold always present."""
+    probes = _RGB_PROBES_FIXTURE
+    # p1 has string gold
+    probe = probes[0]
+
+    seen_prefixes = []
+
+    def fake_answer(prefix, question, model, *, instruction="Answer concisely and specifically."):
+        seen_prefixes.append(prefix)
+        return "3"
+
+    def fake_factcheck(answer, ground_truth, model):
+        return True
+
+    monkeypatch.setattr(g, "_answer", fake_answer)
+    monkeypatch.setattr(g, "_factcheck", fake_factcheck)
+
+    result = g._rgb_noise(probe, probes, noise_ratio=0.4, k=5, answer_model="m", judge_models=["m"])
+    assert result is not None
+    assert result["probe_id"] == "p1"
+    assert "noise_ratio" in result
+    assert "n_distractors" in result
+    assert "majority" in result
+    # floor(0.4 * 5) == 2 distractors
+    assert result["n_distractors"] == 2
+    # Gold must be present in the prefix
+    assert len(seen_prefixes) == 1
+    assert probe["gold"] in seen_prefixes[0]
+
+
+def test_rgb_negative_excludes_gold_and_scores_rejection(monkeypatch):
+    """_rgb_negative: context has NO gold; rejection scored via fast-path then judge."""
+    probes = _RGB_PROBES_FIXTURE
+    probe = probes[0]
+
+    seen_prefixes = []
+
+    def fake_answer(prefix, question, model, *, instruction="Answer concisely and specifically."):
+        seen_prefixes.append(prefix)
+        # Simulate a refusal — fast-path should catch "cannot answer"
+        return "I cannot answer due to insufficient information."
+
+    monkeypatch.setattr(g, "_answer", fake_answer)
+    # _judge_rejection should NOT be called (regex fast-path handles refusal)
+    judge_mock = MagicMock(return_value=True)
+    monkeypatch.setattr(g, "_judge_rejection", judge_mock)
+
+    result = g._rgb_negative(probe, probes, k=3, answer_model="m", judge_models=["m"])
+    assert result is not None
+    assert result["probe_id"] == "p1"
+    assert "rejected" in result
+    assert result["rejected"] is True
+    # Gold must NOT be in the context prefix
+    assert len(seen_prefixes) == 1
+    if probe.get("gold"):
+        gold = probe["gold"]
+        if isinstance(gold, str):
+            assert gold not in seen_prefixes[0]
+
+    # Fall-through case: non-refusal answer goes to _judge_rejection
+    def fake_answer_norefuse(
+        prefix, question, model, *, instruction="Answer concisely and specifically."
+    ):
+        return "The answer is 3."
+
+    monkeypatch.setattr(g, "_answer", fake_answer_norefuse)
+    monkeypatch.setattr(g, "_judge_rejection", lambda a, m: False)
+
+    result2 = g._rgb_negative(probe, probes, k=3, answer_model="m", judge_models=["m"])
+    assert result2 is not None
+    assert result2["rejected"] is False
+
+
+def test_rgb_integration_requires_two_gold_else_none(monkeypatch):
+    """_rgb_integration: returns None for probes with <2 gold passages."""
+    probes = _RGB_PROBES_FIXTURE
+
+    monkeypatch.setattr(
+        g, "_answer", lambda p, q, m, *, instruction="Answer concisely and specifically.": "lz4"
+    )
+    monkeypatch.setattr(g, "_factcheck", lambda a, gt, m: True)
+
+    # p2 has list gold with 2 items => should run
+    result_multi = g._rgb_integration(probes[1], probes, k=5, answer_model="m", judge_models=["m"])
+    assert result_multi is not None
+    assert result_multi["probe_id"] == "p2"
+    assert "majority" in result_multi
+
+    # p1 has string gold (not a list of >=2) => skip
+    result_single = g._rgb_integration(probes[0], probes, k=5, answer_model="m", judge_models=["m"])
+    assert result_single is None
+
+    # p3 has no gold => skip
+    result_none = g._rgb_integration(probes[2], probes, k=5, answer_model="m", judge_models=["m"])
+    assert result_none is None
+
+
+def test_rgb_counterfactual_robust_vs_misled_and_none_when_missing(monkeypatch):
+    """_rgb_counterfactual: returns robust/misled dict or None when fields missing."""
+    probes = _RGB_PROBES_FIXTURE
+
+    call_args = []
+
+    def fake_factcheck(answer, ground_truth, model):
+        call_args.append(ground_truth)
+        # robust check: answer vs real ground_truth -> True
+        # misled check: answer vs wrong_answer -> False
+        return ground_truth == probes[2]["ground_truth"]
+
+    monkeypatch.setattr(
+        g,
+        "_answer",
+        lambda p, q, m, *, instruction="Answer concisely and specifically.": "enable.auto.commit",
+    )
+    monkeypatch.setattr(g, "_factcheck", fake_factcheck)
+
+    # p3 has counterfactual + wrong_answer
+    result = g._rgb_counterfactual(probes[2], answer_model="m", judge_models=["m"])
+    assert result is not None
+    assert result["probe_id"] == "p3"
+    assert "robust" in result
+    assert "misled" in result
+    assert result["robust"] is True
+    assert result["misled"] is False
+
+    # p1 has no counterfactual/wrong_answer => None
+    result_none = g._rgb_counterfactual(probes[0], answer_model="m", judge_models=["m"])
+    assert result_none is None
+
+
+def test_judge_rejection_regex_fastpath_no_subprocess(monkeypatch):
+    """Common refusal phrases -> True via regex fast-path; subprocess.run NOT called."""
+    run_mock = MagicMock()
+    monkeypatch.setattr(subprocess, "run", run_mock)
+    monkeypatch.setattr(g, "_locate_claude", lambda: "/bin/claude")
+
+    refusals = [
+        "I cannot answer this question.",
+        "There is insufficient information to respond.",
+        "I have no information about this topic.",
+        "I don't know the answer to that.",
+        "I am unable to provide that information.",
+        "There is not enough context here.",
+    ]
+    for phrase in refusals:
+        result = g._judge_rejection(phrase, "m")
+        assert result is True, f"expected True for refusal phrase: {phrase!r}"
+
+    assert run_mock.call_count == 0, "subprocess.run must NOT be called for fast-path refusals"
+
+
+def test_answer_instruction_kwarg_default_is_byte_identical(monkeypatch):
+    """_answer with no instruction kwarg produces the same prompt as before (byte-identical)."""
+    monkeypatch.setattr(g, "_locate_claude", lambda: "/bin/claude")
+
+    captured = []
+
+    class _P:
+        returncode = 0
+        stdout = "answer"
+
+    def fake_run(cmd, **kw):
+        captured.append(cmd[-1])  # last arg is the prompt
+        return _P()
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    g._answer("ctx", "What is X?", "m")
+    prompt_default = captured[-1]
+
+    # The default should end with the old trailer
+    assert prompt_default.endswith("\nAnswer concisely and specifically.")
+
+    # With explicit instruction= same value -> identical
+    captured.clear()
+    g._answer("ctx", "What is X?", "m", instruction="Answer concisely and specifically.")
+    assert captured[-1] == prompt_default
+
+    # With different instruction -> different trailer
+    captured.clear()
+    g._answer("ctx", "What is X?", "m", instruction="Respond YES or NO only.")
+    assert captured[-1].endswith("\nRespond YES or NO only.")
+    assert not captured[-1].endswith("\nAnswer concisely and specifically.")
