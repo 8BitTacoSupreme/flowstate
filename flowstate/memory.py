@@ -137,6 +137,9 @@ def _row_to_entry(row: sqlite3.Row) -> MemoryEntry:
 class MemoryStore:
     """SQLite-backed memory store with FTS5 full-text search."""
 
+    # Maximum rows backfilled per open (WR-05: prevents startup hang on large dbs).
+    _BACKFILL_BATCH = 500
+
     def __init__(self, root: Path | None = None, *, embedder: Embedder | None = None) -> None:
         db_path = (root or Path.cwd()) / "memory.db"
         self._conn = sqlite3.connect(str(db_path))
@@ -147,8 +150,12 @@ class MemoryStore:
         # when fastembed is absent, leaving all FTS5 behavior unchanged.
         self._embedder: Embedder = embedder if embedder is not None else get_embedder(root)
         self._vec_ready: bool = False
+        # _init_vec uses configured_dim (cheap — no model load), so opening a
+        # MemoryStore never downloads the real fastembed model (VEC-03).
         self._init_vec()
-        self._backfill_vectors()
+        # Backfill is deferred to the first write so that read-only paths
+        # (status, count, last_entry_at) do not trigger any embed work.
+        self._backfill_pending: bool = self._vec_ready
 
     # ------------------------------------------------------------------
     # Private vec0 helpers
@@ -158,16 +165,43 @@ class MemoryStore:
         """Load sqlite-vec, create memories_vec vec0 table. Never raises.
 
         Sets self._vec_ready = True on success; False on any failure (sqlite-vec
-        absent, vec0 create error, etc.). Calls enable_load_extension(False)
-        immediately after load to re-scope the extension surface (T-09-03).
+        absent, vec0 create error, dim mismatch, etc.).
+
+        Security: enable_load_extension(False) is called in a finally block so the
+        extension-load surface is ALWAYS re-scoped off, even when sqlite_vec.load()
+        raises (T-09-03).
+
+        Startup cost: uses configured_dim (no model load) to size the vec0 table;
+        the real model is only constructed on the first actual embed() call.
+
+        Dim mismatch: if the existing memories_vec table was created with a different
+        dimension, _vec_ready is set False (FTS5-only mode) rather than silently
+        producing a diverged index.
         """
         try:
             self._conn.enable_load_extension(True)
-            import sqlite_vec  # local import — loads only after enable_load_extension(True)
+            try:
+                import sqlite_vec  # local import — loads only after enable_load_extension(True)
 
-            sqlite_vec.load(self._conn)
-            self._conn.enable_load_extension(False)
-            dim = self._embedder.dim
+                sqlite_vec.load(self._conn)
+            finally:
+                # Re-scope off unconditionally — even when sqlite_vec.load() raises.
+                self._conn.enable_load_extension(False)
+            # Use configured_dim: cheap, does not load the real model.
+            dim = self._embedder.configured_dim
+            # Detect dim mismatch: if the table already exists with a different
+            # dimension, degrade to FTS5-only rather than silently diverging.
+            existing = self._conn.execute(
+                "SELECT sql FROM sqlite_master WHERE name='memories_vec'"
+            ).fetchone()
+            if existing is not None:
+                import re as _re
+
+                m = _re.search(r"float\[(\d+)\]", existing[0] or "")
+                if m and int(m.group(1)) != dim:
+                    # Mismatch: mark not-ready so writes stop trying.
+                    self._vec_ready = False
+                    return
             self._conn.execute(
                 f"CREATE VIRTUAL TABLE IF NOT EXISTS memories_vec USING vec0(embedding float[{dim}])"
             )
@@ -182,6 +216,11 @@ class MemoryStore:
         Guarded by _vec_ready and embedder.available(). Deletes any existing
         row first (delete-then-insert = idempotent replace without a REPLACE
         or ON CONFLICT clause, which vec0 may not support).
+
+        On sqlite3.Error (e.g. dim mismatch, disk-full, locked db) _vec_ready
+        is flipped False so subsequent writes stop pretending to succeed rather
+        than silently diverging memories from memories_vec.  Embedder-level
+        failures (returns []) are a silent no-op — FTS5 path is unaffected.
         """
         if not self._vec_ready or not self._embedder.available():
             return
@@ -197,22 +236,29 @@ class MemoryStore:
                 "INSERT INTO memories_vec(rowid, embedding) VALUES (?, ?)",
                 (rowid, serialized),
             )
-        except Exception:
-            pass
+        except sqlite3.Error:
+            # Hard DB error: stop vec writes to avoid silent divergence.
+            self._vec_ready = False
 
     def _backfill_vectors(self) -> None:
-        """Embed all memories rows that lack a memories_vec row. Never raises.
+        """Embed up to _BACKFILL_BATCH un-vectored memories rows. Never raises.
 
-        Runs on open, guarded by _vec_ready and embedder.available(). Commits
-        once after all inserts for efficiency. Idempotent: rows already present
-        in memories_vec are skipped via the NOT IN subquery.
+        Guarded by _vec_ready and embedder.available(). Commits once after all
+        inserts for efficiency. Idempotent: rows already in memories_vec are
+        skipped via the NOT IN subquery.
+
+        The LIMIT cap prevents a startup hang when opening a large db for the
+        first time after enabling [semantic] (WR-05).  Any remaining un-vectored
+        rows are covered by subsequent opens or explicit calls.
         """
         if not self._vec_ready or not self._embedder.available():
             return
         try:
             rows = self._conn.execute(
                 "SELECT rowid, summary, content FROM memories "
-                "WHERE rowid NOT IN (SELECT rowid FROM memories_vec)"
+                "WHERE rowid NOT IN (SELECT rowid FROM memories_vec) "
+                "LIMIT ?",
+                (self._BACKFILL_BATCH,),
             ).fetchall()
             if not rows:
                 return
@@ -222,6 +268,12 @@ class MemoryStore:
             self._conn.commit()
         except Exception:
             pass
+
+    def _maybe_backfill(self) -> None:
+        """Run backfill once on first write; clears the pending flag afterward."""
+        if self._backfill_pending:
+            self._backfill_pending = False
+            self._backfill_vectors()
 
     def close(self) -> None:
         self._conn.close()
@@ -233,6 +285,7 @@ class MemoryStore:
         self.close()
 
     def add(self, entry: MemoryEntry) -> str:
+        self._maybe_backfill()
         self._conn.execute(
             """INSERT INTO memories (id, kind, content, summary, source, tags, metadata, created_at, run_id)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -264,6 +317,7 @@ class MemoryStore:
         automatically; no manual FTS writes are needed here.
         A missing id (zero rows matched) is a silent no-op; it does not raise.
         """
+        self._maybe_backfill()
         self._conn.execute(
             """UPDATE memories
                SET kind=?, content=?, summary=?, source=?, tags=?, metadata=?, created_at=?, run_id=?
@@ -288,6 +342,7 @@ class MemoryStore:
             self._conn.commit()
 
     def add_many(self, entries: list[MemoryEntry]) -> list[str]:
+        self._maybe_backfill()
         ids = []
         for entry in entries:
             self._conn.execute(
@@ -307,14 +362,41 @@ class MemoryStore:
             )
             ids.append(entry.id)
         self._conn.commit()
-        # Embed per entry — rowid resolved via SELECT after the bulk INSERT+commit
-        for entry in entries:
-            row = self._conn.execute(
-                "SELECT rowid FROM memories WHERE id=?", (entry.id,)
-            ).fetchone()
-            if row is not None:
-                self._embed_rowid(row[0], entry.summary + "\n" + entry.content)
-        self._conn.commit()
+        # Embed per entry inside a savepoint so vec writes are all-or-nothing
+        # for this call — a DB error rolls back all vec rows inserted here
+        # rather than leaving memories and memories_vec in a partially-diverged
+        # state (WR-04).  _embed_rowid swallows embedder failures silently;
+        # the savepoint guards against hard sqlite3.Error escapes.
+        if self._vec_ready and self._embedder.available():
+            try:
+                self._conn.execute("SAVEPOINT add_many_vec")
+                for entry in entries:
+                    row = self._conn.execute(
+                        "SELECT rowid FROM memories WHERE id=?", (entry.id,)
+                    ).fetchone()
+                    if row is not None:
+                        # Call embed directly (bypass _embed_rowid's per-row swallow)
+                        # so a DB error escapes to the outer except.
+                        import sqlite_vec  # local import
+
+                        vec = self._embedder.embed([entry.summary + "\n" + entry.content])
+                        if vec:
+                            serialized = sqlite_vec.serialize_float32(vec[0])
+                            self._conn.execute("DELETE FROM memories_vec WHERE rowid=?", (row[0],))
+                            self._conn.execute(
+                                "INSERT INTO memories_vec(rowid, embedding) VALUES (?, ?)",
+                                (row[0], serialized),
+                            )
+                self._conn.execute("RELEASE SAVEPOINT add_many_vec")
+                self._conn.commit()
+            except Exception:
+                # Roll back all vec inserts for this call — FTS5/memories are unaffected.
+                try:
+                    self._conn.execute("ROLLBACK TO SAVEPOINT add_many_vec")
+                    self._conn.execute("RELEASE SAVEPOINT add_many_vec")
+                except Exception:
+                    pass
+                self._vec_ready = False
         return ids
 
     @staticmethod

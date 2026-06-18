@@ -152,6 +152,26 @@ class Embedder:
         return [[float(x) for x in vec] for vec in self._model.embed(texts)]
 
     @property
+    def configured_dim(self) -> int:
+        """Return the expected embedding dimension WITHOUT constructing the real model.
+
+        - Injected embed_fn: derived from a probe call — fully offline; never
+          constructs the real fastembed model.
+        - Default (no embed_fn): returns ``_DEFAULT_DIM`` (384 for bge-small-en-v1.5)
+          without loading or downloading anything.
+
+        Use at MemoryStore open time to size the vec0 table cheaply.  Never raises.
+        """
+        if self._embed_fn is not None:
+            try:
+                result = self._embed_fn([""])
+                if result:
+                    return len(result[0])
+            except Exception:
+                pass
+        return _DEFAULT_DIM
+
+    @property
     def dim(self) -> int:
         """Return the embedding dimension.
 
