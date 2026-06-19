@@ -90,10 +90,11 @@ None at roadmap start. Key implementation constraint: every caller path must che
 | Task ID | Name | Status | Completed | Commits |
 |---------|------|--------|-----------|---------|
 | 260618-p97 | Wire RGB four axes into bench/grounding.py | complete | 2026-06-18 | 5f56e6d, a194431, 137595e, da6a9d6, 32a0df7 |
+| 260619-nfe | Add opt-in hard-negative distractor selection to RGB axes | complete | 2026-06-19 | 484b433, 00ab722, cb67d45, 831def6 |
 
 ## Session Continuity
 
-Last session: 2026-06-18T20:03:35.708Z
-Stopped at: Roadmap created — Phase 9 ready to plan
+Last session: 2026-06-19T21:02:26Z
+Stopped at: Quick task 260619-nfe complete
 Resume file: None
-Next step: `/gsd:plan-phase 9`
+Next step: Continue with productionizing semantic retrieval per SEMANTIC_RETRIEVAL_HANDOFF.md
