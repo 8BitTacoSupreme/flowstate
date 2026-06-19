@@ -1300,3 +1300,116 @@ def test_rgb_distractors_all_ties_deterministic_equals_id_order():
     result2 = g._rgb_distractors(probe, probes, n=5, embed_fn=tie_embed_fn)
     assert result1 == result2, "successive calls with all-ties must be identical"
     assert result1 == id_order, f"all-ties must equal id-order, got {result1}"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Task 2: --hard-negatives CLI flag, axis threading, hard_negatives JSON key
+# (all offline — monkeypatch g._default_embedder; no fastembed/sqlite_vec/network)
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def _make_rgb_args(tmp_path, extra_args=None):
+    """Write a minimal RGB probe file and return (probes_file, out_file, base_argv)."""
+    probes = [
+        {
+            "id": "k1",
+            "question": "What acks value prevents loss?",
+            "ground_truth": "all",
+            "gold": "Producers must set acks=all for durability.",
+        },
+        {
+            "id": "k2",
+            "question": "What compression codec reduces CPU overhead?",
+            "ground_truth": "lz4",
+            "gold": "lz4 minimizes CPU while reducing network traffic.",
+        },
+    ]
+    probes_file = tmp_path / "rgb_probes.json"
+    probes_file.write_text(json.dumps(probes))
+    out_file = tmp_path / "rgb_out.json"
+    argv = [
+        "--root",
+        str(tmp_path),
+        "--probes",
+        str(probes_file),
+        "--mode",
+        "rgb",
+        "--axes",
+        "noise,negative",
+        "--noise-ratios",
+        "0.0",
+        "--rgb-k",
+        "2",
+        "--judge-models",
+        "m1",
+        "--out",
+        str(out_file),
+    ]
+    if extra_args:
+        argv.extend(extra_args)
+    return probes_file, out_file, argv
+
+
+def test_hard_negatives_flag_present_embedder_builds(monkeypatch, tmp_path):
+    """--hard-negatives + working embedder -> hard_negatives=True in JSON output."""
+    _, out_file, argv = _make_rgb_args(tmp_path, ["--hard-negatives"])
+
+    fake_embed = lambda texts: [[1.0, 0.0]] * len(texts)  # noqa: E731
+    monkeypatch.setattr(g, "_default_embedder", lambda model: fake_embed)
+    monkeypatch.setattr(
+        g, "_answer", lambda p, q, m, *, instruction="Answer concisely and specifically.": "all"
+    )
+    monkeypatch.setattr(g, "_factcheck", lambda a, gt, m: True)
+    monkeypatch.setattr(g, "_judge_rejection", lambda a, m: False)
+
+    rc = g.main(argv)
+    assert rc == 0
+    data = json.loads(out_file.read_text())
+    assert data.get("hard_negatives") is True, f"expected hard_negatives=True, got {data}"
+
+
+def test_hard_negatives_flag_absent_false_in_output(monkeypatch, tmp_path):
+    """No --hard-negatives -> hard_negatives=False in JSON; _default_embedder never called."""
+    _, out_file, argv = _make_rgb_args(tmp_path)
+
+    embedder_called = [False]
+
+    def spy_embedder(model):
+        embedder_called[0] = True
+        return lambda texts: [[1.0, 0.0]] * len(texts)
+
+    monkeypatch.setattr(g, "_default_embedder", spy_embedder)
+    monkeypatch.setattr(
+        g, "_answer", lambda p, q, m, *, instruction="Answer concisely and specifically.": "all"
+    )
+    monkeypatch.setattr(g, "_factcheck", lambda a, gt, m: True)
+    monkeypatch.setattr(g, "_judge_rejection", lambda a, m: False)
+
+    rc = g.main(argv)
+    assert rc == 0
+    data = json.loads(out_file.read_text())
+    assert data.get("hard_negatives") is False, f"expected hard_negatives=False, got {data}"
+    assert not embedder_called[0], "_default_embedder must NOT be called when flag is absent"
+
+
+def test_hard_negatives_soft_fail_embedder_raises(monkeypatch, tmp_path, capsys):
+    """--hard-negatives + embedder raises -> rc=0, hard_negatives=False, note printed."""
+    _, out_file, argv = _make_rgb_args(tmp_path, ["--hard-negatives"])
+
+    monkeypatch.setattr(
+        g, "_default_embedder", lambda model: (_ for _ in ()).throw(RuntimeError("no fastembed"))
+    )
+    monkeypatch.setattr(
+        g, "_answer", lambda p, q, m, *, instruction="Answer concisely and specifically.": "all"
+    )
+    monkeypatch.setattr(g, "_factcheck", lambda a, gt, m: True)
+    monkeypatch.setattr(g, "_judge_rejection", lambda a, m: False)
+
+    rc = g.main(argv)
+    assert rc == 0, f"expected rc=0 on soft-fail, got {rc}"
+    data = json.loads(out_file.read_text())
+    assert data.get("hard_negatives") is False, f"expected hard_negatives=False, got {data}"
+    out = capsys.readouterr().out
+    assert "hard-negatives" in out or "fastembed" in out, (
+        f"expected note about hard-negatives/fastembed in stdout, got: {out!r}"
+    )
