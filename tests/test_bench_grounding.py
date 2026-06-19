@@ -1198,3 +1198,101 @@ def test_mode_layers_default_runs_arm_loop_unchanged(monkeypatch, tmp_path: Path
     # RGB block must NOT be present
     assert "noise" not in data
     assert "negative" not in data
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Task 1: _rank_by_similarity + embed_fn-aware _rgb_distractors (all offline)
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def test_rank_by_similarity_zero_norm_no_raise():
+    """Zero-norm candidate embedding must not raise ZeroDivisionError."""
+
+    # embed_fn: query -> [1,0], zero-norm candidate -> [0,0], normal candidate -> [0,1]
+    def embed_fn(texts):
+        vecs = []
+        for t in texts:
+            if "query" in t:
+                vecs.append([1.0, 0.0])
+            elif "zero" in t:
+                vecs.append([0.0, 0.0])
+            else:
+                vecs.append([0.0, 1.0])
+        return vecs
+
+    candidates = [{"gold": "zero-norm doc"}, {"gold": "normal doc"}]
+    # Should not raise; must return all candidates
+    result = g._rank_by_similarity("the query", candidates, embed_fn)
+    assert len(result) == 2
+
+
+def test_rgb_distractors_hard_neg_nearest_first():
+    """With embed_fn, the topically-nearest candidate is returned first; list differs from id-order."""
+    probes = _RGB_PROBES_FIXTURE
+    probe = probes[0]  # p1
+
+    # Build pool for p1 (embed_fn=None path): id-order = [p2_gold[0], p2_gold[1], p4_gold]
+    id_order = g._rgb_distractors(probe, probes, n=5, embed_fn=None)
+
+    # Fake embed_fn: make p4's gold ("Producers must use acks=all ...") nearest to the probe question
+    # by matching the keyword "acks" in p4's gold. Probe question: "default replication factor"
+    # p2 golds don't have "acks"; p4 gold has "acks=all"
+    def embed_fn(texts):
+        vecs = []
+        for t in texts:
+            if "acks" in t:
+                vecs.append([1.0, 0.0])
+            else:
+                vecs.append([0.0, 1.0])
+        return vecs
+
+    result = g._rgb_distractors(probe, probes, n=5, embed_fn=embed_fn)
+    # Result must differ from id-order (nearest is p4's gold, not p2's first gold)
+    assert result != id_order, f"expected different order; id_order={id_order}, result={result}"
+    # The p4 gold must come first (highest cosine with the fake "acks" query signal)
+    p4_gold = probes[3]["gold"]
+    assert result[0] == p4_gold, f"expected p4 gold first, got {result[0]}"
+
+
+def test_rgb_distractors_byte_identical_default():
+    """embed_fn=None returns EXACTLY the same list as the existing id-order behavior."""
+    probes = _RGB_PROBES_FIXTURE
+    probe = probes[0]  # p1
+
+    # Explicit expected list from id-order: p2 (list gold, 2 items) then p4 (string gold)
+    # probes sorted by id: p1(self-skip), p2, p3(no gold), p4
+    expected = [
+        "lz4 compression is recommended for high-throughput Kafka producers.",
+        "zstd is preferred when storage efficiency matters more than CPU cost.",
+        "Producers must use acks=all for durable, loss-free delivery.",
+    ]
+    result = g._rgb_distractors(probe, probes, n=5, embed_fn=None)
+    assert result == expected, f"expected {expected}, got {result}"
+
+
+def test_rgb_distractors_never_raise_on_bad_embed_fn():
+    """An embed_fn that raises -> returns the id-order list, no exception propagates."""
+    probes = _RGB_PROBES_FIXTURE
+    probe = probes[0]
+
+    def bad_embed_fn(texts):
+        raise RuntimeError("embed service unavailable")
+
+    id_order = g._rgb_distractors(probe, probes, n=5, embed_fn=None)
+    result = g._rgb_distractors(probe, probes, n=5, embed_fn=bad_embed_fn)
+    assert result == id_order, f"expected id-order fallback, got {result}"
+
+
+def test_rgb_distractors_all_ties_deterministic_equals_id_order():
+    """All-tie embed_fn (same vector for every text) -> deterministic, equals id-order."""
+    probes = _RGB_PROBES_FIXTURE
+    probe = probes[0]
+
+    def tie_embed_fn(texts):
+        return [[1.0, 0.0]] * len(texts)
+
+    id_order = g._rgb_distractors(probe, probes, n=5, embed_fn=None)
+    result1 = g._rgb_distractors(probe, probes, n=5, embed_fn=tie_embed_fn)
+    result2 = g._rgb_distractors(probe, probes, n=5, embed_fn=tie_embed_fn)
+    assert result1 == result2, "successive calls with all-ties must be identical"
+    assert result1 == id_order, f"all-ties must equal id-order, got {result1}"
