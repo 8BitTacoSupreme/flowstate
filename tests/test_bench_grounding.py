@@ -1208,7 +1208,7 @@ def test_mode_layers_default_runs_arm_loop_unchanged(monkeypatch, tmp_path: Path
 def test_rank_by_similarity_zero_norm_no_raise():
     """Zero-norm candidate embedding must not raise ZeroDivisionError."""
 
-    # embed_fn: query -> [1,0], zero-norm candidate -> [0,0], normal candidate -> [0,1]
+    # embed_fn: text with "query" -> [1,0], text with "zero" -> [0,0], others -> [0,1]
     def embed_fn(texts):
         vecs = []
         for t in texts:
@@ -1220,7 +1220,7 @@ def test_rank_by_similarity_zero_norm_no_raise():
                 vecs.append([0.0, 1.0])
         return vecs
 
-    candidates = [{"gold": "zero-norm doc"}, {"gold": "normal doc"}]
+    candidates = ["zero-norm doc", "normal doc"]
     # Should not raise; must return all candidates
     result = g._rank_by_similarity("the query", candidates, embed_fn)
     assert len(result) == 2
@@ -1228,30 +1228,34 @@ def test_rank_by_similarity_zero_norm_no_raise():
 
 def test_rgb_distractors_hard_neg_nearest_first():
     """With embed_fn, the topically-nearest candidate is returned first; list differs from id-order."""
+    # Use a local probe whose question contains "acks" — same keyword as p4 gold
+    # ("Producers must use acks=all for durable, loss-free delivery.").
+    # In id-order the pool is: p2_gold[0], p2_gold[1], p4_gold.
+    # The fake embed_fn maps "acks"-containing texts to [1,0]; others to [0,1].
+    # Query ("acks setting") -> [1,0]; p4 gold -> [1,0]; p2 golds -> [0,1].
+    # Cosine(query, p4_gold) = 1.0 > cosine(query, p2_golds) = 0.0 -> p4 comes first.
+    local_probe = {
+        "id": "local",
+        "question": "What acks setting prevents data loss?",
+        "ground_truth": "all",
+        "gold": "Local probe gold passage.",
+    }
     probes = _RGB_PROBES_FIXTURE
-    probe = probes[0]  # p1
+    # Include all fixture probes plus local_probe; id-sort: "local" < "p1" < "p2" < "p3" < "p4"
+    local_probes = [local_probe, *probes]
 
-    # Build pool for p1 (embed_fn=None path): id-order = [p2_gold[0], p2_gold[1], p4_gold]
-    id_order = g._rgb_distractors(probe, probes, n=5, embed_fn=None)
+    # id-order pool for local_probe: p1_gold, p2_gold[0], p2_gold[1], p4_gold (p3 has no gold)
+    id_order = g._rgb_distractors(local_probe, local_probes, n=5, embed_fn=None)
 
-    # Fake embed_fn: make p4's gold ("Producers must use acks=all ...") nearest to the probe question
-    # by matching the keyword "acks" in p4's gold. Probe question: "default replication factor"
-    # p2 golds don't have "acks"; p4 gold has "acks=all"
     def embed_fn(texts):
-        vecs = []
-        for t in texts:
-            if "acks" in t:
-                vecs.append([1.0, 0.0])
-            else:
-                vecs.append([0.0, 1.0])
-        return vecs
+        return [[1.0, 0.0] if "acks" in t else [0.0, 1.0] for t in texts]
 
-    result = g._rgb_distractors(probe, probes, n=5, embed_fn=embed_fn)
-    # Result must differ from id-order (nearest is p4's gold, not p2's first gold)
-    assert result != id_order, f"expected different order; id_order={id_order}, result={result}"
-    # The p4 gold must come first (highest cosine with the fake "acks" query signal)
-    p4_gold = probes[3]["gold"]
+    result = g._rgb_distractors(local_probe, local_probes, n=5, embed_fn=embed_fn)
+    # p4 gold contains "acks=all" -> cosine 1.0 with the "acks" query -> must come first
+    p4_gold = probes[3]["gold"]  # "Producers must use acks=all for durable, loss-free delivery."
     assert result[0] == p4_gold, f"expected p4 gold first, got {result[0]}"
+    # Result must differ from id-order (p4 is not first in id-order)
+    assert result != id_order, f"expected different order; id_order={id_order}, result={result}"
 
 
 def test_rgb_distractors_byte_identical_default():

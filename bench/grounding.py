@@ -401,12 +401,47 @@ _RGB_COUNTERFACTUAL_INSTRUCTION = (
 )
 
 
-def _rgb_distractors(probe: dict, probes: list[dict], n: int) -> list[str]:
+def _rank_by_similarity(query: str, candidates: list[str], embed_fn) -> list[str]:
+    """Return candidates reordered nearest-first by cosine similarity to query.
+
+    Makes exactly one embed_fn([query] + candidates) call. Computes cosine in pure Python
+    (math module only — no sqlite_vec). Guards zero-norm: a zero-vector candidate gets
+    similarity -inf so it sinks to the bottom. Tie-break is stable (preserves input order).
+    Does not catch exceptions — the caller wraps this in try/except.
+    """
+    import math
+
+    texts = [query, *candidates]
+    vecs = embed_fn(texts)
+    q_vec = vecs[0]
+    cand_vecs = vecs[1:]
+
+    q_norm = math.sqrt(sum(x * x for x in q_vec))
+
+    sims: list[float] = []
+    for vec in cand_vecs:
+        c_norm = math.sqrt(sum(x * x for x in vec))
+        if q_norm == 0.0 or c_norm == 0.0:
+            sims.append(float("-inf"))
+        else:
+            dot = sum(a * b for a, b in zip(q_vec, vec, strict=False))
+            sims.append(dot / (q_norm * c_norm))
+
+    # Stable descending sort: equal sims keep input order (Python sort is stable).
+    order = sorted(range(len(candidates)), key=lambda i: -sims[i])
+    return [candidates[i] for i in order]
+
+
+def _rgb_distractors(probe: dict, probes: list[dict], n: int, embed_fn=None) -> list[str]:
     """Return up to n distractor passages from other probes' gold fields. Never raises.
 
     Selection is deterministic: probes sorted by id, excluding self.
     A string gold contributes one passage; a list gold contributes each item individually.
     Probes with no gold field contribute nothing. Returns [] when no others have gold.
+
+    When embed_fn is None (default): returns pool[:n] in id-order — byte-identical to the
+    original behavior. When embed_fn is provided: reorders the pool topically-nearest-first
+    via _rank_by_similarity; any exception falls back to id-order.
     """
     try:
         self_id = probe.get("id")
@@ -421,7 +456,13 @@ def _rgb_distractors(probe: dict, probes: list[dict], n: int) -> list[str]:
                 passages.append(gold)
             elif isinstance(gold, list):
                 passages.extend(str(item) for item in gold)
-        return passages[:n]
+        if embed_fn is None:
+            return passages[:n]
+        try:
+            ranked = _rank_by_similarity(probe["question"], passages, embed_fn)
+            return ranked[:n]
+        except Exception:
+            return passages[:n]
     except Exception:
         return []
 
