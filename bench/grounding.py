@@ -51,6 +51,11 @@ Extended probe schema (all new fields are optional; existing required fields unc
     counterfactual (str)    — a misleading document for the counterfactual axis.
     wrong_answer (str)      — the incorrect answer the misleading doc would induce.
 
+``--hard-negatives`` (opt-in): reorders distractors topically-nearest-first via the
+existing embedder (``--embed-model``). Soft-fails to id-order when fastembed is
+unavailable. RGB-mode only; reuses ``--embed-model``; recorded as ``hard_negatives``
+boolean in the RGB JSON output.
+
 See bench/fixtures/rgb_probes.example.json for a complete example probe list.
 """
 
@@ -474,6 +479,7 @@ def _rgb_noise(
     k: int,
     answer_model: str,
     judge_models: list[str],
+    embed_fn=None,
 ) -> dict | None:
     """Noise robustness axis for one probe. Never raises.
 
@@ -486,7 +492,7 @@ def _rgb_noise(
             return None
         gold_passage = gold if isinstance(gold, str) else gold[0]
         n_distractors = min(int(noise_ratio * k), k - 1)
-        distractors = _rgb_distractors(probe, probes, n=n_distractors)
+        distractors = _rgb_distractors(probe, probes, n=n_distractors, embed_fn=embed_fn)
         docs = [gold_passage, *distractors]
         # Cap total at k.
         docs = docs[:k]
@@ -514,6 +520,7 @@ def _rgb_negative(
     k: int,
     answer_model: str,
     judge_models: list[str],
+    embed_fn=None,
 ) -> dict | None:
     """Negative rejection axis for one probe. Never raises.
 
@@ -522,7 +529,7 @@ def _rgb_negative(
     Returns a record dict or None on error.
     """
     try:
-        distractors = _rgb_distractors(probe, probes, n=k)
+        distractors = _rgb_distractors(probe, probes, n=k, embed_fn=embed_fn)
         prefix = _RGB_SEP.join(distractors) if distractors else ""
         answer = _answer(
             prefix, probe["question"], answer_model, instruction=_RGB_NEGATIVE_INSTRUCTION
@@ -544,6 +551,7 @@ def _rgb_integration(
     k: int,
     answer_model: str,
     judge_models: list[str],
+    embed_fn=None,
 ) -> dict | None:
     """Information integration axis for one probe. Never raises.
 
@@ -555,7 +563,7 @@ def _rgb_integration(
         if not isinstance(gold, list) or len(gold) < 2:
             return None
         n_distractors = max(0, k - len(gold))
-        distractors = _rgb_distractors(probe, probes, n=n_distractors)
+        distractors = _rgb_distractors(probe, probes, n=n_distractors, embed_fn=embed_fn)
         docs = list(gold) + distractors
         docs = docs[:k]
         prefix = _RGB_SEP.join(docs)
@@ -623,6 +631,16 @@ def _run_rgb(args: argparse.Namespace, probes: list[dict]) -> int:
         judge_models = [m.strip() for m in args.judge_models.split(",") if m.strip()]
         k = args.rgb_k
 
+        # Build embed_fn when --hard-negatives is requested; soft-fail to id-order on error.
+        embed_fn = None
+        hard_negatives = False
+        if getattr(args, "hard_negatives", False):
+            try:
+                embed_fn = _default_embedder(args.embed_model)
+                hard_negatives = True
+            except Exception as exc:
+                print(f"note: hard-negatives unavailable, proceeding id-order (fastembed): {exc}")
+
         output: dict = {}
 
         # Noise axis: sweep ratios.
@@ -632,7 +650,9 @@ def _run_rgb(args: argparse.Namespace, probes: list[dict]) -> int:
             for ratio in noise_ratios:
                 records = []
                 for probe in probes:
-                    rec = _rgb_noise(probe, probes, ratio, k, args.answer_model, judge_models)
+                    rec = _rgb_noise(
+                        probe, probes, ratio, k, args.answer_model, judge_models, embed_fn=embed_fn
+                    )
                     if rec is not None:
                         records.append(rec)
                         per_probe_noise.append({**rec, "ratio": ratio})
@@ -651,7 +671,9 @@ def _run_rgb(args: argparse.Namespace, probes: list[dict]) -> int:
         if "negative" in axes:
             records = []
             for probe in probes:
-                rec = _rgb_negative(probe, probes, k, args.answer_model, judge_models)
+                rec = _rgb_negative(
+                    probe, probes, k, args.answer_model, judge_models, embed_fn=embed_fn
+                )
                 if rec is not None:
                     records.append(rec)
             n = len(records)
@@ -670,7 +692,9 @@ def _run_rgb(args: argparse.Namespace, probes: list[dict]) -> int:
             records = []
             skipped = 0
             for probe in probes:
-                rec = _rgb_integration(probe, probes, k, args.answer_model, judge_models)
+                rec = _rgb_integration(
+                    probe, probes, k, args.answer_model, judge_models, embed_fn=embed_fn
+                )
                 if rec is None:
                     skipped += 1
                     print(f"integration: skipped {probe.get('id')} (needs >=2 gold)")
@@ -712,6 +736,8 @@ def _run_rgb(args: argparse.Namespace, probes: list[dict]) -> int:
                 "skipped": skipped,
                 "per_probe": records,
             }
+
+        output["hard_negatives"] = hard_negatives
 
         if args.out is not None:
             try:
@@ -785,6 +811,15 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--axes", default="noise,negative,integration,counterfactual")
     parser.add_argument("--noise-ratios", default="0.0,0.4,0.8")
     parser.add_argument("--rgb-k", type=int, default=5)
+    parser.add_argument(
+        "--hard-negatives",
+        action="store_true",
+        help=(
+            "Reorder RGB distractors topically-nearest-first via the existing embedder "
+            "(--embed-model). Soft-fails to id-order when fastembed is unavailable. "
+            "RGB-mode only."
+        ),
+    )
     return parser
 
 
