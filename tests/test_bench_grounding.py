@@ -1623,3 +1623,338 @@ def test_promptab_unreadable_variant_returns_1(monkeypatch, tmp_path, capsys):
     assert rc == 1, f"expected rc=1 for unreadable variant, got {rc}"
     out = capsys.readouterr().out
     assert out.strip(), "expected a note to be printed for unreadable variant"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# sysab mode — _generate_strategy, _judge_pairwise, _run_sysab + CLI wiring
+# (all offline — monkeypatch; no real claude / bridge / network)
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def _make_sysab_args(tmp_path, extra=None):
+    """Write a scenarios file + variant files; return base argv for --mode sysab.
+
+    --probes is still required by the parser so we pass a throwaway probes file
+    (sysab ignores it at runtime, but argparse requires it).
+    """
+    scenarios = [
+        {
+            "id": "stream-1",
+            "question": "Streaming platform for financial analytics",
+            "core_problem": "Latency too high for real-time risk.",
+            "ten_x_vision": "Sub-second risk visibility across all asset classes.",
+            "milestones": ["Deploy Confluent cluster", "Launch risk dashboard"],
+            "architecture_pattern": "Event-driven microservices",
+            "test_coverage": 80,
+        },
+        {
+            "id": "cli-1",
+            "question": "Dev productivity CLI for AI context orchestration",
+            "core_problem": "Engineers waste time re-establishing context.",
+            "ten_x_vision": "Each session starts smarter than the last.",
+            "milestones": ["Ship pipeline", "Persistent memory store"],
+            "architecture_pattern": "Event-driven orchestrator with SQLite FTS5",
+            "test_coverage": 80,
+        },
+    ]
+    scenarios_file = tmp_path / "scenarios.json"
+    scenarios_file.write_text(json.dumps(scenarios))
+    vb_file = tmp_path / "candidate.txt"
+    vb_file.write_text("Candidate system prompt for testing.")
+    # throwaway probes file — parser requires --probes even in sysab mode
+    probes_file = tmp_path / "probes.json"
+    probes_file.write_text(json.dumps([{"id": "p1", "question": "Q?", "ground_truth": "GT"}]))
+    argv = [
+        "--root",
+        str(tmp_path),
+        "--probes",
+        str(probes_file),
+        "--mode",
+        "sysab",
+        "--scenarios",
+        str(scenarios_file),
+        "--variant-b",
+        str(vb_file),
+        "--judge-models",
+        "m1",
+        "--trials",
+        "1",
+    ]
+    if extra:
+        argv += extra
+    return scenarios_file, vb_file, probes_file, argv
+
+
+def test__generate_strategy_happy_and_failure(monkeypatch):
+    """_generate_strategy: returns doc text on success, '' on failure, never raises."""
+
+    class _HappyResult:
+        success = True
+        output = "  Generated strategy document.  "
+
+    class _FailResult:
+        success = False
+        output = ""
+
+    class _HappyBridge:
+        def __init__(self, config=None):
+            pass
+
+        def run(self, prompt, *, system_prompt=None, **kw):
+            return _HappyResult()
+
+    class _FailBridge:
+        def __init__(self, config=None):
+            pass
+
+        def run(self, prompt, *, system_prompt=None, **kw):
+            return _FailResult()
+
+    class _RaisingBridge:
+        def __init__(self, config=None):
+            pass
+
+        def run(self, *a, **kw):
+            raise RuntimeError("bridge exploded")
+
+    from flowstate.state import InterviewAnswers
+
+    answers = InterviewAnswers(
+        core_problem="test problem",
+        ten_x_vision="test vision",
+        milestones=["m1"],
+        architecture_pattern="microservices",
+        test_coverage=80,
+    )
+
+    # Happy path: success=True → returns stripped output.
+    monkeypatch.setattr(g, "ClaudeBridge", _HappyBridge)
+    result = g._generate_strategy(answers, "sys prompt", "sonnet")
+    assert result == "Generated strategy document."
+
+    # Failure path: success=False → "".
+    monkeypatch.setattr(g, "ClaudeBridge", _FailBridge)
+    result_fail = g._generate_strategy(answers, "sys prompt", "sonnet")
+    assert result_fail == ""
+
+    # Never raises even if bridge raises.
+    monkeypatch.setattr(g, "ClaudeBridge", _RaisingBridge)
+    result_raise = g._generate_strategy(answers, "sys prompt", "sonnet")
+    assert result_raise == ""
+
+
+def test__judge_pairwise_parsing(monkeypatch):
+    """_judge_pairwise returns 'FIRST'/'SECOND'/None based on subprocess output; never raises."""
+    monkeypatch.setattr(g, "_locate_claude", lambda: "/bin/claude")
+
+    class _P:
+        returncode = 0
+        stdout = ""
+
+    def make_run(response):
+        def fake_run(cmd, **kw):
+            p = _P()
+            p.stdout = response
+            return p
+
+        return fake_run
+
+    # "FIRST" in output → "FIRST"
+    monkeypatch.setattr(subprocess, "run", make_run("FIRST"))
+    assert g._judge_pairwise("question", "doc A", "doc B", "m1") == "FIRST"
+
+    # Case-insensitive "second" → "SECOND"
+    monkeypatch.setattr(subprocess, "run", make_run("  second is better  "))
+    assert g._judge_pairwise("question", "doc A", "doc B", "m1") == "SECOND"
+
+    # Unparseable output → None
+    monkeypatch.setattr(subprocess, "run", make_run("garbage output no match"))
+    assert g._judge_pairwise("question", "doc A", "doc B", "m1") is None
+
+    # No claude binary → None
+    monkeypatch.setattr(g, "_locate_claude", lambda: None)
+    assert g._judge_pairwise("question", "doc A", "doc B", "m1") is None
+
+    # Non-zero rc → None
+    monkeypatch.setattr(g, "_locate_claude", lambda: "/bin/claude")
+
+    class _FailP:
+        returncode = 1
+        stdout = "FIRST"
+
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: _FailP())
+    assert g._judge_pairwise("question", "doc A", "doc B", "m1") is None
+
+
+def test_sysab_adopt_b(monkeypatch, tmp_path):
+    """B wins both orderings across scenarios x trials x judges → wilson_low>0.5 → ADOPT_B."""
+    # 2 scenarios x 2 trials x 1 judge x 2 orderings = 8 comparisons, all B-wins
+    # b_win_rate=1.0, wilson_low~0.675 > 0.5 → ADOPT_B.
+    _, _, _, argv = _make_sysab_args(tmp_path, extra=["--trials", "2"])
+    out_file = tmp_path / "out.json"
+    argv += ["--out", str(out_file)]
+
+    monkeypatch.setattr(
+        g,
+        "_generate_strategy",
+        lambda answers, sys_prompt, model: f"strategy for: {sys_prompt[:20]}",
+    )
+
+    judge_call_count = [0]
+
+    def fake_judge(scenario_question, doc_first, doc_second, model):
+        # Odd calls = ordering1 (doc_a first) → "SECOND" = B-win.
+        # Even calls = ordering2 (doc_b first) → "FIRST" = B-win.
+        judge_call_count[0] += 1
+        return "SECOND" if (judge_call_count[0] % 2 == 1) else "FIRST"
+
+    monkeypatch.setattr(g, "_judge_pairwise", fake_judge)
+
+    rc = g.main(argv)
+    assert rc == 0, f"expected rc=0, got {rc}"
+
+    data = json.loads(out_file.read_text())
+    assert data["decision"] == "ADOPT_B", f"expected ADOPT_B: {data}"
+    assert data["b_win_rate"] > 0.5, f"expected b_win_rate>0.5: {data}"
+    assert data["wilson_ci"][0] > 0.5, f"expected wilson_low>0.5: {data}"
+
+
+def test_sysab_no_change(monkeypatch, tmp_path):
+    """Judge always returns 'SECOND' → 50/50 split → b_win_rate not >0.5 → NO_CHANGE."""
+    # ordering1: "SECOND" = B-win; ordering2: "SECOND" = A-win → 50/50.
+    _, _, _, argv = _make_sysab_args(tmp_path)
+    out_file = tmp_path / "out.json"
+    argv += ["--out", str(out_file)]
+
+    monkeypatch.setattr(
+        g,
+        "_generate_strategy",
+        lambda answers, sys_prompt, model: f"doc for {sys_prompt[:10]}",
+    )
+    # Always "SECOND": ordering1→B-win, ordering2→A-win → b_win_rate=0.5 (not >0.5).
+    monkeypatch.setattr(g, "_judge_pairwise", lambda q, df, ds, m: "SECOND")
+
+    rc = g.main(argv)
+    assert rc == 0, f"expected rc=0, got {rc}"
+
+    data = json.loads(out_file.read_text())
+    assert data["decision"] == "NO_CHANGE", f"expected NO_CHANGE: {data}"
+    assert abs(data["b_win_rate"] - 0.5) < 1e-9, f"expected b_win_rate=0.5: {data}"
+    assert data["wilson_ci"][0] <= 0.5, f"expected wilson_low<=0.5: {data}"
+
+
+def test_sysab_json_shape(monkeypatch, tmp_path):
+    """--out produces JSON with all required top-level keys, correct mode/adapter, and shapes."""
+    _, _, _, argv = _make_sysab_args(tmp_path)
+    out_file = tmp_path / "shape.json"
+    argv += ["--out", str(out_file)]
+
+    monkeypatch.setattr(g, "_generate_strategy", lambda answers, sys_prompt, model: "strategy doc")
+    monkeypatch.setattr(g, "_judge_pairwise", lambda q, df, ds, m: "FIRST")
+
+    rc = g.main(argv)
+    assert rc == 0, f"expected rc=0, got {rc}"
+
+    data = json.loads(out_file.read_text())
+    for key in (
+        "mode",
+        "adapter",
+        "n_scenarios",
+        "trials",
+        "answer_model",
+        "judge_models",
+        "variant_a",
+        "variant_b",
+        "comparisons",
+        "b_wins",
+        "b_win_rate",
+        "wilson_ci",
+        "decision",
+    ):
+        assert key in data, f"missing top-level key '{key}': {list(data.keys())}"
+
+    assert data["mode"] == "sysab"
+    assert data["adapter"] == "strategy"
+    assert isinstance(data["judge_models"], list)
+    assert isinstance(data["wilson_ci"], list) and len(data["wilson_ci"]) == 2
+
+    for vk in ("variant_a", "variant_b"):
+        v = data[vk]
+        assert "text_sha" in v, f"missing 'text_sha' in {vk}: {list(v.keys())}"
+        sha = v["text_sha"]
+        assert isinstance(sha, str) and len(sha) == 12, f"text_sha must be 12-char hex: {sha!r}"
+
+    assert "is_default_prompt" in data["variant_a"], "variant_a must have 'is_default_prompt'"
+
+
+def test_sysab_variant_a_defaults_to_constant(monkeypatch, tmp_path):
+    """Omitting --variant-a → is_default_prompt=True, sha matches live STRATEGY_SYSTEM_PROMPT."""
+    import hashlib
+
+    from flowstate.tools.strategy import STRATEGY_SYSTEM_PROMPT
+
+    _, _, _, argv = _make_sysab_args(tmp_path)
+    out_file = tmp_path / "default_a.json"
+    argv += ["--out", str(out_file)]
+
+    monkeypatch.setattr(g, "_generate_strategy", lambda answers, sys_prompt, model: "doc")
+    monkeypatch.setattr(g, "_judge_pairwise", lambda q, df, ds, m: "SECOND")
+
+    rc = g.main(argv)
+    assert rc == 0, f"expected rc=0, got {rc}"
+
+    data = json.loads(out_file.read_text())
+    va = data["variant_a"]
+    assert va["is_default_prompt"] is True, f"expected is_default_prompt=True: {va}"
+    expected_sha = hashlib.sha1(STRATEGY_SYSTEM_PROMPT.encode()).hexdigest()[:12]
+    assert va["text_sha"] == expected_sha, f"expected sha={expected_sha}, got {va['text_sha']}"
+
+
+def test_sysab_unreadable_scenarios(tmp_path):
+    """Missing --scenarios file → main() returns 1, no raise."""
+    _, _, probes_file, _ = _make_sysab_args(tmp_path)
+    missing = tmp_path / "no_such_scenarios.json"
+    vb = tmp_path / "candidate.txt"
+    vb.write_text("candidate prompt")
+    argv = [
+        "--root",
+        str(tmp_path),
+        "--probes",
+        str(probes_file),
+        "--mode",
+        "sysab",
+        "--scenarios",
+        str(missing),
+        "--variant-b",
+        str(vb),
+        "--judge-models",
+        "m1",
+        "--trials",
+        "1",
+    ]
+    rc = g.main(argv)
+    assert rc == 1, f"expected rc=1 for missing scenarios, got {rc}"
+
+
+def test_sysab_unreadable_variant_b(tmp_path):
+    """Missing --variant-b file → main() returns 1, no raise."""
+    scenarios_file, _, probes_file, _ = _make_sysab_args(tmp_path)
+    missing_vb = tmp_path / "no_such_vb.txt"
+    argv = [
+        "--root",
+        str(tmp_path),
+        "--probes",
+        str(probes_file),
+        "--mode",
+        "sysab",
+        "--scenarios",
+        str(scenarios_file),
+        "--variant-b",
+        str(missing_vb),
+        "--judge-models",
+        "m1",
+        "--trials",
+        "1",
+    ]
+    rc = g.main(argv)
+    assert rc == 1, f"expected rc=1 for missing variant-b, got {rc}"
