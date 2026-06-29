@@ -62,6 +62,7 @@ See bench/fixtures/rgb_probes.example.json for a complete example probe list.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -784,6 +785,142 @@ def _run_rgb(args: argparse.Namespace, probes: list[dict]) -> int:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# PromptAB dispatcher
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def _read_variant(path: Path) -> str | None:
+    """Read and strip an instruction-variant file. Never raises.
+
+    Returns the stripped text on success, or None on any error (missing file, permission
+    error, decode error, etc.).
+    """
+    try:
+        return path.read_text().strip()
+    except Exception:
+        return None
+
+
+def _run_promptab(args: argparse.Namespace, probes: list[dict]) -> int:
+    """A/B-test two answer-instruction variants over a single fixed context arm. Never raises.
+
+    Reads variant A and B instruction text from files (args.variant_a / args.variant_b),
+    builds a context prefix via build_context_prefix for each probe, then evaluates both
+    instruction variants using the same multi-judge majority idiom as the layers-mode arm
+    loop.  Applies a Wilson-CI-gated decision rule: ADOPT_B only when B strictly beats A
+    AND their Wilson CIs do not overlap, else NO_CHANGE.
+
+    Returns 0 on success, 1 on guard failure (unreadable variant, retrieval arm, n==0).
+    """
+    try:
+        # Read variant instruction files.
+        a_text = _read_variant(args.variant_a) if args.variant_a is not None else None
+        b_text = _read_variant(args.variant_b) if args.variant_b is not None else None
+        if a_text is None:
+            print(f"note: could not read variant-a file: {args.variant_a}")
+            return 1
+        if b_text is None:
+            print(f"note: could not read variant-b file: {args.variant_b}")
+            return 1
+
+        # Guard: promptab supports only build_context_prefix arms (not retrieval arms).
+        arm = args.layers[0]
+        if arm in {"wikirag", "wikivec"}:
+            print(
+                f"note: promptab does not support retrieval arm '{arm}'; "
+                "use a build_context_prefix arm (none, pack, memory, wiki, full)"
+            )
+            return 1
+
+        judge_models = [m.strip() for m in args.judge_models.split(",") if m.strip()]
+
+        # Accumulate successes and n for each variant.
+        successes: dict[str, int] = {"a": 0, "b": 0}
+        totals: dict[str, int] = {"a": 0, "b": 0}
+
+        for label, text in (("a", a_text), ("b", b_text)):
+            for _trial in range(args.trials):
+                for probe in probes:
+                    with MemoryStore(root=args.root) as mem:
+                        prefix = build_context_prefix(
+                            args.root,
+                            mem,
+                            query=probe["question"],
+                            include_layers=_LAYERS_MAP[arm],
+                        )
+                    answer = _answer(prefix, probe["question"], args.answer_model, instruction=text)
+                    if answer == "":
+                        votes = [None] * len(judge_models)
+                    else:
+                        votes = [_factcheck(answer, probe["ground_truth"], m) for m in judge_models]
+                    yes = sum(1 for v in votes if v is True)
+                    majority = yes > len(judge_models) / 2
+                    totals[label] += 1
+                    if majority:
+                        successes[label] += 1
+
+        n_a = totals["a"]
+        n_b = totals["b"]
+
+        a_acc = successes["a"] / n_a if n_a else 0.0
+        b_acc = successes["b"] / n_b if n_b else 0.0
+        a_low, a_high = _wilson(successes["a"], n_a)
+        b_low, b_high = _wilson(successes["b"], n_b)
+
+        a_sha = hashlib.sha1(a_text.encode()).hexdigest()[:12]
+        b_sha = hashlib.sha1(b_text.encode()).hexdigest()[:12]
+
+        delta = round(b_acc - a_acc, 3)
+        ci_overlap = not (b_low > a_high or a_low > b_high)
+        decision = "ADOPT_B" if (b_acc > a_acc and not ci_overlap) else "NO_CHANGE"
+
+        # JSON output (when --out is provided).
+        output = {
+            "mode": "promptab",
+            "arm": arm,
+            "trials": args.trials,
+            "answer_model": args.answer_model,
+            "judge_models": judge_models,
+            "variant_a": {
+                "accuracy": a_acc,
+                "n": n_a,
+                "wilson_ci": [a_low, a_high],
+                "text_sha": a_sha,
+            },
+            "variant_b": {
+                "accuracy": b_acc,
+                "n": n_b,
+                "wilson_ci": [b_low, b_high],
+                "text_sha": b_sha,
+            },
+            "delta": delta,
+            "ci_overlap": ci_overlap,
+            "decision": decision,
+        }
+
+        if args.out is not None:
+            try:
+                args.out.write_text(json.dumps(output, indent=2))
+            except Exception as exc:
+                print(f"warning: could not write results to {args.out}: {exc}")
+
+        # Console summary table.
+        print(f"\n{'variant':<10} {'accuracy':>10} {'wilson_ci':>22} {'n':>6}")
+        print("-" * 52)
+        for label, acc, lo, hi, n in (
+            ("a", a_acc, a_low, a_high, n_a),
+            ("b", b_acc, b_low, b_high, n_b),
+        ):
+            ci = f"[{lo:.3f}, {hi:.3f}]"
+            print(f"{label:<10} {acc:>10.3f} {ci:>22} {n:>6}")
+        print(f"\ndelta={delta}  ci_overlap={ci_overlap}  decision={decision}")
+
+        return 1 if (n_a == 0 and n_b == 0) else 0
+    except Exception:
+        return 1
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # CLI
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -807,7 +944,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--rag-k", type=int, default=3)
     parser.add_argument("--embed-model", default="BAAI/bge-small-en-v1.5")
     # RGB flags (additive — ignored when --mode layers).
-    parser.add_argument("--mode", choices=("layers", "rgb"), default="layers")
+    parser.add_argument("--mode", choices=("layers", "rgb", "promptab"), default="layers")
     parser.add_argument("--axes", default="noise,negative,integration,counterfactual")
     parser.add_argument("--noise-ratios", default="0.0,0.4,0.8")
     parser.add_argument("--rgb-k", type=int, default=5)
@@ -819,6 +956,19 @@ def _build_parser() -> argparse.ArgumentParser:
             "(--embed-model). Soft-fails to id-order when fastembed is unavailable. "
             "RGB-mode only."
         ),
+    )
+    # PromptAB flags (additive — ignored when --mode is not promptab).
+    parser.add_argument(
+        "--variant-a",
+        type=Path,
+        default=None,
+        help="Path to a text file containing the Variant A answer instruction.",
+    )
+    parser.add_argument(
+        "--variant-b",
+        type=Path,
+        default=None,
+        help="Path to a text file containing the Variant B answer instruction.",
     )
     return parser
 
@@ -845,6 +995,10 @@ def main(argv: list[str] | None = None) -> int:
         # RGB mode: dispatch to _run_rgb and return immediately; arm loop does not run.
         if args.mode == "rgb":
             return _run_rgb(args, probes)
+
+        # PromptAB mode: dispatch to _run_promptab and return immediately.
+        if args.mode == "promptab":
+            return _run_promptab(args, probes)
 
         judge_models = [m.strip() for m in args.judge_models.split(",") if m.strip()]
         root = args.root

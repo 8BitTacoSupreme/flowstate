@@ -1413,3 +1413,213 @@ def test_hard_negatives_soft_fail_embedder_raises(monkeypatch, tmp_path, capsys)
     assert "hard-negatives" in out or "fastembed" in out, (
         f"expected note about hard-negatives/fastembed in stdout, got: {out!r}"
     )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Task 3: promptab mode — _read_variant + _run_promptab + CLI flags (RED gate)
+# ──────────────────────────────────────────────────────────────────────────────
+
+_PROMPTAB_PROBES = [
+    {"id": f"p{i}", "question": f"Q{i}?", "ground_truth": f"A{i}"} for i in range(5)
+]
+
+# Distinct instruction strings written to variant files; _run_promptab passes them
+# as the ``instruction=`` kwarg so the monkeypatched _answer can identify which arm
+# is being evaluated.
+_INSTR_A = "variant_a_instruction"
+_INSTR_B = "variant_b_instruction"
+
+
+def _make_promptab_args(tmp_path, extra=None):
+    """Write probes + variant files; return (probes_file, va_file, vb_file, base_argv)."""
+    probes_file = tmp_path / "probes.json"
+    probes_file.write_text(json.dumps(_PROMPTAB_PROBES))
+    va = tmp_path / "va.txt"
+    va.write_text(_INSTR_A)
+    vb = tmp_path / "vb.txt"
+    vb.write_text(_INSTR_B)
+    argv = [
+        "--root",
+        str(tmp_path),
+        "--probes",
+        str(probes_file),
+        "--mode",
+        "promptab",
+        "--variant-a",
+        str(va),
+        "--variant-b",
+        str(vb),
+        "--layers",
+        "none",
+        "--trials",
+        "1",
+        "--judge-models",
+        "m1",
+    ]
+    if extra:
+        argv += extra
+    return probes_file, va, vb, argv
+
+
+def test__read_variant_happy_and_missing(tmp_path):
+    """_read_variant: reads + strips text; returns None for missing path without raising."""
+    f = tmp_path / "instr.txt"
+    f.write_text("  hello world  \n")
+    assert g._read_variant(f) == "hello world"
+
+    # Non-existent path → None, no raise.
+    result = g._read_variant(tmp_path / "does_not_exist.txt")
+    assert result is None
+
+
+def test_promptab_adopt_b_when_b_wins_nonoverlapping(monkeypatch, tmp_path):
+    """Variant A scores 0/5, B scores 5/5 → non-overlapping Wilson CIs → ADOPT_B."""
+    _, _, _, argv = _make_promptab_args(tmp_path)
+    out_file = tmp_path / "out.json"
+    argv += ["--out", str(out_file)]
+
+    monkeypatch.setattr(
+        g,
+        "_answer",
+        lambda p, q, m, *, instruction="Answer concisely and specifically.": (
+            "correct" if instruction == _INSTR_B else "wrong"
+        ),
+    )
+    monkeypatch.setattr(g, "_factcheck", lambda a, gt, m: a == "correct")
+    monkeypatch.setattr(g, "build_context_prefix", _bcp)
+    monkeypatch.setattr(g, "MemoryStore", _Mem)
+
+    rc = g.main(argv)
+    assert rc == 0, f"expected rc=0, got {rc}"
+    data = json.loads(out_file.read_text())
+    assert data["decision"] == "ADOPT_B", f"expected ADOPT_B: {data}"
+    assert data["ci_overlap"] is False, f"expected ci_overlap=False: {data}"
+    assert data["delta"] > 0, f"expected delta>0: {data}"
+
+
+def test_promptab_no_change_when_tie_overlap(monkeypatch, tmp_path):
+    """Both variants score identically → overlapping CIs → NO_CHANGE."""
+    _, _, _, argv = _make_promptab_args(tmp_path)
+    out_file = tmp_path / "out.json"
+    argv += ["--out", str(out_file)]
+
+    # Both A and B always produce correct answers → same accuracy → tied CIs → overlap.
+    monkeypatch.setattr(
+        g,
+        "_answer",
+        lambda p, q, m, *, instruction="Answer concisely and specifically.": "correct",
+    )
+    monkeypatch.setattr(g, "_factcheck", lambda a, gt, m: True)
+    monkeypatch.setattr(g, "build_context_prefix", _bcp)
+    monkeypatch.setattr(g, "MemoryStore", _Mem)
+
+    rc = g.main(argv)
+    assert rc == 0, f"expected rc=0, got {rc}"
+    data = json.loads(out_file.read_text())
+    assert data["decision"] == "NO_CHANGE", f"expected NO_CHANGE: {data}"
+    assert data["ci_overlap"] is True, f"expected ci_overlap=True: {data}"
+
+
+def test_promptab_json_shape(monkeypatch, tmp_path):
+    """--out produces JSON with all required top-level keys and per-variant sub-structure."""
+    _, _, _, argv = _make_promptab_args(tmp_path)
+    out_file = tmp_path / "shape.json"
+    argv += ["--out", str(out_file)]
+
+    monkeypatch.setattr(
+        g,
+        "_answer",
+        lambda p, q, m, *, instruction="Answer concisely and specifically.": "ans",
+    )
+    monkeypatch.setattr(g, "_factcheck", lambda a, gt, m: True)
+    monkeypatch.setattr(g, "build_context_prefix", _bcp)
+    monkeypatch.setattr(g, "MemoryStore", _Mem)
+
+    rc = g.main(argv)
+    assert rc == 0, f"expected rc=0, got {rc}"
+    data = json.loads(out_file.read_text())
+
+    # Top-level keys
+    for key in (
+        "mode",
+        "arm",
+        "trials",
+        "answer_model",
+        "judge_models",
+        "variant_a",
+        "variant_b",
+        "delta",
+        "ci_overlap",
+        "decision",
+    ):
+        assert key in data, f"missing top-level key '{key}': {list(data.keys())}"
+
+    assert data["mode"] == "promptab"
+    assert isinstance(data["judge_models"], list)
+
+    # Per-variant sub-structure
+    for vk in ("variant_a", "variant_b"):
+        v = data[vk]
+        for sub in ("accuracy", "n", "wilson_ci", "text_sha"):
+            assert sub in v, f"missing '{sub}' in {vk}: {list(v.keys())}"
+        assert isinstance(v["wilson_ci"], list) and len(v["wilson_ci"]) == 2, (
+            f"wilson_ci must be a 2-list: {v['wilson_ci']!r}"
+        )
+        assert isinstance(v["text_sha"], str) and len(v["text_sha"]) == 12, (
+            f"text_sha must be 12-char hex string: {v['text_sha']!r}"
+        )
+
+
+def test_promptab_retrieval_arm_returns_1(monkeypatch, tmp_path, capsys):
+    """--layers wikivec is a retrieval arm → _run_promptab returns 1 with a note."""
+    _, _, _, argv = _make_promptab_args(tmp_path, extra=["--layers", "wikivec"])
+
+    monkeypatch.setattr(
+        g,
+        "_answer",
+        lambda p, q, m, *, instruction="Answer concisely and specifically.": "ans",
+    )
+    monkeypatch.setattr(g, "_factcheck", lambda a, gt, m: True)
+    monkeypatch.setattr(g, "build_context_prefix", _bcp)
+    monkeypatch.setattr(g, "MemoryStore", _Mem)
+
+    rc = g.main(argv)
+    assert rc == 1, f"expected rc=1 for retrieval arm, got {rc}"
+    out = capsys.readouterr().out
+    assert out.strip(), "expected a note to be printed for retrieval arm"
+
+
+def test_promptab_unreadable_variant_returns_1(monkeypatch, tmp_path, capsys):
+    """Missing --variant-a path → _read_variant returns None → returns 1 without crashing."""
+    probes_file = tmp_path / "probes.json"
+    probes_file.write_text(json.dumps(_PROMPTAB_PROBES))
+    missing = tmp_path / "does_not_exist.txt"
+    vb = tmp_path / "vb.txt"
+    vb.write_text(_INSTR_B)
+
+    argv = [
+        "--root",
+        str(tmp_path),
+        "--probes",
+        str(probes_file),
+        "--mode",
+        "promptab",
+        "--variant-a",
+        str(missing),
+        "--variant-b",
+        str(vb),
+        "--layers",
+        "none",
+        "--trials",
+        "1",
+        "--judge-models",
+        "m1",
+    ]
+
+    monkeypatch.setattr(g, "build_context_prefix", _bcp)
+    monkeypatch.setattr(g, "MemoryStore", _Mem)
+
+    rc = g.main(argv)
+    assert rc == 1, f"expected rc=1 for unreadable variant, got {rc}"
+    out = capsys.readouterr().out
+    assert out.strip(), "expected a note to be printed for unreadable variant"
