@@ -74,8 +74,11 @@ from pathlib import Path
 
 from bench.compound_eval import _LAYERS_MAP
 from bench.judge import _locate_claude
+from flowstate.bridge import BridgeConfig, ClaudeBridge
 from flowstate.context_prefix import build_context_prefix
 from flowstate.memory import MemoryStore
+from flowstate.state import InterviewAnswers
+from flowstate.tools.strategy import STRATEGY_SYSTEM_PROMPT, _build_pressure_test_prompt
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Constants
@@ -921,6 +924,199 @@ def _run_promptab(args: argparse.Namespace, probes: list[dict]) -> int:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# SysAB helpers
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Matches the first FIRST or SECOND token in a pairwise judge response.
+_FIRSTSECOND_RE = re.compile(r"\b(FIRST|SECOND)\b", re.IGNORECASE)
+
+
+def _generate_strategy(answers: InterviewAnswers, system_prompt: str, model: str) -> str:
+    """Generate a strategy document for the given scenario and system prompt. Never raises.
+
+    Single-shot bridge call with no tools and no canon injection — the goal is to isolate
+    the system prompt's effect on generation quality. This deliberately deviates from
+    StrategyAdapter which uses WebSearch + max_turns=5 and inject_canon=True. Here we want
+    exactly one generation pass per prompt variant with zero external noise (no web search,
+    no prior knowledge, no multi-turn), so any quality difference is attributable solely to
+    the system prompt under test.
+
+    Returns the stripped output text on success, or "" on any failure.
+    """
+    try:
+        prompt = _build_pressure_test_prompt(answers)
+        # inject_canon=False + max_turns=1 + no tools: isolate the system prompt's effect on
+        # a single-shot generation. Deliberate deviation from StrategyAdapter's
+        # WebSearch/max_turns=5 config — external signals would confound the A/B signal.
+        bridge = ClaudeBridge(
+            BridgeConfig(model=model, max_turns=1, allowed_tools=[], inject_canon=False)
+        )
+        br = bridge.run(prompt, system_prompt=system_prompt)
+        return br.output.strip() if br.success and br.output.strip() else ""
+    except Exception:
+        return ""
+
+
+def _judge_pairwise(
+    scenario_question: str,
+    doc_first: str,
+    doc_second: str,
+    model: str,
+) -> str | None:
+    """Pairwise rubric judge: which strategy doc is better? Never raises.
+
+    Presents two strategy documents to a judge model and asks it to choose FIRST or SECOND.
+    Uses the same subprocess idiom as _factcheck (not the bridge) for lightweight single
+    invocations. Returns 'FIRST', 'SECOND', or None (unparseable / non-zero rc / no binary).
+
+    Five-dimension rubric: problem clarity, 10x potential, feasibility realism,
+    risk identification quality, recommendation decisiveness.
+    """
+    try:
+        claude = _locate_claude()
+        if claude is None:
+            return None
+        prompt = (
+            "You are evaluating two strategy documents on five dimensions:\n"
+            "1. Problem clarity\n"
+            "2. 10x potential\n"
+            "3. Feasibility realism\n"
+            "4. Risk identification quality\n"
+            "5. Recommendation decisiveness\n\n"
+            f"Question: {scenario_question}\n\n"
+            f"DOCUMENT FIRST:\n{doc_first}\n\n"
+            f"DOCUMENT SECOND:\n{doc_second}\n\n"
+            "Which document is better overall across these five dimensions? "
+            "Reply with ONLY the word FIRST or SECOND."
+        )
+        cmd = [claude, "--print", "--max-turns", "1", "--model", model, "--", prompt]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=_JUDGE_TIMEOUT)
+        if proc.returncode != 0:
+            return None
+        m = _FIRSTSECOND_RE.search(proc.stdout or "")
+        if m is None:
+            return None
+        return m.group(1).upper()
+    except Exception:
+        return None
+
+
+def _run_sysab(args: argparse.Namespace, probes: list[dict]) -> int:
+    """A/B-test two strategy system prompts via pairwise generation + judgment. Never raises.
+
+    For each scenario: generates a strategy document per variant (single-shot, no tools),
+    judges them pairwise with position-debiasing (both orderings per judge model), and
+    accumulates B-wins for a Wilson-CI-vs-0.5 decision gate.
+
+    Variant A defaults to the live STRATEGY_SYSTEM_PROMPT when --variant-a is omitted.
+    Returns 0 on success, 1 on guard failure (unreadable file, zero comparisons).
+    """
+    try:
+        # Load scenarios (reuses _load_probes — same JSON-list-of-dicts contract).
+        scenarios = _load_probes(args.scenarios)
+        if scenarios is None:
+            print(f"note: could not load scenarios from {args.scenarios}")
+            return 1
+
+        # Resolve variant A: file path takes precedence; absent → live constant.
+        if args.variant_a is not None:
+            a_text = _read_variant(args.variant_a)
+            if a_text is None:
+                print(f"note: could not read variant-a file: {args.variant_a}")
+                return 1
+        else:
+            a_text = STRATEGY_SYSTEM_PROMPT
+
+        # Variant B is always required.
+        b_text = _read_variant(args.variant_b)
+        if b_text is None:
+            print(f"note: could not read variant-b file: {args.variant_b}")
+            return 1
+
+        judge_models = [m.strip() for m in args.judge_models.split(",") if m.strip()]
+
+        comparisons = 0
+        b_wins = 0
+
+        for scenario in scenarios:
+            answers = InterviewAnswers(
+                core_problem=scenario.get("core_problem", ""),
+                ten_x_vision=scenario.get("ten_x_vision", ""),
+                milestones=scenario.get("milestones", []),
+                architecture_pattern=scenario.get("architecture_pattern", ""),
+                test_coverage=scenario.get("test_coverage", 80),
+            )
+            scenario_question = scenario.get("question") or scenario.get("core_problem", "")
+
+            for _trial in range(args.trials):
+                doc_a = _generate_strategy(answers, a_text, args.answer_model)
+                doc_b = _generate_strategy(answers, b_text, args.answer_model)
+                if not doc_a or not doc_b:
+                    continue
+
+                for judge_model in judge_models:
+                    # Position-debiased: run BOTH orderings per (scenario, trial, judge).
+                    # ordering1: first=doc_a, second=doc_b → "SECOND" = B-win.
+                    # ordering2: first=doc_b, second=doc_a → "FIRST"  = B-win.
+                    # None vote counts as a comparison but NOT a B-win (position bias unknown).
+                    vote1 = _judge_pairwise(scenario_question, doc_a, doc_b, judge_model)
+                    comparisons += 1
+                    if vote1 == "SECOND":
+                        b_wins += 1
+
+                    vote2 = _judge_pairwise(scenario_question, doc_b, doc_a, judge_model)
+                    comparisons += 1
+                    if vote2 == "FIRST":
+                        b_wins += 1
+
+        n = comparisons
+        b_win_rate = b_wins / n if n else 0.0
+        low, high = _wilson(b_wins, n)
+        decision = "ADOPT_B" if (b_win_rate > 0.5 and low > 0.5) else "NO_CHANGE"
+
+        def text_sha(text: str) -> str:
+            return hashlib.sha1(text.encode()).hexdigest()[:12]
+
+        output = {
+            "mode": "sysab",
+            "adapter": "strategy",
+            "n_scenarios": len(scenarios),
+            "trials": args.trials,
+            "answer_model": args.answer_model,
+            "judge_models": judge_models,
+            "variant_a": {
+                "text_sha": text_sha(a_text),
+                "is_default_prompt": args.variant_a is None,
+            },
+            "variant_b": {
+                "text_sha": text_sha(b_text),
+            },
+            "comparisons": n,
+            "b_wins": b_wins,
+            "b_win_rate": b_win_rate,
+            "wilson_ci": [low, high],
+            "decision": decision,
+        }
+
+        if args.out is not None:
+            try:
+                args.out.write_text(json.dumps(output, indent=2))
+            except Exception as exc:
+                print(f"warning: could not write results to {args.out}: {exc}")
+
+        # Console summary (mirrors _run_promptab visual style).
+        print(f"\n{'sysab':<16} {'b_win_rate':>12} {'wilson_ci':>22} {'comparisons':>12}")
+        print("-" * 64)
+        ci = f"[{low:.3f}, {high:.3f}]"
+        print(f"{'strategy':<16} {b_win_rate:>12.3f} {ci:>22} {n:>12}")
+        print(f"\ndecision={decision}")
+
+        return 1 if n == 0 else 0
+    except Exception:
+        return 1
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # CLI
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -944,7 +1140,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--rag-k", type=int, default=3)
     parser.add_argument("--embed-model", default="BAAI/bge-small-en-v1.5")
     # RGB flags (additive — ignored when --mode layers).
-    parser.add_argument("--mode", choices=("layers", "rgb", "promptab"), default="layers")
+    parser.add_argument("--mode", choices=("layers", "rgb", "promptab", "sysab"), default="layers")
     parser.add_argument("--axes", default="noise,negative,integration,counterfactual")
     parser.add_argument("--noise-ratios", default="0.0,0.4,0.8")
     parser.add_argument("--rgb-k", type=int, default=5)
@@ -969,6 +1165,17 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="Path to a text file containing the Variant B answer instruction.",
+    )
+    # SysAB flag (additive — ignored when --mode is not sysab).
+    parser.add_argument(
+        "--scenarios",
+        type=Path,
+        default=None,
+        help=(
+            "JSON list of strategy scenarios for --mode sysab. sysab reads its input here; "
+            "--probes stays required by the parser but is ignored by sysab "
+            "(pass any probes file to satisfy it)."
+        ),
     )
     return parser
 
@@ -999,6 +1206,10 @@ def main(argv: list[str] | None = None) -> int:
         # PromptAB mode: dispatch to _run_promptab and return immediately.
         if args.mode == "promptab":
             return _run_promptab(args, probes)
+
+        # SysAB mode: dispatch to _run_sysab and return immediately.
+        if args.mode == "sysab":
+            return _run_sysab(args, probes)
 
         judge_models = [m.strip() for m in args.judge_models.split(",") if m.strip()]
         root = args.root

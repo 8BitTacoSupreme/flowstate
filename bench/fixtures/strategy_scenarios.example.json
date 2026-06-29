@@ -1,0 +1,27 @@
+[
+  {
+    "id": "streaming-platform",
+    "question": "Streaming data platform for real-time financial analytics",
+    "core_problem": "Banks spend 3+ hours reconciling trade data across siloed systems; risk teams miss intraday limit breaches because latency is too high.",
+    "ten_x_vision": "A single event-streaming backbone that gives every risk and compliance team sub-second visibility into all trade activity across asset classes.",
+    "milestones": [
+      "Deploy Confluent Cloud cluster with 6 producer adapters (FIX, SWIFT, MQ)",
+      "Launch real-time risk dashboard with sub-500ms end-to-end latency"
+    ],
+    "architecture_pattern": "Event-driven microservices on Confluent Cloud",
+    "test_coverage": 80
+  },
+  {
+    "id": "dev-tooling-cli",
+    "question": "Developer productivity CLI for AI-assisted code context orchestration",
+    "core_problem": "Engineers waste 30-60 min per session re-establishing context before LLM-assisted coding; context is ephemeral and does not compound across sessions.",
+    "ten_x_vision": "A CLI that auto-generates, stores, and injects project context so every agent session starts with full institutional knowledge, making each run smarter than the last.",
+    "milestones": [
+      "Ship pipeline: context generation to research to strategy to discipline",
+      "Persistent FTS5 memory store with auto-injection into subsequent runs",
+      "80% test coverage gate enforced via pre-commit"
+    ],
+    "architecture_pattern": "Event-driven orchestrator with pluggable adapters and SQLite FTS5 memory",
+    "test_coverage": 80
+  }
+]
