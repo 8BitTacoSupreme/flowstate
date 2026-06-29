@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-18)
 Phase: 11
 Plan: Not started
 Status: Milestone complete
-Last activity: 2026-06-29 - Completed quick task 260629-fxt: --mode promptab bench A/B
+Last activity: 2026-06-29 - Completed quick task 260629-gzd: --mode sysab system-prompt A/B
 
 Progress: [██████████] 100%
 
@@ -92,10 +92,11 @@ None at roadmap start. Key implementation constraint: every caller path must che
 | 260618-p97 | Wire RGB four axes into bench/grounding.py | complete | 2026-06-18 | 5f56e6d, a194431, 137595e, da6a9d6, 32a0df7 |
 | 260619-nfe | Add opt-in hard-negative distractor selection to RGB axes | complete | 2026-06-19 | 484b433, 00ab722, cb67d45, 831def6 |
 | 260629-fxt | Add --mode promptab (eval-gated answer-instruction A/B) to bench/grounding.py | complete | 2026-06-29 | 2ff1d63, 03c07ae |
+| 260629-gzd | Add --mode sysab (system-prompt A/B for strategy adapter, pairwise rubric judge, Wilson-vs-0.5 gate) | complete | 2026-06-29 | 0523a6b, 18bae30 |
 
 ## Session Continuity
 
-Last session: 2026-06-29T15:40:00Z
-Stopped at: Quick task 260629-fxt complete
+Last session: 2026-06-29T16:34:00Z
+Stopped at: Quick task 260629-gzd complete
 Resume file: None
 Next step: Continue with productionizing semantic retrieval per SEMANTIC_RETRIEVAL_HANDOFF.md
