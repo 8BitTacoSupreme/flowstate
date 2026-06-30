@@ -249,8 +249,8 @@ flowstate/
 │       ├── research.py     # Research adapter (split-topic)
 │       ├── strategy.py     # Strategy adapter (pressure-test)
 │       └── gsd_adapter.py  # Management adapter (context files)
-├── tests/                  # 758 tests, 92% coverage
-├── bench/                  # research harness (grounding eval, RGB axes, arms)
+├── tests/                  # 803 tests, 92% coverage
+├── bench/                  # research harness: grounding eval, RGB axes, arms, promptab/sysab A/B, tune_loop
 ├── research/               # Generated research artifacts
 ├── flowstate.json          # Pipeline state (gitignored)
 ├── memory.db               # Persistent memory (gitignored)
@@ -341,6 +341,29 @@ By default, `get_context()` retrieves via FTS5/BM25. With the optional `[semanti
 Why it matters: on a checkable grounding benchmark, naive BM25 surfaced the correct article 3/20 while semantic KNN hit 17/20 (≈ oracle), recovering grounding accuracy lexical retrieval loses. Enable it with `pip install -e ".[semantic]"`.
 
 The embedding model is configurable via `FLOWSTATE_EMBED_MODEL` or `.planning/config.json`.
+
+## Prompt-tuning A/B harness (`bench/`, research-only)
+
+FlowState's prompts are tuned with evidence, not vibes. The `bench/` harness includes an opt-in A/B suite that measures whether a prompt change actually helps *before* anyone adopts it. **None of this runs in the pipeline** — these are manual measurement tools you invoke directly; a deterministic `flowstate` run never calls them.
+
+It builds up in three rungs, each gated on real grounding measurements with Wilson score confidence intervals (binary multi-judge eval over `claude --print`):
+
+- **`--mode promptab`** — A/B two *answer-instruction* variants over a fixed context layer. Decision: `ADOPT_B` only when B beats A **and** their Wilson CIs do not overlap (else `NO_CHANGE`).
+- **`--mode sysab`** — A/B two *adapter system prompts* (the strategy adapter). Because the output is a document, not a fact, it uses a **pairwise, position-debiased rubric judge** (both orderings, five strategy dimensions) and a win-rate gate: `ADOPT_B` only when B's win-rate > 0.5 with a Wilson lower bound > 0.5.
+- **`bench/tune_loop.py`** — closes the loop: **mine** the probes the live prompt gets wrong → **propose** a candidate via one `claude` call → **gate** it through `promptab` → **emit a human-approval report**. Hard stop: the loop **never edits any source file** and has no `--apply` flag. A human reads the report and makes the one change.
+
+The gate is what keeps self-improvement honest. A candidate mined from a real failure can still *regress* — e.g. a plausible "cite the source / never answer empty" instruction tanks accuracy when there's no context to cite. The bench catches that and returns `NO_CHANGE`. Tuning is measured; adoption is human; the whole loop stays out of the deterministic runtime by design.
+
+```bash
+# A/B an answer instruction
+python -m bench.grounding --mode promptab --root . --layers none \
+  --probes bench/fixtures/grounding_probes.example.json \
+  --variant-a bench/fixtures/instr_baseline.txt \
+  --variant-b bench/fixtures/instr_candidate.txt --out promptab.json
+
+# closed loop: mine → propose → gate → report (writes tune_report.md, never touches flowstate/)
+python -m bench.tune_loop --root . --probes <probes.json> --arm none --out-dir ./.tune_runs
+```
 
 ## Acknowledgments
 

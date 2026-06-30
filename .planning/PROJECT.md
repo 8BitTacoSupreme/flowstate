@@ -85,6 +85,7 @@ If everything else fails, that compounding loop is what FlowState exists to deli
 
 ## Context
 
+- **Prompt-tuning A/B harness added (bench research tooling, 2026-06-29, post-v0.6.0):** three opt-in `bench/` rungs that tune prompts with *measured grounding* instead of vibes — `--mode promptab` (answer-instruction A/B, Wilson-CI-overlap gate), `--mode sysab` (strategy system-prompt A/B, pairwise position-debiased rubric judge, Wilson-vs-0.5 win-rate gate), and `bench/tune_loop.py` (mine the probes the live prompt fails → propose a candidate via one `claude` call → gate through `promptab` → emit a human-approval report). The "RSI arc": the gate disposes, a human approves the one change. ADD-ONLY, never-raises, stdlib+flowstate-only; **none of it runs in the deterministic pipeline** and `tune_loop` never edits source (no `--apply`, dedicated no-writes guard test). 803 tests at 92.19%. Quick tasks 260629-fxt / 260629-gzd / 260629-kyl.
 - **v0.5.0 shipped (Compounding Loop):** run journal (`## Since Last Run`) + gotchas accumulator (`## Gotchas`, before memory) + `flowstate verify` runnable fixture gates that close the loop into both. 549 tests at 92.25% coverage. `build_context_prefix` now assembles five layers (fixtures → pack → gotchas → memory → since-last-run), all budget-participating. Pure-Python, no new runtime deps. Two new CLI commands (`flowstate journal`, `flowstate gotchas`) + `flowstate verify`. Working tree clean on `main`.
 - **v0.4.0 shipped (Context Compaction & Compounding):** repomix pack + CAG layered context prefix (`build_context_prefix`) + Karpathy canon + ECC-modeled fixtures + scaffold-only `flowstate kickoff`. 381 tests at 92.85% coverage. The implicit-cache prefix (m9v/o6h spikes) is now formalized into ordered layers.
 - **External tool surface grew (no Python deps):** repomix is now an expected external Node CLI/MCP (located like `claude` via PATH / `FLOWSTATE_REPOMIX_BIN`); absent → graceful degradation. `.mcp.json` registers repomix-MCP for spawned-agent retrieval-on-top.
@@ -117,6 +118,7 @@ If everything else fails, that compounding loop is what FlowState exists to deli
 | All prefix layers must participate in the budget fit-ladder + final guard | A new layer appended without budget accounting silently blows the cache window (caught as CR-01 in Phase-6 review; reapplied to the gotchas layer) | ✓ Validated (v0.5 — review-enforced) |
 | `flowstate verify` SKIPs un-checkable NL gates, never fabricates verdicts | Pure-Python can't evaluate "all functionality works"; honesty (real checks for the checkable subset, explicit SKIP otherwise) beats theater | ✓ Validated (VER-01, v0.5) |
 | Skip Codex/OpenCode/Cursor adapters | ECC ships to 7 harnesses with one maintainer and it's visibly straining; FlowState stays Claude-Code-native until users ask | — Pending (still deferred at v0.4) |
+| Prompt self-improvement lives in `bench/`, is eval-gated, and never auto-applies | RSI without a gate is drift, and wiring prompt self-modification into the deterministic runtime is exactly the surface FlowState avoids. The A/B harness *measures* (Wilson-CI gate), the tune-loop *proposes*, a human *approves* the one change — bench-only, no `--apply` | ✓ Validated (260629-fxt/gzd/kyl — `flowstate/` untouched + no-writes guard test; gate caught a real candidate regression in smoke testing) |
 
 ## Evolution
 
@@ -136,4 +138,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-18 — v0.6.0 Semantic Retrieval milestone complete (Phases 9–11)*
+*Last updated: 2026-06-29 — post-v0.6.0 prompt-tuning A/B bench harness + tune-loop added (quick tasks 260629-fxt/gzd/kyl); v0.6.0 Semantic Retrieval milestone complete (Phases 9–11)*
