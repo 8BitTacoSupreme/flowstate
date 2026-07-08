@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-18)
 Phase: 11
 Plan: Not started
 Status: Milestone complete
-Last activity: 2026-06-29 - Completed quick task 260629-kyl: bench/tune_loop.py prompt-tuning loop
+Last activity: 2026-07-08 - Completed quick task 260708-jy5: deterministic supersession in memory.py
 
 Progress: [██████████] 100%
 
@@ -94,6 +94,7 @@ None at roadmap start. Key implementation constraint: every caller path must che
 | 260629-fxt | Add --mode promptab (eval-gated answer-instruction A/B) to bench/grounding.py | complete | 2026-06-29 | 2ff1d63, 03c07ae |
 | 260629-gzd | Add --mode sysab (system-prompt A/B for strategy adapter, pairwise rubric judge, Wilson-vs-0.5 gate) | complete | 2026-06-29 | 0523a6b, 18bae30 |
 | 260629-kyl | Build bench/tune_loop.py — manual prompt-tuning loop (mine→propose→gate→human-approval report; never edits source) | complete | 2026-06-29 | 20a0afd, a22087d |
+| 260708-jy5 | Deterministic supersession in memory.py (additive superseded_by column, supersede() API, retrieval excludes superseded by default, flag-only find_contradiction_candidates) | complete | 2026-07-08 | 35f3a61, 7a467d9 |
 
 ## Session Continuity
 
