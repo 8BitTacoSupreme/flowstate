@@ -96,10 +96,11 @@ None at roadmap start. Key implementation constraint: every caller path must che
 | 260629-kyl | Build bench/tune_loop.py — manual prompt-tuning loop (mine→propose→gate→human-approval report; never edits source) | complete | 2026-06-29 | 20a0afd, a22087d |
 | 260708-jy5 | Deterministic supersession in memory.py (additive superseded_by column, supersede() API, retrieval excludes superseded by default, flag-only find_contradiction_candidates) | complete | 2026-07-08 | 35f3a61, 7a467d9 |
 | 260708-mjt | Build bench/longmemeval.py + bench/locomo.py retrieval-eval harnesses (recall_all/any@k, evidence-coverage, semantic vs BM25, Wilson CIs, smoke fixtures) — Task A of the public-benchmark arc | complete | 2026-07-08 | b1d962c, fcb87ef, d6a6704 |
+| 260708-nsm | Build bench/longmemeval_qa.py — QA-accuracy layer (Task B): retrieve→read→judge, per-question-type + overall accuracy with Wilson CIs, retrieval+oracle arms, --limit | complete | 2026-07-08 | 603d558, 1087dce, 830c6e9 |
 
 ## Session Continuity
 
 Last session: 2026-07-08T20:14:10Z
-Stopped at: Quick task 260708-mjt complete (LongMemEval/LoCoMo retrieval benches)
+Stopped at: Quick task 260708-nsm complete (LongMemEval QA layer). Ran real LongMemEval_S retrieval (n=500): FlowState-semantic bge-small recall_all@5=0.806 / recall_any@5=0.934 vs BM25 0.844 / 0.966 — BM25-competitive, NOT leaderboard-leading (leaders use ~1.5B-param embedders vs bge-small 33M). QA-accuracy run (n=50, semantic+oracle) in progress.
 Resume file: None
-Next step: Task B — QA reader+judge layer on LongMemEval for the headline QA-accuracy number (claude judge = comparable reproduction; GPT-4o judge = officially submittable). Then optionally run at scale on real longmemeval-cleaned (3GB).
+Next step: Read QA-accuracy result vs paper baselines (oracle 0.870, full-context 0.606). Optional: scale QA to n=500; test a larger embedder (bge-base/large) to see if semantic can beat BM25; add GPT-4o judge for an officially-submittable number.
