@@ -10,8 +10,9 @@ import argparse
 import json
 from pathlib import Path
 
-import bench.longmemeval_qa as qa
 import pytest
+
+import bench.longmemeval_qa as qa
 
 _FIXTURE = Path(__file__).parent.parent / "bench" / "fixtures" / "lme_smoke.json"
 
