@@ -3,14 +3,14 @@
 Implements a TRANSPARENT REPRODUCTION of the LongMemEval QA-accuracy headline metric
 (session-level Recall@k retrieval → reader → judge → per-question-type accuracy).
 
-Judge note: this uses a SINGLE binary factcheck judge (bench.grounding._factcheck) for
-ALL question types, NOT the paper's official per-question-type GPT-4o judge prompts.
-The judge_model is configurable so callers can swap in a different model.  This approach
-trades judge fidelity for operational simplicity; results are comparable within a run but
-should not be compared directly to paper Table 2 numbers.  Abstention questions whose
-question_type ends in "_abs" use bench.grounding._judge_rejection instead of _factcheck
-(the cleaned-S variant of the dataset uses question_type="abstention" which does NOT end
-in "_abs"; that branch is defensive).
+Judge note: the default judge provider is "claude", which uses a SINGLE binary factcheck
+judge (bench.grounding._factcheck) for ALL question types, NOT the paper's official
+per-question-type GPT-4o judge prompts.  Pass --judge-provider openai to use a GPT-4o
+judge (requires OPENAI_API_KEY and `pip install -e .[eval]`) for a paper-comparable
+number.  The judge_model is configurable so callers can swap in a different model.
+Abstention questions whose question_type ends in "_abs" use bench.grounding._judge_rejection
+instead of _factcheck (the cleaned-S variant of the dataset uses question_type="abstention"
+which does NOT end in "_abs"; that branch is defensive).
 
 ADD-ONLY: this module imports from bench.longmemeval, bench._retrieval, and bench.grounding
 via module-attribute access so tests can monkeypatch any collaborator on its owning module.
@@ -23,6 +23,8 @@ Usage:
         --arms retrieval,oracle \\
         --k 5 \\
         --limit 100 \\
+        --judge-provider openai \\
+        --sample 200 --seed 0 \\
         --out <results.json>
 """
 
@@ -30,12 +32,100 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import random
+import re
 import sys
 from pathlib import Path
 
 import bench._retrieval as _r
 import bench.grounding as _g
 import bench.longmemeval as _lme
+
+# Regex for parsing yes/no from OpenAI judge responses (case-insensitive, word-boundary).
+_YESNO_OAI_RE = re.compile(r"\b(yes|no)\b", re.IGNORECASE)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Lazy OpenAI seam (never raises — all errors surface as None/False)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _openai_available() -> bool:
+    """Return True if the openai package can be imported; never raises."""
+    try:
+        import openai  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
+def _openai_chat(model: str, system: str, user: str) -> str | None:
+    """Call the OpenAI chat completions API lazily; never raises.
+
+    Lazily imports openai (so the module loads without the SDK installed).
+    Returns the first-choice message content string, or None on any error.
+
+    Args:
+        model: OpenAI model name (e.g. "gpt-4o").
+        system: System prompt string.
+        user: User message string.
+
+    Returns:
+        Response text string, or None on any failure.
+    """
+    try:
+        import openai
+
+        client = openai.OpenAI()
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            temperature=0,
+            max_tokens=10,
+        )
+        return resp.choices[0].message.content
+    except Exception:
+        return None
+
+
+def _judge_openai(question: str, gold: str, answer: str, model: str) -> bool | None:
+    """Judge correctness using the OpenAI chat API; never raises.
+
+    Builds a paper-style binary judge prompt and calls _openai_chat.
+    Parses the first "yes"/"no" token from the response (case-insensitive).
+
+    Args:
+        question: The original question text.
+        gold: The gold/correct answer string.
+        answer: The model's answer to judge.
+        model: OpenAI model name (e.g. "gpt-4o").
+
+    Returns:
+        True (correct), False (incorrect), or None (inconclusive/error).
+    """
+    try:
+        system = "You are a strict grader."
+        user = (
+            "Is the model's ANSWER correct given the QUESTION and the correct/gold answer?\n"
+            "Reply ONLY 'yes' or 'no'.\n\n"
+            f"QUESTION: {question}\n"
+            f"GOLD: {gold}\n"
+            f"ANSWER: {answer}"
+        )
+        raw = _openai_chat(model, system, user)
+        if raw is None:
+            return None
+        m = _YESNO_OAI_RE.search(raw)
+        if not m:
+            return None
+        return m.group(1).lower() == "yes"
+    except Exception:
+        return None
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Reader context builder
@@ -102,12 +192,15 @@ def _answer_one(instance: dict, ids: list[str], reader_model: str, char_budget: 
         return ""
 
 
-def _judge_one(answer: str, instance: dict, judge_model: str) -> bool | None:
+def _judge_one(
+    answer: str, instance: dict, judge_model: str, *, provider: str = "claude"
+) -> bool | None:
     """Judge whether answer correctly responds to the instance.
 
     For question types ending in "_abs" (abstention variant; defensive — cleaned-S has none),
     uses _g._judge_rejection to score whether the model appropriately declined.
-    All other question types use _g._factcheck against instance["answer"] (the gold string).
+    For provider=="openai", non-abstention questions use _judge_openai (GPT-4o judge).
+    For provider=="claude" (default), non-abstention questions use _g._factcheck.
 
     A None return means the judge was inconclusive (no claude binary, parse error, etc.).
 
@@ -115,8 +208,9 @@ def _judge_one(answer: str, instance: dict, judge_model: str) -> bool | None:
 
     Args:
         answer: Reader model's answer string.
-        instance: LongMemEval instance dict (must have question_type and answer keys).
+        instance: LongMemEval instance dict (must have question_type, question, answer keys).
         judge_model: Model name for the judge call.
+        provider: Judge provider — "claude" (default) or "openai".
 
     Returns:
         True (correct), False (incorrect), or None (inconclusive).
@@ -126,6 +220,8 @@ def _judge_one(answer: str, instance: dict, judge_model: str) -> bool | None:
             # Abstention path: correct iff the answer declines.
             # cleaned-S has no "_abs" question types — this branch is defensive.
             return _g._judge_rejection(answer, judge_model)
+        if provider == "openai":
+            return _judge_openai(instance["question"], instance["answer"], answer, judge_model)
         return _g._factcheck(answer, instance["answer"], judge_model)
     except Exception:
         return None
@@ -157,10 +253,35 @@ def _run_qa(args: argparse.Namespace, instances: list[dict]) -> int:
         or any unrecoverable error.
     """
     try:
+        # Resolve effective judge model: openai provider defaults "sonnet" → "gpt-4o".
+        judge_model = args.judge_model
+        if args.judge_provider == "openai" and judge_model == "sonnet":
+            judge_model = "gpt-4o"
+
+        # Hard-check: openai provider requires OPENAI_API_KEY and the openai package.
+        # This is the ONE deliberate hard-stop — no silent fallback to claude.
+        if args.judge_provider == "openai" and not (
+            os.environ.get("OPENAI_API_KEY") and _openai_available()
+        ):
+            print("--judge-provider openai requires OPENAI_API_KEY and `pip install -e .[eval]`")
+            return 1
+
         arms_requested = [a.strip() for a in args.arms.split(",") if a.strip()]
 
-        # Apply limit
-        instances_to_score = instances[: args.limit] if args.limit is not None else instances
+        # Sampling (sample first, then limit).
+        # --sample draws a representative seeded random subset before --limit is applied.
+        processed = list(instances)
+        if args.sample is not None:
+            processed = random.Random(args.seed).sample(processed, min(args.sample, len(processed)))
+        if args.limit is not None:
+            processed = processed[: args.limit]
+        instances_to_score = processed
+
+        # Build question_type_distribution over the scored instances.
+        question_type_distribution: dict[str, int] = {}
+        for inst in instances_to_score:
+            qt = inst.get("question_type", "unknown")
+            question_type_distribution[qt] = question_type_distribution.get(qt, 0) + 1
 
         arm_data: dict[str, dict] = {}
 
@@ -201,7 +322,7 @@ def _run_qa(args: argparse.Namespace, instances: list[dict]) -> int:
                         ids = instance.get("answer_session_ids", [])
 
                     answer = _answer_one(instance, ids, args.reader_model, args.char_budget)
-                    judge = _judge_one(answer, instance, args.judge_model)
+                    judge = _judge_one(answer, instance, judge_model, provider=args.judge_provider)
 
                     # None judge is INCORRECT (correct only when True) but IS counted in n.
                     per_type_n[qtype] = per_type_n.get(qtype, 0) + 1
@@ -244,7 +365,11 @@ def _run_qa(args: argparse.Namespace, instances: list[dict]) -> int:
             "backend": args.backend,
             "k": args.k,
             "reader_model": args.reader_model,
-            "judge_model": args.judge_model,
+            "judge_model": judge_model,
+            "judge_provider": args.judge_provider,
+            "sample": args.sample,
+            "seed": args.seed,
+            "question_type_distribution": question_type_distribution,
             "arms": arm_data,
         }
 
@@ -255,6 +380,7 @@ def _run_qa(args: argparse.Namespace, instances: list[dict]) -> int:
                 print(f"warning: could not write results to {args.out}: {exc}")
 
         # Console summary table
+        print(f"\nprovider={args.judge_provider}  sample={args.sample}  seed={args.seed}")
         print(f"\n{'arm':<12} {'type':<22} {'accuracy':>10} {'wilson_ci':>22} {'n':>6}")
         print("-" * 76)
         for arm_name, arm in arm_data.items():
@@ -300,6 +426,17 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reader-model", default="sonnet", help="Model for reading/answering.")
     parser.add_argument("--judge-model", default="sonnet", help="Model for fact-checking.")
     parser.add_argument(
+        "--judge-provider",
+        choices=("claude", "openai"),
+        default="claude",
+        help=(
+            "Judge provider: 'claude' (default, uses bench.grounding._factcheck) or "
+            "'openai' (GPT-4o judge for paper-comparable numbers; requires OPENAI_API_KEY "
+            "and `pip install -e .[eval]`).  Leaving --judge-model at 'sonnet' with "
+            "provider=openai auto-upgrades to 'gpt-4o'."
+        ),
+    )
+    parser.add_argument(
         "--embed-model",
         default="BAAI/bge-small-en-v1.5",
         help="Embedding model for semantic backend.",
@@ -312,6 +449,21 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--limit", type=int, default=None, help="Cap the number of instances evaluated."
+    )
+    parser.add_argument(
+        "--sample",
+        type=int,
+        default=None,
+        help=(
+            "Randomly sample N instances before --limit is applied (seeded by --seed). "
+            "Produces a representative subset spanning question types."
+        ),
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="Random seed for --sample (default: 0); ignored when --sample is not set.",
     )
     parser.add_argument("--out", type=Path, default=None, help="Output JSON path.")
     return parser

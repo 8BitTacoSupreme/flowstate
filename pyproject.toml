@@ -32,6 +32,9 @@ dev = [
 semantic = [
     "fastembed>=0.3",
 ]
+eval = [
+    "openai>=1.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
