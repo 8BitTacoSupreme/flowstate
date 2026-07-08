@@ -1,0 +1,146 @@
+[
+  {
+    "question_id": "lme-001",
+    "question_type": "single_session",
+    "question": "What is the default replication factor for Confluent Cloud Kafka topics?",
+    "answer": "3",
+    "question_date": "2024-01-15",
+    "haystack_session_ids": ["sess-001", "sess-002", "sess-003", "sess-004"],
+    "haystack_dates": ["2024-01-10", "2024-01-11", "2024-01-12", "2024-01-13"],
+    "haystack_sessions": [
+      [
+        {
+          "role": "user",
+          "content": "What is the default replication factor for Confluent Cloud Kafka topics?",
+          "has_answer": true
+        },
+        {
+          "role": "assistant",
+          "content": "Confluent Cloud uses a default replication factor of 3 for all Kafka topics, paired with min.insync.replicas=2.",
+          "has_answer": true
+        }
+      ],
+      [
+        {
+          "role": "user",
+          "content": "How do I configure producer settings for high throughput?",
+          "has_answer": false
+        },
+        {
+          "role": "assistant",
+          "content": "Set acks=all and enable.idempotence=true for durable production workloads.",
+          "has_answer": false
+        }
+      ],
+      [
+        {
+          "role": "user",
+          "content": "What is the best compression codec for Kafka producers?",
+          "has_answer": false
+        },
+        {
+          "role": "assistant",
+          "content": "Use lz4 for throughput optimization or zstd when storage efficiency matters most.",
+          "has_answer": false
+        }
+      ],
+      [
+        {
+          "role": "user",
+          "content": "How do consumer groups work in Apache Kafka?",
+          "has_answer": false
+        },
+        {
+          "role": "assistant",
+          "content": "Each consumer group maintains its own committed offset per partition, enabling independent consumption.",
+          "has_answer": false
+        }
+      ]
+    ],
+    "answer_session_ids": ["sess-001"]
+  },
+  {
+    "question_id": "lme-002",
+    "question_type": "multi_session",
+    "question": "Which sessions discuss Kafka Schema Registry subject naming strategies?",
+    "answer": "sess-005 and sess-006",
+    "question_date": "2024-02-20",
+    "haystack_session_ids": ["sess-005", "sess-006", "sess-007"],
+    "haystack_dates": ["2024-02-15", "2024-02-16", "2024-02-17"],
+    "haystack_sessions": [
+      [
+        {
+          "role": "user",
+          "content": "What are the Schema Registry subject naming strategies in Confluent?",
+          "has_answer": true
+        },
+        {
+          "role": "assistant",
+          "content": "TopicNameStrategy is the default Schema Registry subject naming strategy. RecordNameStrategy is used for event union patterns across Confluent topics.",
+          "has_answer": true
+        }
+      ],
+      [
+        {
+          "role": "user",
+          "content": "How do I configure Schema Registry subject naming for multi-topic schemas?",
+          "has_answer": true
+        },
+        {
+          "role": "assistant",
+          "content": "Set value.subject.name.strategy to RecordNameStrategy in Schema Registry for schema reuse across Confluent topics.",
+          "has_answer": true
+        }
+      ],
+      [
+        {
+          "role": "user",
+          "content": "What is Cluster Linking in Confluent Platform?",
+          "has_answer": false
+        },
+        {
+          "role": "assistant",
+          "content": "Cluster Linking mirrors topics across Confluent clusters without MirrorMaker 2 overhead, ideal for cross-region disaster recovery.",
+          "has_answer": false
+        }
+      ]
+    ],
+    "answer_session_ids": ["sess-005", "sess-006"]
+  },
+  {
+    "question_id": "lme-003",
+    "question_type": "abstention",
+    "question": "What is the recommended auto.offset.reset for brand-new consumer groups?",
+    "answer": "",
+    "question_date": "2024-03-01",
+    "haystack_session_ids": ["sess-008", "sess-009"],
+    "haystack_dates": ["2024-02-25", "2024-02-26"],
+    "haystack_sessions": [
+      [
+        {
+          "role": "user",
+          "content": "How do I configure Flink watermarks for out-of-order events?",
+          "has_answer": false
+        },
+        {
+          "role": "assistant",
+          "content": "Use BOUNDED_OUT_OF_ORDERNESS strategy with a bounded delay for Flink SQL watermarks.",
+          "has_answer": false
+        }
+      ],
+      [
+        {
+          "role": "user",
+          "content": "What is mTLS authentication in Confluent Platform?",
+          "has_answer": false
+        },
+        {
+          "role": "assistant",
+          "content": "mTLS provides mutual authentication for Confluent Platform services in regulated FSI environments.",
+          "has_answer": false
+        }
+      ]
+    ],
+    "answer_session_ids": []
+  }
+]
