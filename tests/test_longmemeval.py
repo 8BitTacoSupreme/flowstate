@@ -9,8 +9,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import bench.longmemeval as lme
 import pytest
+
+import bench.longmemeval as lme
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Shared fixtures / helpers

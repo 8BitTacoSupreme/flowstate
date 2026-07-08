@@ -9,8 +9,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import bench.locomo as loc
 import pytest
+
+import bench.locomo as loc
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Shared fixtures / helpers
