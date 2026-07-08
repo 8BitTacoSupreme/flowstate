@@ -1,0 +1,74 @@
+[
+  {
+    "sample_id": "locomo-001",
+    "speaker_a": "Alice",
+    "speaker_b": "Bob",
+    "conversation": {
+      "session_1": [
+        {
+          "speaker": "Alice",
+          "dia_id": "D001",
+          "text": "How do we configure Kafka producer acks for financial workloads?"
+        },
+        {
+          "speaker": "Bob",
+          "dia_id": "D002",
+          "text": "Set acks=all and enable.idempotence=true for durable exactly-once producer semantics in financial Kafka pipelines."
+        }
+      ],
+      "session_1_date_time": "2024-01-10 09:00",
+      "session_2": [
+        {
+          "speaker": "Alice",
+          "dia_id": "D003",
+          "text": "What Schema Registry subject naming strategies should we use for Confluent?"
+        },
+        {
+          "speaker": "Bob",
+          "dia_id": "D004",
+          "text": "TopicNameStrategy is the default; RecordNameStrategy enables schema reuse across Confluent topics."
+        }
+      ],
+      "session_2_date_time": "2024-01-11 10:00",
+      "session_3": [
+        {
+          "speaker": "Alice",
+          "dia_id": "D005",
+          "text": "Which compression codec should we use for our Confluent Kafka topics?"
+        },
+        {
+          "speaker": "Bob",
+          "dia_id": "D006",
+          "text": "Use lz4 for throughput-optimized Kafka producers and zstd for storage-constrained Confluent clusters."
+        }
+      ],
+      "session_3_date_time": "2024-01-12 11:00"
+    },
+    "qa": [
+      {
+        "question": "What acks value ensures exactly-once producer semantics?",
+        "answer": "acks=all",
+        "category": "single_hop",
+        "evidence": ["D002"]
+      },
+      {
+        "question": "What Kafka producer acks configuration for financial workloads was discussed?",
+        "answer": "Set acks=all and enable.idempotence=true",
+        "category": "multi_hop",
+        "evidence": ["D001", "D002"]
+      },
+      {
+        "question": "Which compression codec is recommended for storage-constrained Confluent clusters?",
+        "answer": "zstd",
+        "category": "single_hop",
+        "evidence": ["D006"]
+      },
+      {
+        "question": "What is the lz4 versus zstd throughput tradeoff?",
+        "answer": "",
+        "category": "abstention",
+        "evidence": []
+      }
+    ]
+  }
+]
