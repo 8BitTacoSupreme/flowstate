@@ -59,7 +59,8 @@ CREATE TABLE IF NOT EXISTS memories (
     tags TEXT NOT NULL DEFAULT '[]',
     metadata TEXT NOT NULL DEFAULT '{}',
     created_at TEXT NOT NULL,
-    run_id TEXT NOT NULL DEFAULT ''
+    run_id TEXT NOT NULL DEFAULT '',
+    superseded_by TEXT DEFAULT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_memories_kind ON memories(kind);
@@ -114,6 +115,7 @@ class MemoryEntry:
     metadata: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     run_id: str = ""
+    superseded_by: str | None = None
 
     @classmethod
     def create(
@@ -156,6 +158,7 @@ def _row_to_entry(row: sqlite3.Row) -> MemoryEntry:
         metadata=json.loads(row["metadata"]),
         created_at=datetime.fromisoformat(row["created_at"]),
         run_id=row["run_id"],
+        superseded_by=row["superseded_by"],
     )
 
 
@@ -170,6 +173,7 @@ class MemoryStore:
         self._conn = sqlite3.connect(str(db_path))
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(SCHEMA_SQL)
+        self._migrate_schema()
         # Embedding provider — use injected instance or create one via factory.
         # Default (embedder=None) is available iff the [semantic] extra / fastembed
         # is importable; otherwise available() is False and the store is FTS5-only.
@@ -181,6 +185,31 @@ class MemoryStore:
         # Backfill is deferred to the first write so that read-only paths
         # (status, count, last_entry_at) do not trigger any embed work.
         self._backfill_pending: bool = self._vec_ready
+
+    # ------------------------------------------------------------------
+    # Schema migration
+    # ------------------------------------------------------------------
+
+    def _migrate_schema(self) -> None:
+        """Migrate memories table to the current schema version. Never raises.
+
+        Runs after executescript(SCHEMA_SQL) so the schema_version table already
+        exists. Adds superseded_by column via PRAGMA-guarded ALTER if absent, then
+        unconditionally bumps schema_version to 2 (idempotent for both fresh and
+        migrated DBs). Leaves memories_fts and its triggers untouched — they
+        reference only summary/content/tags.
+        """
+        try:
+            cols = {row[1] for row in self._conn.execute("PRAGMA table_info(memories)")}
+            if "superseded_by" not in cols:
+                self._conn.execute(
+                    "ALTER TABLE memories ADD COLUMN superseded_by TEXT DEFAULT NULL"
+                )
+            # Unconditional: ensures BOTH fresh and migrated DBs record version=2.
+            self._conn.execute("INSERT OR REPLACE INTO schema_version(version) VALUES (2)")
+            self._conn.commit()
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # Private vec0 helpers
@@ -443,29 +472,34 @@ class MemoryStore:
         *,
         kind: MemoryKind | None = None,
         limit: int = 10,
+        include_superseded: bool = False,
     ) -> list[SearchResult]:
         if not query.strip():
             return []
 
         safe_query = self._sanitize_fts_query(query)
+        # When include_superseded is False (default), exclude superseded rows.
+        # The clause is appended to each FTS branch's WHERE so both paths filter
+        # identically — byte-identical output when no rows are superseded.
+        active_filter = "" if include_superseded else " AND m.superseded_by IS NULL"
 
         if kind is not None:
             rows = self._conn.execute(
-                """SELECT m.*, rank
+                f"""SELECT m.*, rank
                    FROM memories_fts fts
                    JOIN memories m ON m.rowid = fts.rowid
                    WHERE memories_fts MATCH ?
-                     AND m.kind = ?
+                     AND m.kind = ?{active_filter}
                    ORDER BY rank
                    LIMIT ?""",
                 (safe_query, kind.value, limit),
             ).fetchall()
         else:
             rows = self._conn.execute(
-                """SELECT m.*, rank
+                f"""SELECT m.*, rank
                    FROM memories_fts fts
                    JOIN memories m ON m.rowid = fts.rowid
-                   WHERE memories_fts MATCH ?
+                   WHERE memories_fts MATCH ?{active_filter}
                    ORDER BY rank
                    LIMIT ?""",
                 (safe_query, limit),
@@ -480,6 +514,11 @@ class MemoryStore:
         return _row_to_entry(row)
 
     def get_by_kind(self, kind: MemoryKind, *, limit: int = 20) -> list[MemoryEntry]:
+        """Return memories of the given kind ordered by created_at DESC.
+
+        Superseded rows are intentionally included; callers needing active-only
+        results must check entry.superseded_by.
+        """
         rows = self._conn.execute(
             "SELECT * FROM memories WHERE kind = ? ORDER BY created_at DESC LIMIT ?",
             (kind.value, limit),
@@ -492,6 +531,9 @@ class MemoryStore:
         Uses a SQL LIKE filter on the tags column so the result is not limited
         by the arbitrary limit budget shared with non-gotcha INSIGHT entries.
         The LIKE pattern is parameterized — no injection risk.
+
+        Superseded rows are intentionally included; callers needing active-only
+        results must check entry.superseded_by.
         """
         rows = self._conn.execute(
             "SELECT * FROM memories WHERE kind = ? AND tags LIKE ? ORDER BY created_at DESC",
@@ -503,6 +545,75 @@ class MemoryStore:
         """Delete a memory entry by id. FTS index updated via memories_ad trigger."""
         self._conn.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
         self._conn.commit()
+
+    def supersede(self, old_id: str, new_id: str) -> bool:
+        """Mark old_id as superseded by new_id. Returns True if old_id existed; False otherwise.
+
+        Sets superseded_by=new_id on the old entry and commits. new_id is NOT validated —
+        callers may supply a forward reference or any string. The memories_au AFTER UPDATE
+        trigger re-syncs FTS with unchanged summary/content/tags (harmless); the vec row
+        is untouched (embedding remains valid — content did not change). Never raises.
+        """
+        try:
+            cur = self._conn.execute(
+                "UPDATE memories SET superseded_by=? WHERE id=?", (new_id, old_id)
+            )
+            self._conn.commit()
+            return cur.rowcount > 0
+        except Exception:
+            return False
+
+    def find_contradiction_candidates(
+        self,
+        entry: MemoryEntry,
+        *,
+        threshold: float = 0.9,
+        same_kind: bool = True,
+    ) -> list[SearchResult]:
+        """Surface active memories semantically similar to entry. FLAG-ONLY — mutates nothing.
+
+        Uses vec0 KNN to find the nearest active (non-superseded) memories, converts
+        L2 distance to cosine similarity (cos = 1 - (dist**2)/2), and returns those
+        with cos >= threshold. Excludes entry.id itself. Returns [] when the embedder
+        is unavailable or any error occurs — never raises.
+
+        Does NOT auto-supersede or auto-delete anything (honors ECC silent-content-loss
+        caution). Callers decide what to do with the returned candidates.
+        """
+        try:
+            if not self._vec_ready or not self._embedder.available():
+                return []
+            text = entry.summary + "\n" + entry.content
+            vecs = self._embedder.embed([text])
+            if not vecs:
+                return []
+            import sqlite_vec  # local import — must be loaded on this conn already
+
+            serialized = sqlite_vec.serialize_float32(vecs[0])
+            knn_rows = self._conn.execute(
+                "SELECT rowid, distance FROM memories_vec "
+                "WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
+                (serialized, _SEMANTIC_K),
+            ).fetchall()
+            results = []
+            for knn_row in knn_rows:
+                mem_row = self._conn.execute(
+                    "SELECT * FROM memories WHERE rowid=? AND superseded_by IS NULL",
+                    (knn_row[0],),
+                ).fetchone()
+                if mem_row is None:
+                    continue
+                if mem_row["id"] == entry.id:
+                    continue
+                if same_kind and mem_row["kind"] != entry.kind.value:
+                    continue
+                dist = knn_row[1]
+                cos = 1.0 - (dist * dist) / 2.0
+                if cos >= threshold:
+                    results.append(SearchResult(entry=_row_to_entry(mem_row), score=cos))
+            return results
+        except Exception:
+            return []
 
     def _semantic_results(self, query: str, k: int) -> list[SearchResult] | None:
         """Return KNN-ranked SearchResults for query against memories_vec, or None to fall back.
@@ -544,8 +655,10 @@ class MemoryStore:
                 return None
             results = []
             for knn_row in knn_rows:
+                # Superseded rows drop out here so get_context injects current truth;
+                # k may shrink below LIMIT, acceptable.
                 mem_row = self._conn.execute(
-                    "SELECT * FROM memories WHERE rowid=?", (knn_row[0],)
+                    "SELECT * FROM memories WHERE rowid=? AND superseded_by IS NULL", (knn_row[0],)
                 ).fetchone()
                 if mem_row is not None:
                     results.append(SearchResult(entry=_row_to_entry(mem_row), score=knn_row[1]))
