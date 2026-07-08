@@ -95,10 +95,11 @@ None at roadmap start. Key implementation constraint: every caller path must che
 | 260629-gzd | Add --mode sysab (system-prompt A/B for strategy adapter, pairwise rubric judge, Wilson-vs-0.5 gate) | complete | 2026-06-29 | 0523a6b, 18bae30 |
 | 260629-kyl | Build bench/tune_loop.py — manual prompt-tuning loop (mine→propose→gate→human-approval report; never edits source) | complete | 2026-06-29 | 20a0afd, a22087d |
 | 260708-jy5 | Deterministic supersession in memory.py (additive superseded_by column, supersede() API, retrieval excludes superseded by default, flag-only find_contradiction_candidates) | complete | 2026-07-08 | 35f3a61, 7a467d9 |
+| 260708-mjt | Build bench/longmemeval.py + bench/locomo.py retrieval-eval harnesses (recall_all/any@k, evidence-coverage, semantic vs BM25, Wilson CIs, smoke fixtures) — Task A of the public-benchmark arc | complete | 2026-07-08 | b1d962c, fcb87ef, d6a6704 |
 
 ## Session Continuity
 
-Last session: 2026-06-29T19:21:00Z
-Stopped at: Quick task 260629-kyl complete
+Last session: 2026-07-08T20:14:10Z
+Stopped at: Quick task 260708-mjt complete (LongMemEval/LoCoMo retrieval benches)
 Resume file: None
-Next step: Continue with productionizing semantic retrieval per SEMANTIC_RETRIEVAL_HANDOFF.md
+Next step: Task B — QA reader+judge layer on LongMemEval for the headline QA-accuracy number (claude judge = comparable reproduction; GPT-4o judge = officially submittable). Then optionally run at scale on real longmemeval-cleaned (3GB).
