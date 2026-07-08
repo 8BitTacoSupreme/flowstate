@@ -590,10 +590,12 @@ def test_run_qa_sampling_reproducible(tmp_path, monkeypatch):
     args2.out = out2
     qa._run_qa(args2, instances)
 
-    assert len(scored_ids_run1) == 4, f"expected 4 scored, got {len(scored_ids_run1)}"
-    assert sorted(scored_ids_run1) == sorted(scored_ids_run2), (
-        "same seed must yield the same subset"
-    )
+    # _build_docs is called twice per instance in the retrieval arm (once for ranking,
+    # once inside _answer_one for context).  Deduplicate to get the unique scored set.
+    unique_ids_run1 = sorted(set(scored_ids_run1))
+    unique_ids_run2 = sorted(set(scored_ids_run2))
+    assert len(unique_ids_run1) == 4, f"expected 4 unique instances, got {unique_ids_run1}"
+    assert unique_ids_run1 == unique_ids_run2, "same seed must yield the same subset"
 
     # --- Run 3: seed=1 → different subset (deterministic: seed0=[6,9,0,2], seed1=[2,1,4,0]) ---
     scored_ids_seed1: list[str] = []
@@ -609,9 +611,8 @@ def test_run_qa_sampling_reproducible(tmp_path, monkeypatch):
     args3.out = out3
     qa._run_qa(args3, instances)
 
-    assert sorted(scored_ids_seed1) != sorted(scored_ids_run1), (
-        "different seeds should yield different subsets"
-    )
+    unique_ids_seed1 = sorted(set(scored_ids_seed1))
+    assert unique_ids_seed1 != unique_ids_run1, "different seeds should yield different subsets"
 
 
 def test_run_qa_sample_spans_multiple_types(tmp_path, monkeypatch):
