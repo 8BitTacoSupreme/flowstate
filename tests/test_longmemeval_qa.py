@@ -67,6 +67,9 @@ def _make_args(
     reader_model: str = "sonnet",
     judge_model: str = "sonnet",
     char_budget: int = 48000,
+    judge_provider: str = "claude",
+    sample: int | None = None,
+    seed: int = 0,
 ) -> argparse.Namespace:
     """Build an argparse.Namespace mimicking _build_parser() output."""
     return argparse.Namespace(
@@ -79,6 +82,9 @@ def _make_args(
         embed_model="BAAI/bge-small-en-v1.5",
         char_budget=char_budget,
         out=tmp_path / "out.json",
+        judge_provider=judge_provider,
+        sample=sample,
+        seed=seed,
     )
 
 
@@ -364,3 +370,300 @@ def test_main_semantic_unavailable_does_not_raise(tmp_path, monkeypatch):
     )
 
     assert isinstance(rc, int)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NEW: openai judge seam tests (_openai_chat → _judge_openai)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test__judge_openai_yes_true(monkeypatch):
+    """_openai_chat returning 'yes' → _judge_openai returns True."""
+    monkeypatch.setattr(qa, "_openai_chat", lambda model, system, user: "yes")
+    result = qa._judge_openai("what color?", "blue", "blue", "gpt-4o")
+    assert result is True
+
+
+def test__judge_openai_no_false(monkeypatch):
+    """_openai_chat returning 'no' → _judge_openai returns False."""
+    monkeypatch.setattr(qa, "_openai_chat", lambda model, system, user: "no")
+    result = qa._judge_openai("what color?", "blue", "red", "gpt-4o")
+    assert result is False
+
+
+def test__judge_openai_garbage_none(monkeypatch):
+    """_openai_chat returning unparseable text → _judge_openai returns None."""
+    monkeypatch.setattr(qa, "_openai_chat", lambda model, system, user: "maybe??")
+    result = qa._judge_openai("what?", "gold", "ans", "gpt-4o")
+    assert result is None
+
+
+def test__judge_openai_returns_none_seam_none(monkeypatch):
+    """_openai_chat returning None → _judge_openai returns None."""
+    monkeypatch.setattr(qa, "_openai_chat", lambda model, system, user: None)
+    result = qa._judge_openai("what?", "gold", "ans", "gpt-4o")
+    assert result is None
+
+
+def test__judge_openai_never_raises(monkeypatch):
+    """_openai_chat raising → _judge_openai returns None, never raises."""
+
+    def raise_always(model, system, user):
+        raise RuntimeError("network failure")
+
+    monkeypatch.setattr(qa, "_openai_chat", raise_always)
+    result = qa._judge_openai("what?", "gold", "ans", "gpt-4o")
+    assert result is None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NEW: provider routing through _judge_one
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test__judge_one_routes_openai(monkeypatch):
+    """provider='openai' → _judge_openai called, _g._factcheck NOT called."""
+    import bench.grounding as _g
+
+    openai_calls: list[tuple] = []
+    factcheck_calls: list[tuple] = []
+
+    monkeypatch.setattr(
+        qa,
+        "_judge_openai",
+        lambda q, gold, ans, model: openai_calls.append((q, gold, ans, model)) or True,
+    )
+    monkeypatch.setattr(
+        _g,
+        "_factcheck",
+        lambda a, gt, m: factcheck_calls.append((a, gt, m)) or True,
+    )
+
+    result = qa._judge_one(
+        "ans",
+        {"question_type": "single_session", "question": "q", "answer": "gold"},
+        "gpt-4o",
+        provider="openai",
+    )
+
+    assert len(openai_calls) == 1
+    assert len(factcheck_calls) == 0
+    assert result is True
+
+
+def test__judge_one_routes_claude_default(monkeypatch):
+    """provider defaults to 'claude' → _g._factcheck called, _judge_openai NOT called."""
+    import bench.grounding as _g
+
+    openai_calls: list[tuple] = []
+    factcheck_calls: list[tuple] = []
+
+    monkeypatch.setattr(
+        qa,
+        "_judge_openai",
+        lambda q, gold, ans, model: openai_calls.append((q, gold, ans, model)) or False,
+    )
+    monkeypatch.setattr(
+        _g,
+        "_factcheck",
+        lambda a, gt, m: factcheck_calls.append((a, gt, m)) or True,
+    )
+
+    result = qa._judge_one(
+        "ans",
+        {"question_type": "single_session", "question": "q", "answer": "gold"},
+        "sonnet",
+    )
+
+    assert len(factcheck_calls) == 1
+    assert len(openai_calls) == 0
+    assert result is True
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NEW: openai hard-check tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_run_qa_openai_missing_key_returns_one(tmp_path, monkeypatch):
+    """provider='openai' with OPENAI_API_KEY unset → returns 1, no judge calls."""
+    import bench._retrieval as _r
+    import bench.grounding as _g
+    import bench.longmemeval as _lme
+
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "")  # ensure absent / empty
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    factcheck_calls: list[bool] = []
+    openai_judge_calls: list[bool] = []
+
+    monkeypatch.setattr(_g, "_factcheck", lambda a, gt, m: factcheck_calls.append(True) or True)
+    monkeypatch.setattr(
+        qa, "_judge_openai", lambda q, gold, ans, model: openai_judge_calls.append(True) or True
+    )
+    monkeypatch.setattr(_lme, "_build_docs", lambda inst: [("s", "text")])
+    monkeypatch.setattr(_r, "bm25_rank", lambda docs, q, k: ["s"])
+    monkeypatch.setattr(_g, "_answer", lambda prefix, question, model, **kw: "ans")
+
+    instances = _make_instances(n_single=1, n_multi=0)
+    args = _make_args(tmp_path, backend="bm25", arms="retrieval", judge_provider="openai")
+
+    rc = qa._run_qa(args, instances)
+
+    assert rc == 1, f"expected rc=1 (hard-check), got {rc}"
+    assert len(factcheck_calls) == 0, "factcheck must not be called when hard-check fires"
+    assert len(openai_judge_calls) == 0, "_judge_openai must not be called when hard-check fires"
+
+
+def test_run_qa_openai_pkg_missing_returns_one(tmp_path, monkeypatch):
+    """provider='openai' with key set but openai pkg unavailable → returns 1, no judge calls."""
+    import bench._retrieval as _r
+    import bench.grounding as _g
+    import bench.longmemeval as _lme
+
+    monkeypatch.setenv("OPENAI_API_KEY", "fake-key")
+    monkeypatch.setattr(qa, "_openai_available", lambda: False)
+
+    factcheck_calls: list[bool] = []
+    openai_judge_calls: list[bool] = []
+    monkeypatch.setattr(_g, "_factcheck", lambda a, gt, m: factcheck_calls.append(True) or True)
+    monkeypatch.setattr(
+        qa, "_judge_openai", lambda q, gold, ans, model: openai_judge_calls.append(True) or True
+    )
+    monkeypatch.setattr(_lme, "_build_docs", lambda inst: [("s", "text")])
+    monkeypatch.setattr(_r, "bm25_rank", lambda docs, q, k: ["s"])
+    monkeypatch.setattr(_g, "_answer", lambda prefix, question, model, **kw: "ans")
+
+    instances = _make_instances(n_single=1, n_multi=0)
+    args = _make_args(tmp_path, backend="bm25", arms="retrieval", judge_provider="openai")
+
+    rc = qa._run_qa(args, instances)
+
+    assert rc == 1, f"expected rc=1 (pkg hard-check), got {rc}"
+    assert len(factcheck_calls) == 0, "factcheck must not be called when hard-check fires"
+    assert len(openai_judge_calls) == 0, "_judge_openai must not be called when hard-check fires"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NEW: seeded sampling tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_run_qa_sampling_reproducible(tmp_path, monkeypatch):
+    """--sample N --seed S produces the same subset across two runs; seed change differs."""
+    import bench._retrieval as _r
+    import bench.grounding as _g
+    import bench.longmemeval as _lme
+
+    instances = _make_instances(n_single=5, n_multi=5)
+    fixed_docs = [("s", "text")]
+
+    monkeypatch.setattr(_r, "bm25_rank", lambda docs, q, k: ["s"])
+    monkeypatch.setattr(_g, "_answer", lambda prefix, question, model, **kw: "ans")
+
+    # --- Run 1: seed=0, sample=4 ---
+    scored_ids_run1: list[str] = []
+
+    def build_docs_spy_1(instance):
+        scored_ids_run1.append(instance["question_id"])
+        return fixed_docs
+
+    out1 = tmp_path / "out1.json"
+    monkeypatch.setattr(_lme, "_build_docs", build_docs_spy_1)
+    monkeypatch.setattr(_g, "_factcheck", lambda a, gt, m: True)
+    args1 = _make_args(tmp_path, backend="bm25", arms="retrieval", sample=4, seed=0)
+    args1.out = out1
+    qa._run_qa(args1, instances)
+
+    # --- Run 2: same seed=0, sample=4 → must yield identical subset ---
+    scored_ids_run2: list[str] = []
+
+    def build_docs_spy_2(instance):
+        scored_ids_run2.append(instance["question_id"])
+        return fixed_docs
+
+    out2 = tmp_path / "out2.json"
+    monkeypatch.setattr(_lme, "_build_docs", build_docs_spy_2)
+    monkeypatch.setattr(_g, "_factcheck", lambda a, gt, m: True)
+    args2 = _make_args(tmp_path, backend="bm25", arms="retrieval", sample=4, seed=0)
+    args2.out = out2
+    qa._run_qa(args2, instances)
+
+    assert len(scored_ids_run1) == 4, f"expected 4 scored, got {len(scored_ids_run1)}"
+    assert sorted(scored_ids_run1) == sorted(scored_ids_run2), (
+        "same seed must yield the same subset"
+    )
+
+    # --- Run 3: seed=1 → different subset (deterministic: seed0=[6,9,0,2], seed1=[2,1,4,0]) ---
+    scored_ids_seed1: list[str] = []
+
+    def build_docs_spy_3(instance):
+        scored_ids_seed1.append(instance["question_id"])
+        return fixed_docs
+
+    out3 = tmp_path / "out3.json"
+    monkeypatch.setattr(_lme, "_build_docs", build_docs_spy_3)
+    monkeypatch.setattr(_g, "_factcheck", lambda a, gt, m: True)
+    args3 = _make_args(tmp_path, backend="bm25", arms="retrieval", sample=4, seed=1)
+    args3.out = out3
+    qa._run_qa(args3, instances)
+
+    assert sorted(scored_ids_seed1) != sorted(scored_ids_run1), (
+        "different seeds should yield different subsets"
+    )
+
+
+def test_run_qa_sample_spans_multiple_types(tmp_path, monkeypatch):
+    """sample=4 seed=0 over 5 single + 5 multi → question_type_distribution has >1 key."""
+    import bench._retrieval as _r
+    import bench.grounding as _g
+    import bench.longmemeval as _lme
+
+    # seed=0, sample=4 from 10 → indices [6,9,0,2] → 2 multi_session + 2 single_session
+    instances = _make_instances(n_single=5, n_multi=5)
+    args = _make_args(tmp_path, backend="bm25", arms="retrieval", sample=4, seed=0)
+
+    monkeypatch.setattr(_lme, "_build_docs", lambda inst: [("s", "text")])
+    monkeypatch.setattr(_r, "bm25_rank", lambda docs, q, k: ["s"])
+    monkeypatch.setattr(_g, "_answer", lambda prefix, question, model, **kw: "ans")
+    monkeypatch.setattr(_g, "_factcheck", lambda a, gt, m: True)
+
+    qa._run_qa(args, instances)
+
+    result = json.loads(args.out.read_text())
+    dist = result["question_type_distribution"]
+    assert len(dist) > 1, f"expected >1 question type in distribution, got: {dist}"
+
+
+def test_run_qa_records_new_json_fields(tmp_path, monkeypatch):
+    """Output JSON contains judge_provider, sample, seed, question_type_distribution."""
+    import bench._retrieval as _r
+    import bench.grounding as _g
+    import bench.longmemeval as _lme
+
+    instances = _make_instances(n_single=2, n_multi=1)
+    args = _make_args(
+        tmp_path,
+        backend="bm25",
+        arms="retrieval",
+        judge_provider="claude",
+        sample=2,
+        seed=42,
+    )
+
+    monkeypatch.setattr(_lme, "_build_docs", lambda inst: [("s", "text")])
+    monkeypatch.setattr(_r, "bm25_rank", lambda docs, q, k: ["s"])
+    monkeypatch.setattr(_g, "_answer", lambda prefix, question, model, **kw: "ans")
+    monkeypatch.setattr(_g, "_factcheck", lambda a, gt, m: True)
+
+    qa._run_qa(args, instances)
+
+    result = json.loads(args.out.read_text())
+    assert "judge_provider" in result, "missing judge_provider key"
+    assert "sample" in result, "missing sample key"
+    assert "seed" in result, "missing seed key"
+    assert "question_type_distribution" in result, "missing question_type_distribution key"
+    assert result["judge_provider"] == "claude"
+    assert result["sample"] == 2
+    assert result["seed"] == 42
