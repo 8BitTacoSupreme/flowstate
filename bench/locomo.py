@@ -11,12 +11,25 @@ Metrics (per the LoCoMo eval spec):
 
 QA items with empty evidence lists (abstentions) are skipped and counted.
 
+Corpus arms (--corpus):
+    turns        (default) retrieve over raw conversation turns (conv["conversation"]).
+                 Byte-identical to prior behavior.
+    observations retrieve over the paper's assertive observation summaries
+                 (conv["observation"]), which carry dia_id provenance. Because
+                 observation doc ids ARE dia_ids, evidence-coverage scoring is
+                 unchanged and metric-compatible with the turns corpus.
+
+    conv["session_summary"] (plain strings, no dia_id provenance) is intentionally
+    NOT offered as a corpus arm: without dia_id provenance its docs cannot be scored
+    by evidence-coverage (there is no id to intersect against gold evidence).
+
 ADD-ONLY: do NOT modify bench/grounding.py or anything under flowstate/.
 
 Usage:
     python -m bench.locomo \\
         --data <locomo_data.json> \\
         --backends bm25,semantic \\
+        --corpus turns \\
         --top-n 5 \\
         --out <results.json>
 """
@@ -62,6 +75,48 @@ def _build_docs(conv: dict) -> list[tuple[str, str]]:
             for turn in value:
                 if isinstance(turn, dict) and "dia_id" in turn and "text" in turn:
                     docs.append((str(turn["dia_id"]), str(turn["text"])))
+        return docs
+    except Exception:
+        return []
+
+
+def _build_observation_docs(conv: dict) -> list[tuple[str, str]]:
+    """Build (dia_id, text) doc list from observation summaries in a conversation.
+
+    Iterates over conv['observation'][session_key][speaker], where each row is
+    expected to be a 2-element [text, dia] list/tuple. If `dia` is a list of
+    dia_ids, one doc is emitted per id (sharing the same text); if `dia` is a
+    single id, one doc is emitted. Rows that don't match this shape (wrong type,
+    wrong length) and non-dict session values are skipped. Never raises;
+    returns [] on any error or when the 'observation' key is absent.
+
+    Deduplication is intentionally NOT performed: if the same dia_id appears
+    across multiple observation rows, each occurrence becomes its own doc.
+
+    conv['session_summary'] is not a valid source for this builder: its values
+    are plain strings with no dia_id provenance, so they cannot be scored by
+    evidence-coverage (there is no id to intersect against gold evidence).
+    """
+    try:
+        docs: list[tuple[str, str]] = []
+        observation = conv.get("observation", {})
+        if not isinstance(observation, dict):
+            return []
+        for session_value in observation.values():
+            if not isinstance(session_value, dict):
+                continue
+            for rows in session_value.values():
+                if not isinstance(rows, list):
+                    continue
+                for row in rows:
+                    if not isinstance(row, list | tuple) or len(row) != 2:
+                        continue
+                    text, dia = row
+                    if isinstance(dia, list):
+                        for d in dia:
+                            docs.append((str(d), str(text)))
+                    else:
+                        docs.append((str(dia), str(text)))
         return docs
     except Exception:
         return []
@@ -127,6 +182,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Comma-separated backends to evaluate: bm25, semantic (default: both).",
     )
     parser.add_argument(
+        "--corpus",
+        choices=("turns", "observations"),
+        default="turns",
+        help="Retrieval corpus: raw conversation turns or observation summaries (default: turns).",
+    )
+    parser.add_argument(
         "--top-n",
         type=int,
         default=5,
@@ -170,12 +231,15 @@ def main(argv: list[str] | None = None) -> int:
     if "bm25" in requested:
         backends_to_run.append("bm25")
 
+    build_docs = _build_docs if args.corpus == "turns" else _build_observation_docs
+
     output: dict = {
         "benchmark": "locomo",
         "n_qa": 0,
         "skipped": 0,
         "top_n": args.top_n,
         "embed_model": args.embed_model,
+        "corpus": args.corpus,
         "backends": {},
     }
 
@@ -190,7 +254,7 @@ def main(argv: list[str] | None = None) -> int:
         total_skipped = 0
 
         for conv in data:
-            docs = _build_docs(conv)
+            docs = build_docs(conv)
             for qa in conv.get("qa", []):
                 evidence = qa.get("evidence", [])
                 if not evidence:
@@ -213,9 +277,8 @@ def main(argv: list[str] | None = None) -> int:
 
     # Console summary table.
     if output["backends"]:
-        print(
-            f"\n{'backend':<12} {'mean_cov':>10} {'full_cov_rate':>14} {'wilson_ci':>22} {'n':>6}"
-        )
+        print(f"\ncorpus: {args.corpus}")
+        print(f"{'backend':<12} {'mean_cov':>10} {'full_cov_rate':>14} {'wilson_ci':>22} {'n':>6}")
         print("-" * 68)
         for backend, stats in output["backends"].items():
             ci = f"[{stats['wilson_ci'][0]:.3f}, {stats['wilson_ci'][1]:.3f}]"
