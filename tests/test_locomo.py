@@ -294,3 +294,207 @@ def test_main_empty_evidence_qa_skipped(tmp_path: Path):
     data = json.loads(out_file.read_text())
     # Smoke fixture has one abstention qa (empty evidence)
     assert data.get("skipped", 0) > 0, "empty-evidence qa must be counted in skipped"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# _build_observation_docs — offline unit tests
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def test_build_observation_docs_string_dia():
+    """String dia_id row -> one (dia_id, text) doc."""
+    conv = {
+        "observation": {
+            "session_1_observation": {
+                "Alice": [["Alice loves hiking.", "D1:1"]],
+            }
+        }
+    }
+    docs = loc._build_observation_docs(conv)
+    assert docs == [("D1:1", "Alice loves hiking.")]
+
+
+def test_build_observation_docs_list_of_dia_ids():
+    """List-of-dia_ids row -> one doc per id, same text."""
+    conv = {
+        "observation": {
+            "session_1_observation": {
+                "Bob": [["Bob works remotely.", ["D2:1", "D2:2"]]],
+            }
+        }
+    }
+    docs = loc._build_observation_docs(conv)
+    assert sorted(docs) == sorted(
+        [
+            ("D2:1", "Bob works remotely."),
+            ("D2:2", "Bob works remotely."),
+        ]
+    )
+
+
+def test_build_observation_docs_multiple_speakers_and_sessions():
+    """Multiple speakers/sessions all contribute docs."""
+    conv = {
+        "observation": {
+            "session_1_observation": {
+                "Alice": [["Alice loves hiking.", "D1:1"]],
+                "Bob": [["Bob works remotely.", "D1:2"]],
+            },
+            "session_2_observation": {
+                "Alice": [["Alice adopted a dog.", "D2:1"]],
+            },
+        }
+    }
+    docs = loc._build_observation_docs(conv)
+    assert set(docs) == {
+        ("D1:1", "Alice loves hiking."),
+        ("D1:2", "Bob works remotely."),
+        ("D2:1", "Alice adopted a dog."),
+    }
+
+
+def test_build_observation_docs_malformed_rows_skipped():
+    """Non-list rows, wrong-length rows, and non-dict session values are skipped."""
+    conv = {
+        "observation": {
+            "session_1_observation": {
+                "Alice": [
+                    ["Alice loves hiking.", "D1:1"],  # valid
+                    "not-a-list",  # malformed: not a list/tuple
+                    ["only-one-element"],  # malformed: wrong length
+                    ["too", "many", "elements"],  # malformed: wrong length
+                ],
+                "Bob": "not-a-list-of-rows",  # malformed: speaker value not a list
+            },
+            "session_2_observation": "not-a-dict",  # malformed: session value not a dict
+        }
+    }
+    docs = loc._build_observation_docs(conv)
+    assert docs == [("D1:1", "Alice loves hiking.")]
+
+
+def test_build_observation_docs_missing_observation_key():
+    """Missing 'observation' key -> [] (never raises)."""
+    assert loc._build_observation_docs({}) == []
+    assert loc._build_observation_docs({"conversation": {}}) == []
+
+
+def test_build_observation_docs_never_raises_on_garbage():
+    """Wildly malformed input never raises; returns []."""
+    assert loc._build_observation_docs({"observation": None}) == []
+    assert loc._build_observation_docs({"observation": []}) == []
+    assert loc._build_observation_docs({"observation": {"session_1_observation": None}}) == []
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# --corpus flag — end-to-end main() tests with inline tmp_path fixtures
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def _write_observations_conv(tmp_path: Path) -> Path:
+    """Write a tiny inline conv with conversation + observation + qa to a tmp JSON file."""
+    conv = {
+        "qa": [
+            {
+                "question": "What hobby does Alice enjoy?",
+                "evidence": ["D1:1"],
+            }
+        ],
+        "conversation": {
+            "session_1": [
+                {"speaker": "Alice", "dia_id": "D1:1", "text": "Alice loves hiking on weekends."},
+                {"speaker": "Bob", "dia_id": "D1:2", "text": "Bob prefers reading books."},
+            ],
+        },
+        "observation": {
+            "session_1_observation": {
+                "Alice": [["Alice loves hiking on weekends.", "D1:1"]],
+                "Bob": [["Bob prefers reading books.", "D1:2"]],
+            },
+        },
+    }
+    p = tmp_path / "observations_conv.json"
+    p.write_text(json.dumps([conv]))
+    return p
+
+
+def test_corpus_observations_end_to_end_retrieves_gold_evidence(tmp_path: Path):
+    """--corpus observations retrieves the gold dia_id from observation docs within top-n."""
+    data_file = _write_observations_conv(tmp_path)
+    out_file = tmp_path / "out.json"
+    rc = loc.main(
+        [
+            "--data",
+            str(data_file),
+            "--backends",
+            "bm25",
+            "--top-n",
+            "5",
+            "--corpus",
+            "observations",
+            "--out",
+            str(out_file),
+        ]
+    )
+    assert rc == 0
+    data = json.loads(out_file.read_text())
+    assert data["corpus"] == "observations"
+    bm25 = data["backends"]["bm25"]
+    assert bm25["n"] == 1
+    assert bm25["mean_coverage"] == 1.0
+    assert bm25["full_coverage_rate"] == 1.0
+
+
+def test_corpus_default_is_turns(tmp_path: Path):
+    """Omitting --corpus defaults to 'turns' and is recorded in the output JSON."""
+    out_file = tmp_path / "out.json"
+    rc = loc.main(
+        [
+            "--data",
+            str(_FIXTURE),
+            "--backends",
+            "bm25",
+            "--top-n",
+            "5",
+            "--out",
+            str(out_file),
+        ]
+    )
+    assert rc == 0
+    data = json.loads(out_file.read_text())
+    assert data["corpus"] == "turns"
+
+
+def test_corpus_turns_explicit_matches_default(tmp_path: Path):
+    """--corpus turns explicitly produces byte-identical results to the default (omitted) case."""
+    out_default = tmp_path / "default.json"
+    out_explicit = tmp_path / "explicit.json"
+    rc1 = loc.main(
+        [
+            "--data",
+            str(_FIXTURE),
+            "--backends",
+            "bm25",
+            "--top-n",
+            "5",
+            "--out",
+            str(out_default),
+        ]
+    )
+    rc2 = loc.main(
+        [
+            "--data",
+            str(_FIXTURE),
+            "--backends",
+            "bm25",
+            "--top-n",
+            "5",
+            "--corpus",
+            "turns",
+            "--out",
+            str(out_explicit),
+        ]
+    )
+    assert rc1 == 0
+    assert rc2 == 0
+    assert out_default.read_text() == out_explicit.read_text()
