@@ -101,6 +101,7 @@ None at roadmap start. Key implementation constraint: every caller path must che
 | 260709-d64 | Reader-path + robustness for longmemeval_qa.py: LongMemEval-tuned reader prompt, --reader-provider claude|openai, upfront openai canary (fail loud on model-403 instead of silent 0/100) | complete | 2026-07-09 | 66cf980, 1747290 |
 | 260709-fot | Task E: OpenAI rate-limit resilience for longmemeval_qa.py — SDK retry client (max_retries=10/timeout=120) + mass-failure guard (>--max-failure-rate of judge/reader None → unreliable flag + exit 2, never fake a low score) | complete | 2026-07-09 | 7596a75, 1dd0d9c |
 | 260709-j8q | Build bench/locomo_qa.py — LoCoMo QA-accuracy layer (official stemmed-F1 + exact-match, no LLM judge; per-category 1-5 + Wilson CI; adversarial rule; retrieval+oracle arms; reader claude|openai w/ Task E resilience) | complete | 2026-07-09 | 5067807, 597579e |
+| 260709-qte | Chunk-level semantic retrieval (semantic_rank_chunked + --chunk-tokens): fixes measured truncation — 94.6% of LongMemEval sessions exceed bge 512-tok cap (median 2500 tok) | complete | 2026-07-09 | 7a67cec, 585ae5e |
 
 ## Session Continuity
 
