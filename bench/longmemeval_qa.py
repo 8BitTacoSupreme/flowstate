@@ -64,6 +64,13 @@ _READER_INSTRUCTION = (
 # Lazy OpenAI seam (never raises — all errors surface as None/False)
 # ─────────────────────────────────────────────────────────────────────────────
 
+# SDK-level retry/backoff constants for the OpenAI client.
+# max_retries=10 with the SDK's built-in exponential + jitter backoff absorbs 429
+# Retry-After headers common under Tier-1 (30k-TPM) limits.  timeout=120.0 allows
+# long queued requests to complete rather than erroring with a connection timeout.
+_OPENAI_MAX_RETRIES: int = 10
+_OPENAI_TIMEOUT: float = 120.0
+
 
 def _openai_available() -> bool:
     """Return True if the openai package can be imported; never raises."""
@@ -92,7 +99,7 @@ def _openai_chat(model: str, system: str, user: str) -> str | None:
     try:
         import openai
 
-        client = openai.OpenAI()
+        client = openai.OpenAI(max_retries=_OPENAI_MAX_RETRIES, timeout=_OPENAI_TIMEOUT)
         resp = client.chat.completions.create(
             model=model,
             messages=[
@@ -329,6 +336,10 @@ def _run_qa(args: argparse.Namespace, instances: list[dict]) -> int:
 
         arms_requested = [a.strip() for a in args.arms.split(",") if a.strip()]
 
+        # Run-level failure counters — tallied across all arms and instances.
+        judge_none_count = 0
+        reader_empty_count = 0
+
         # Sampling (sample first, then limit).
         # --sample draws a representative seeded random subset before --limit is applied.
         processed = list(instances)
@@ -391,6 +402,12 @@ def _run_qa(args: argparse.Namespace, instances: list[dict]) -> int:
                     )
                     judge = _judge_one(answer, instance, judge_model, provider=args.judge_provider)
 
+                    # Tally failure signals independently (both may fire for the same item).
+                    if answer == "":
+                        reader_empty_count += 1
+                    if judge is None:
+                        judge_none_count += 1
+
                     # None judge is INCORRECT (correct only when True) but IS counted in n.
                     per_type_n[qtype] = per_type_n.get(qtype, 0) + 1
                     if qtype not in per_type_correct:
@@ -425,6 +442,10 @@ def _run_qa(args: argparse.Namespace, instances: list[dict]) -> int:
         # Return 1 when zero instances were scored across all arms.
         total_n = sum(arm_data[arm]["overall"]["n"] for arm in arm_data)
 
+        # Mass-failure guard: compute failure rate and unreliable flag BEFORE writing JSON.
+        failure_rate = (judge_none_count + reader_empty_count) / max(1, total_n)
+        unreliable = failure_rate > args.max_failure_rate
+
         output: dict = {
             "benchmark": "longmemeval_qa",
             "n_instances": len(instances_to_score),
@@ -439,6 +460,11 @@ def _run_qa(args: argparse.Namespace, instances: list[dict]) -> int:
             "seed": args.seed,
             "question_type_distribution": question_type_distribution,
             "arms": arm_data,
+            # Additive reliability keys — always present; byte-identical path sees 0/False.
+            "unreliable": unreliable,
+            "failure_rate": failure_rate,
+            "judge_none": judge_none_count,
+            "reader_empty": reader_empty_count,
         }
 
         if args.out is not None:
@@ -462,7 +488,16 @@ def _run_qa(args: argparse.Namespace, instances: list[dict]) -> int:
                 ci = f"[{stats['wilson_ci'][0]:.3f}, {stats['wilson_ci'][1]:.3f}]"
                 print(f"{'':12} {qtype:<22} {stats['accuracy']:>10.3f} {ci:>22} {stats['n']:>6}")
 
-        return 1 if total_n == 0 else 0
+        if total_n == 0:
+            return 1
+        if unreliable:
+            print(
+                f"\nWARNING: results UNRELIABLE — {failure_rate * 100:.1f}% of reader/judge calls "
+                f"failed (empty answer or inconclusive judge), likely rate-limit/throttle "
+                f"(e.g. low OpenAI TPM). Not a real score."
+            )
+            return 2
+        return 0
     except Exception:
         return 1
 
@@ -549,6 +584,17 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Random seed for --sample (default: 0); ignored when --sample is not set.",
     )
     parser.add_argument("--out", type=Path, default=None, help="Output JSON path.")
+    parser.add_argument(
+        "--max-failure-rate",
+        type=float,
+        default=0.30,
+        dest="max_failure_rate",
+        help=(
+            "Fraction of (reader-empty + judge-None) calls above which the run is declared "
+            "UNRELIABLE (exit 2, unreliable:true in JSON). Default: 0.30. "
+            "Useful when running under low-TPM OpenAI limits."
+        ),
+    )
     return parser
 
 

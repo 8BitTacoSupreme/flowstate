@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -71,6 +73,7 @@ def _make_args(
     reader_provider: str = "claude",
     sample: int | None = None,
     seed: int = 0,
+    max_failure_rate: float = 0.30,
 ) -> argparse.Namespace:
     """Build an argparse.Namespace mimicking _build_parser() output."""
     return argparse.Namespace(
@@ -87,6 +90,7 @@ def _make_args(
         reader_provider=reader_provider,
         sample=sample,
         seed=seed,
+        max_failure_rate=max_failure_rate,
     )
 
 
@@ -901,3 +905,135 @@ def test_run_qa_records_reader_provider_json(tmp_path, monkeypatch):
         f"missing reader_provider in output JSON; keys={list(result)}"
     )
     assert result["reader_provider"] == "claude"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NEW: OpenAI retry-client kwargs + mass-failure guard
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_openai_chat_retry_client_kwargs(monkeypatch):
+    """_openai_chat constructs openai.OpenAI with max_retries=10 and timeout=120.0."""
+    recorded_kwargs: dict = {}
+
+    class FakeMessage:
+        content = "ok"
+
+    class FakeChoice:
+        message = FakeMessage()
+
+    class FakeResponse:
+        def __init__(self):
+            self.choices = [FakeChoice()]
+
+    class FakeCompletions:
+        def create(self, **kw):
+            return FakeResponse()
+
+    class FakeChat:
+        def __init__(self):
+            self.completions = FakeCompletions()
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            recorded_kwargs.update(kwargs)
+            self.chat = FakeChat()
+
+    fake_openai = types.ModuleType("openai")
+    fake_openai.OpenAI = FakeOpenAI
+
+    monkeypatch.setitem(sys.modules, "openai", fake_openai)
+
+    result = qa._openai_chat("gpt-4o", "sys", "user")
+    assert result == "ok"
+    assert recorded_kwargs.get("max_retries") == 10, (
+        f"expected max_retries=10, got {recorded_kwargs.get('max_retries')!r}"
+    )
+    assert recorded_kwargs.get("timeout") == 120.0, (
+        f"expected timeout=120.0, got {recorded_kwargs.get('timeout')!r}"
+    )
+
+
+def test_run_qa_guard_triggers_above_threshold(tmp_path, monkeypatch, capsys):
+    """Guard fires when >30% of judge calls return None: rc==2, unreliable==True, WARNING printed."""
+    import bench._retrieval as _r
+    import bench.grounding as _g
+    import bench.longmemeval as _lme
+
+    instances = _make_instances(n_single=4, n_multi=0)
+    args = _make_args(tmp_path, backend="bm25", arms="retrieval")
+
+    monkeypatch.setattr(_lme, "_build_docs", lambda inst: [("s", "session text")])
+    monkeypatch.setattr(_r, "bm25_rank", lambda docs, q, k: ["s"])
+    monkeypatch.setattr(_g, "_answer", lambda prefix, question, model, **kw: "the answer")
+    # All judge calls → None (100% failure rate > 0.30 default)
+    monkeypatch.setattr(qa, "_judge_one", lambda answer, instance, judge_model, **kw: None)
+
+    rc = qa._run_qa(args, instances)
+
+    assert rc == 2, f"expected rc=2 for unreliable run, got {rc}"
+    result = json.loads(args.out.read_text())
+    assert result["unreliable"] is True, "expected unreliable=True in output JSON"
+    assert result["failure_rate"] > 0.30, (
+        f"expected failure_rate>0.30, got {result.get('failure_rate')}"
+    )
+    assert result["judge_none"] == 4, f"expected judge_none=4, got {result.get('judge_none')}"
+    assert result["reader_empty"] == 0, f"expected reader_empty=0, got {result.get('reader_empty')}"
+    captured = capsys.readouterr()
+    assert "UNRELIABLE" in captured.out, f"expected UNRELIABLE in stdout, got: {captured.out!r}"
+
+
+def test_run_qa_guard_clean_run_unreliable_false(tmp_path, monkeypatch):
+    """Guard does not fire on a clean run: rc==0, unreliable==False, accuracy math intact."""
+    import bench._retrieval as _r
+    import bench.grounding as _g
+    import bench.longmemeval as _lme
+
+    instances = _make_instances(n_single=4, n_multi=0)
+    args = _make_args(tmp_path, backend="bm25", arms="retrieval")
+
+    monkeypatch.setattr(_lme, "_build_docs", lambda inst: [("s", "session text")])
+    monkeypatch.setattr(_r, "bm25_rank", lambda docs, q, k: ["s"])
+    monkeypatch.setattr(_g, "_answer", lambda prefix, question, model, **kw: "the answer")
+    # All judge calls → True (0% failure rate, well below 0.30)
+    monkeypatch.setattr(qa, "_judge_one", lambda answer, instance, judge_model, **kw: True)
+
+    rc = qa._run_qa(args, instances)
+
+    assert rc == 0, f"expected rc=0 for clean run, got {rc}"
+    result = json.loads(args.out.read_text())
+    assert result["unreliable"] is False, "expected unreliable=False for clean run"
+    assert result["failure_rate"] == 0.0, (
+        f"expected failure_rate=0.0, got {result.get('failure_rate')}"
+    )
+    assert result["arms"]["retrieval"]["overall"]["accuracy"] == pytest.approx(1.0)
+    assert result["arms"]["retrieval"]["overall"]["n"] == 4
+
+
+def test_run_qa_guard_threshold_boundary(tmp_path, monkeypatch):
+    """5 instances, 2 None judges (rate 0.4), max_failure_rate=0.5 → still reliable, rc==0."""
+    import bench._retrieval as _r
+    import bench.grounding as _g
+    import bench.longmemeval as _lme
+
+    instances = _make_instances(n_single=5, n_multi=0)
+    # Set max_failure_rate above the 0.4 observed rate → should NOT trigger guard
+    args = _make_args(tmp_path, backend="bm25", arms="retrieval", max_failure_rate=0.5)
+
+    monkeypatch.setattr(_lme, "_build_docs", lambda inst: [("s", "session text")])
+    monkeypatch.setattr(_r, "bm25_rank", lambda docs, q, k: ["s"])
+    monkeypatch.setattr(_g, "_answer", lambda prefix, question, model, **kw: "the answer")
+
+    call_count = [0]
+
+    def two_none_then_true(answer, instance, judge_model, **kw):
+        call_count[0] += 1
+        return None if call_count[0] <= 2 else True
+
+    monkeypatch.setattr(qa, "_judge_one", two_none_then_true)
+
+    rc = qa._run_qa(args, instances)
+
+    assert rc == 0, f"expected rc=0 (threshold 0.5 > rate 0.4), got {rc}"
+    result = json.loads(args.out.read_text())
+    assert result["unreliable"] is False, "expected unreliable=False when below threshold"
