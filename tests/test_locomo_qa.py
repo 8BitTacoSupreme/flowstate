@@ -15,10 +15,10 @@ import json
 import sys
 from pathlib import Path
 
-import bench.locomo_qa as qa
 import pytest
 
 import bench._retrieval as _r
+import bench.locomo_qa as qa
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Inline LoCoMo fixture (INTEGER categories, cat-5 + empty-evidence items)
