@@ -46,6 +46,21 @@ import bench.longmemeval as _lme
 _YESNO_OAI_RE = re.compile(r"\b(yes|no)\b", re.IGNORECASE)
 
 # ─────────────────────────────────────────────────────────────────────────────
+# LongMemEval-tuned reader instruction
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Replaces grounding's generic "Answer concisely and specifically." for the LME reader.
+# The {question_date} placeholder is filled per-instance from instance["question_date"].
+# Required substrings (case-insensitive): "prior", "session", "only", "{question_date}".
+_READER_INSTRUCTION = (
+    "The context above is a set of the user's PRIOR CONVERSATION SESSIONS with an assistant. "
+    "The question date is {question_date}. "
+    "Answer using ONLY information present in those sessions. "
+    "Be specific and concise. "
+    "If the sessions do not contain the answer, say it is not available."
+)
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Lazy OpenAI seam (never raises — all errors surface as None/False)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -167,17 +182,30 @@ def _reader_context(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _answer_one(instance: dict, ids: list[str], reader_model: str, char_budget: int) -> str:
+def _answer_one(
+    instance: dict,
+    ids: list[str],
+    reader_model: str,
+    char_budget: int,
+    *,
+    provider: str = "claude",
+) -> str:
     """Retrieve session texts for ids, build a context prefix, and call the reader model.
 
     Returns the reader's answer string, or "" on any failure (missing docs, LLM error,
     exception).  Never raises.
 
+    For provider=="claude" (default): calls bench.grounding._answer with the LME-tuned
+    _READER_INSTRUCTION (prior-session framing + question_date) via instruction= kwarg.
+    For provider=="openai": routes through _openai_chat with the same tuned instruction
+    embedded in the user message.
+
     Args:
         instance: A LongMemEval instance dict (must have haystack_session_ids/sessions).
         ids: Session ids to include as reader context (ranked or oracle).
-        reader_model: Model name passed to bench.grounding._answer.
+        reader_model: Model name for the reader call.
         char_budget: Maximum chars to feed to the reader.
+        provider: Reader provider — "claude" (default) or "openai".
 
     Returns:
         Answer string from the reader, or "" on failure.
@@ -187,7 +215,14 @@ def _answer_one(instance: dict, ids: list[str], reader_model: str, char_budget: 
         if docs is None:
             return ""
         context = _reader_context(docs, ids, char_budget=char_budget)
-        return _g._answer(context, instance["question"], reader_model)
+        instruction = _READER_INSTRUCTION.format(
+            question_date=instance.get("question_date", "unknown")
+        )
+        if provider == "openai":
+            system = "You are a helpful assistant that answers questions from conversation session context."
+            user = f"{context}\n\nQUESTION: {instance['question']}\n\n{instruction}"
+            return _openai_chat(reader_model, system, user) or ""
+        return _g._answer(context, instance["question"], reader_model, instruction=instruction)
     except Exception:
         return ""
 
@@ -258,13 +293,39 @@ def _run_qa(args: argparse.Namespace, instances: list[dict]) -> int:
         if args.judge_provider == "openai" and judge_model == "sonnet":
             judge_model = "gpt-4o"
 
-        # Hard-check: openai provider requires OPENAI_API_KEY and the openai package.
+        # Resolve effective reader model: openai provider defaults "sonnet" → "gpt-4-turbo".
+        reader_provider = args.reader_provider
+        effective_reader_model = args.reader_model
+        if reader_provider == "openai" and effective_reader_model == "sonnet":
+            effective_reader_model = "gpt-4-turbo"
+
+        # Generalized openai use check — fires for judge OR reader openai use.
+        use_openai = args.judge_provider == "openai" or reader_provider == "openai"
+
+        # Hard-check: openai requires OPENAI_API_KEY and the openai package.
         # This is the ONE deliberate hard-stop — no silent fallback to claude.
-        if args.judge_provider == "openai" and not (
-            os.environ.get("OPENAI_API_KEY") and _openai_available()
-        ):
+        if use_openai and not (os.environ.get("OPENAI_API_KEY") and _openai_available()):
             print("--judge-provider openai requires OPENAI_API_KEY and `pip install -e .[eval]`")
             return 1
+
+        # Upfront canary: one real probe per unique openai model before the scoring loop.
+        # A None result means the key lacks access to that model — return 1 immediately
+        # rather than silently scoring everything wrong.
+        if use_openai:
+            canary_models: set[str] = set()
+            if args.judge_provider == "openai":
+                canary_models.add(judge_model)
+            if reader_provider == "openai":
+                canary_models.add(effective_reader_model)
+            for m in sorted(canary_models):
+                raw = _openai_chat(m, "ping", "Reply with the single word: ok")
+                if raw is None:
+                    print(
+                        f"openai canary failed for model '{m}' — check the key's project has "
+                        f"access to that model; falling back is disabled to avoid silently "
+                        f"scoring everything wrong"
+                    )
+                    return 1
 
         arms_requested = [a.strip() for a in args.arms.split(",") if a.strip()]
 
@@ -321,7 +382,13 @@ def _run_qa(args: argparse.Namespace, instances: list[dict]) -> int:
                     else:  # oracle
                         ids = instance.get("answer_session_ids", [])
 
-                    answer = _answer_one(instance, ids, args.reader_model, args.char_budget)
+                    answer = _answer_one(
+                        instance,
+                        ids,
+                        effective_reader_model,
+                        args.char_budget,
+                        provider=reader_provider,
+                    )
                     judge = _judge_one(answer, instance, judge_model, provider=args.judge_provider)
 
                     # None judge is INCORRECT (correct only when True) but IS counted in n.
@@ -364,7 +431,8 @@ def _run_qa(args: argparse.Namespace, instances: list[dict]) -> int:
             "limit": args.limit,
             "backend": args.backend,
             "k": args.k,
-            "reader_model": args.reader_model,
+            "reader_model": effective_reader_model,
+            "reader_provider": reader_provider,
             "judge_model": judge_model,
             "judge_provider": args.judge_provider,
             "sample": args.sample,
@@ -380,7 +448,10 @@ def _run_qa(args: argparse.Namespace, instances: list[dict]) -> int:
                 print(f"warning: could not write results to {args.out}: {exc}")
 
         # Console summary table
-        print(f"\nprovider={args.judge_provider}  sample={args.sample}  seed={args.seed}")
+        print(
+            f"\njudge_provider={args.judge_provider}  reader_provider={reader_provider}"
+            f"  sample={args.sample}  seed={args.seed}"
+        )
         print(f"\n{'arm':<12} {'type':<22} {'accuracy':>10} {'wilson_ci':>22} {'n':>6}")
         print("-" * 76)
         for arm_name, arm in arm_data.items():
@@ -434,6 +505,18 @@ def _build_parser() -> argparse.ArgumentParser:
             "'openai' (GPT-4o judge for paper-comparable numbers; requires OPENAI_API_KEY "
             "and `pip install -e .[eval]`).  Leaving --judge-model at 'sonnet' with "
             "provider=openai auto-upgrades to 'gpt-4o'."
+        ),
+    )
+    parser.add_argument(
+        "--reader-provider",
+        choices=("claude", "openai"),
+        default="claude",
+        help=(
+            "Reader provider: 'claude' (default, uses bench.grounding._answer with the "
+            "LME-tuned instruction) or 'openai' (routes through _openai_chat; requires "
+            "OPENAI_API_KEY and `pip install -e .[eval]`). "
+            "Leaving --reader-model at 'sonnet' with provider=openai auto-upgrades to "
+            "'gpt-4-turbo'."
         ),
     )
     parser.add_argument(
