@@ -98,10 +98,11 @@ None at roadmap start. Key implementation constraint: every caller path must che
 | 260708-mjt | Build bench/longmemeval.py + bench/locomo.py retrieval-eval harnesses (recall_all/any@k, evidence-coverage, semantic vs BM25, Wilson CIs, smoke fixtures) — Task A of the public-benchmark arc | complete | 2026-07-08 | b1d962c, fcb87ef, d6a6704 |
 | 260708-nsm | Build bench/longmemeval_qa.py — QA-accuracy layer (Task B): retrieve→read→judge, per-question-type + overall accuracy with Wilson CIs, retrieval+oracle arms, --limit | complete | 2026-07-08 | 603d558, 1087dce, 830c6e9 |
 | 260708-r6n | Add GPT-4o judge provider (--judge-provider openai, hard-error if unavailable) + representative seeded sampling (--sample/--seed) to longmemeval_qa.py; openai as optional [eval] extra | complete | 2026-07-08 | ee80b24, 5c9928b, 50483e0 |
+| 260709-d64 | Reader-path + robustness for longmemeval_qa.py: LongMemEval-tuned reader prompt, --reader-provider claude|openai, upfront openai canary (fail loud on model-403 instead of silent 0/100) | complete | 2026-07-09 | 66cf980, 1747290 |
 
 ## Session Continuity
 
-Last session: 2026-07-08T20:14:10Z
-Stopped at: Quick task 260708-nsm complete (LongMemEval QA layer). Ran real LongMemEval_S retrieval (n=500): FlowState-semantic bge-small recall_all@5=0.806 / recall_any@5=0.934 vs BM25 0.844 / 0.966 — BM25-competitive, NOT leaderboard-leading (leaders use ~1.5B-param embedders vs bge-small 33M). QA-accuracy run (n=50, semantic+oracle) in progress.
+Last session: 2026-07-09
+Stopped at: Task D (260709-d64) complete. FINDINGS on real LongMemEval_S: RETRIEVAL (n=500) — FlowState semantic reaches BM25-parity with bge-base (recall_all@5 0.840≈BM25 0.844; recall_all@10 0.930>0.904); bge-small (33M) 0.806. QA (n=100 representative): claude judge retrieval 0.450/oracle 0.410; gpt-4-turbo judge retrieval 0.410/oracle 0.480 (restored oracle>retrieval). Judge swap barely moved it → the gap to paper's 0.870 oracle is the READER (claude sonnet + generic prompt + truncation), not retrieval/judge. Discovered key's project lacks gpt-4o access (only gpt-3.5/gpt-4-turbo) — silent 0/100 bug fixed by Task D canary. bge-base embed on CPU is slow (~30-40min/500).
 Resume file: None
-Next step: Read QA-accuracy result vs paper baselines (oracle 0.870, full-context 0.606). Optional: scale QA to n=500; test a larger embedder (bge-base/large) to see if semantic can beat BM25; add GPT-4o judge for an officially-submittable number.
+Next step: Improved-QA reruns (bge-base, sample 100, tuned reader): (a) claude reader + gpt-4-turbo judge, (b) gpt-4-turbo reader + gpt-4-turbo judge — does tuned/stronger reader lift oracle 0.48→toward 0.87? Then push batch (held). Rotate the OPENAI_API_KEY that was pasted in chat.
