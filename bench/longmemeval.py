@@ -151,6 +151,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--limit", type=int, default=None, help="Cap the number of instances evaluated."
     )
+    parser.add_argument(
+        "--chunk-tokens",
+        type=int,
+        default=0,
+        help=(
+            "Chunk-level semantic retrieval window size in tokens. "
+            "0 (default) uses plain semantic_rank (legacy, reproducible); "
+            ">0 uses semantic_rank_chunked with this many tokens per chunk."
+        ),
+    )
     args = parser.parse_args(argv)
 
     data = _load_data(args.data)
@@ -186,12 +196,19 @@ def main(argv: list[str] | None = None) -> int:
         "n_instances": 0,
         "skipped": 0,
         "embed_model": args.embed_model,
+        "chunk_tokens": args.chunk_tokens,
         "backends": {},
     }
 
     for backend in backends_to_run:
         if backend == "bm25":
             ranker = lambda docs, q, k_: _retrieval.bm25_rank(docs, q, k_)  # noqa: E731
+        elif args.chunk_tokens > 0:
+            _ef = embed_fn
+            _ct = args.chunk_tokens
+            ranker = lambda docs, q, k_, __ef=_ef, __ct=_ct: _retrieval.semantic_rank_chunked(  # noqa: E731
+                docs, q, k_, __ef, chunk_tokens=__ct
+            )
         else:
             _ef = embed_fn
             ranker = lambda docs, q, k_, __ef=_ef: _retrieval.semantic_rank(docs, q, k_, __ef)  # noqa: E731

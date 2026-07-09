@@ -278,6 +278,101 @@ def test_main_malformed_instance_skipped(tmp_path: Path):
     assert isinstance(rc, int)
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# --chunk-tokens wiring — 0 uses plain semantic_rank, >0 uses semantic_rank_chunked
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def _fake_embed_fn(texts: list[str]) -> list[list[float]]:
+    return [[0.0, 1.0] for _ in texts]
+
+
+def test_chunk_tokens_zero_uses_plain_semantic(tmp_path: Path, monkeypatch):
+    """--chunk-tokens 0 (default) calls semantic_rank, NOT semantic_rank_chunked; JSON records 0."""
+    import bench._retrieval as retrieval
+
+    calls = {"plain": 0, "chunked": 0}
+
+    def fake_semantic_rank(docs, q, k_, ef):
+        calls["plain"] += 1
+        return []
+
+    def fake_semantic_rank_chunked(docs, q, k_, ef, *, chunk_tokens=400):
+        calls["chunked"] += 1
+        return []
+
+    monkeypatch.setattr(retrieval, "semantic_rank", fake_semantic_rank)
+    monkeypatch.setattr(retrieval, "semantic_rank_chunked", fake_semantic_rank_chunked)
+    monkeypatch.setattr(
+        retrieval, "semantic_backend_available", lambda model: (_fake_embed_fn, True)
+    )
+
+    out_file = tmp_path / "out.json"
+    rc = lme.main(
+        [
+            "--data",
+            str(_FIXTURE),
+            "--backends",
+            "semantic",
+            "--k",
+            "5",
+            "--out",
+            str(out_file),
+        ]
+    )
+    assert rc == 0
+    assert calls["plain"] > 0, "expected semantic_rank to be called"
+    assert calls["chunked"] == 0, (
+        "semantic_rank_chunked must NOT be called when --chunk-tokens is 0"
+    )
+
+    data = json.loads(out_file.read_text())
+    assert data["chunk_tokens"] == 0
+
+
+def test_chunk_tokens_positive_uses_chunked(tmp_path: Path, monkeypatch):
+    """--chunk-tokens 400 calls semantic_rank_chunked, NOT semantic_rank; JSON records 400."""
+    import bench._retrieval as retrieval
+
+    calls = {"plain": 0, "chunked": 0}
+
+    def fake_semantic_rank(docs, q, k_, ef):
+        calls["plain"] += 1
+        return []
+
+    def fake_semantic_rank_chunked(docs, q, k_, ef, *, chunk_tokens=400):
+        calls["chunked"] += 1
+        return []
+
+    monkeypatch.setattr(retrieval, "semantic_rank", fake_semantic_rank)
+    monkeypatch.setattr(retrieval, "semantic_rank_chunked", fake_semantic_rank_chunked)
+    monkeypatch.setattr(
+        retrieval, "semantic_backend_available", lambda model: (_fake_embed_fn, True)
+    )
+
+    out_file = tmp_path / "out.json"
+    rc = lme.main(
+        [
+            "--data",
+            str(_FIXTURE),
+            "--backends",
+            "semantic",
+            "--k",
+            "5",
+            "--chunk-tokens",
+            "400",
+            "--out",
+            str(out_file),
+        ]
+    )
+    assert rc == 0
+    assert calls["chunked"] > 0, "expected semantic_rank_chunked to be called"
+    assert calls["plain"] == 0, "semantic_rank must NOT be called when --chunk-tokens > 0"
+
+    data = json.loads(out_file.read_text())
+    assert data["chunk_tokens"] == 400
+
+
 def test_main_abstention_instance_counted_in_skipped(tmp_path: Path):
     """Instance with empty answer_session_ids is counted in 'skipped'."""
     out_file = tmp_path / "out.json"
