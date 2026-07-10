@@ -4,8 +4,8 @@ milestone: v0.6.1
 milestone_name: Make the Names Real
 status: executing
 stopped_at: "v0.6.1 "Make the Names Real" opened as the active milestone, inserted before v0.7.0 per the user's "fix the gaps before we benchmark any further." Scope: undead the adapter stubs. v0.7.0 (retrieval bench) and the v0.8.0 seed are deferred; they renumber automatically when they start (GSD continues from the last shipped phase). v0.7.0's requirements preserved at `.planning/deferred/v0.7.0-REQUIREMENTS.md`."
-last_updated: "2026-07-10T23:31:14.019Z"
-last_activity: 2026-07-10 -- Phase 15 planning complete
+last_updated: "2026-07-10T23:31:14.792Z"
+last_activity: 2026-07-10 -- Phase 15 execution started
 progress:
   total_phases: 4
   completed_phases: 3
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Phase 15 — bundle gsd
+**Current focus:** Phase 15 — Bundle GSD
 
 ## Current Position
 
-Phase: 15
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-07-10 -- Phase 15 planning complete
+Phase: 15 (Bundle GSD) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 15
+Last activity: 2026-07-10 -- Phase 15 execution started
 
 ## Performance Metrics
 
