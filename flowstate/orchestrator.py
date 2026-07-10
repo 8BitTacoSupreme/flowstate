@@ -29,6 +29,7 @@ from flowstate.state import (
     state_path,
     update_tool,
 )
+from flowstate.tools.base import ToolResult
 from flowstate.tools.gsd_adapter import GSDAdapter
 from flowstate.tools.research import ResearchAdapter
 from flowstate.tools.strategy import StrategyAdapter
@@ -311,14 +312,15 @@ def run_pipeline(state: FlowStateModel, root: Path) -> FlowStateModel:
             state.artifacts["roadmap"] = a
 
     # Step 5: Discipline — pure Python audit
-    console.print("\n[bold magenta]5/5 Discipline[/] — audit")
-    update_tool(state, "discipline", status=ToolStatus.RUNNING)
-    save_state(state, root)
+    def _run_discipline() -> ToolResult:
+        audit = check_setup(root)
+        error = None
+        if not audit.success:
+            failed = [key for key in ("git_repo", "pytest_config") if not audit.checks.get(key)]
+            error = f"required check(s) failed: {', '.join(failed)}"
+        return ToolResult(success=audit.success, output=audit.summary, error=error)
 
-    audit = check_setup(root)
-    update_tool(state, "discipline", status=ToolStatus.COMPLETED)
-    console.print(f"  [green]{audit.summary}[/green]")
-    save_state(state, root)
+    _run_step(state, root, "discipline", 5, 5, _run_discipline, bus=bus)
 
     # Journal: write delta entry after all steps complete
     try:
