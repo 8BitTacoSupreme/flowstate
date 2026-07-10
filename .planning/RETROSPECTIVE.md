@@ -117,6 +117,47 @@
 
 ---
 
+## Milestone: v0.6.0 — Semantic Retrieval
+
+**Shipped:** 2026-06-18 (archived 2026-07-10)
+**Phases:** 3 (Embedding Provider + Vector Store → Semantic Memory Retrieval → Semantic Wiki Retrieval) | **Plans:** 4 | **Tasks:** 4
+
+### What Was Built
+- Optional embedding provider: `flowstate/embeddings.py` (`get_embedder`/`Embedder`) behind a `[semantic]` pip extra, with fastembed imported lazily inside `_ensure_model()` so `import flowstate.embeddings` succeeds on a bare install. Model precedence env > config.json > `bge-small-en-v1.5` (384-dim).
+- Vector store: `memories_vec` sqlite-vec `vec0` table in `memory.db`, embed-on-write (savepoint-atomic), idempotent lazy backfill on open, `enable_load_extension(False)` immediately after load to re-scope the extension surface.
+- Semantic memory retrieval: `MemoryStore.get_context()` serves KNN when vectors exist, byte-identical FTS5 fallback when they don't; no-match handled by an L2 distance floor (`_SEMANTIC_MAX_DISTANCE = 0.89` ≈ cosine 0.60).
+- Semantic wiki retrieval: ephemeral in-memory `vec0` KNN over a wiki corpus feeds per-run top-k articles into the opt-in `context_prefix` wiki layer; default path byte-identical, static fallback preserved.
+
+### What Worked
+- **The distance-floor-vs-FTS5-gate catch.** Phase 10 originally gated semantic KNN behind "FTS5 found ≥1 match." Adversarial code review flagged it Critical: that gate would fire semantic retrieval *only when lexical search already succeeded*, suppressing precisely the lexically-disjoint-but-semantically-relevant case the entire milestone exists to serve. Replaced with a pure-semantic distance threshold. The milestone's core value would have been silently nullified while every test still passed.
+- **Offline-by-construction tests.** Injecting a fake `embed_fn` and `skipif`-guarding `sqlite_vec` kept the whole suite network-free and model-free, so an optional heavyweight dep added zero test flakiness.
+- **Byte-identical default path as an explicit success criterion** turned "don't regress" into a checkable golden-test assertion rather than a hope.
+
+### What Was Inefficient
+- **A mechanism shipped with no caller.** Phase 11's semantic wiki retrieval is implemented, tested, and dormant — nothing passes `include_layers={"wiki"}`. The phase's success criteria were all satisfiable without an integration point existing, so "done" and "reachable in production" diverged. Deferred as WIKI-F1.
+- **Summary frontmatter drifted from shipped code.** `10-01-SUMMARY.md` still records the superseded "FTS5 relevance gate" decision that review had already overturned; the summary was written from the plan, not from the merged diff. Anyone reading the summary would draw the wrong architectural conclusion.
+- **The SDK `milestone.complete` accomplishment extractor mis-picked lines for the fourth consecutive milestone** — this time not empty placeholders but *plausible-looking wrong content* (bug-fix bullets like "[Rule 1 - Bug] noqa directive for non-enabled rule" presented as milestone accomplishments). A silent-wrong output is worse than a blank one.
+- **`--limit` was used to subset LongMemEval during the benchmark arc.** It is a head-slice, and the dataset is type-blocked, so every "limited" run silently evaluated one or two question types. Discovered only at v0.7.0 planning.
+
+### Patterns Established
+- **Optional-dep seam:** lazy import inside a method + `available()` probe + byte-identical fallback path. Core install stays dep-free; the feature is additive and reversible.
+- **Additive schema evolution:** `memory.db` gains a `vec0` table on open (idempotent `CREATE TABLE IF NOT EXISTS`, dim fixed at first create); `flowstate.json` and its migration ladder stay untouched.
+- **Degradation contract:** every semantic path returns `None`/`[]` and falls back rather than raising — enforced by tests that simulate an absent embedder rather than relying on it being absent in the venv.
+
+### Key Lessons
+1. **A gate that conditions a new mechanism on the old mechanism succeeding will erase the new mechanism's entire reason for existing** — and every test can still pass. Ask of any fallback/gate: "in the case this feature exists to serve, does this gate let it fire?"
+2. **"Phase complete" ≠ "reachable in production."** If no caller invokes the code path, add an integration success criterion or expect a dormant feature. WIKI-F1 is the cost of not doing this.
+3. **Write SUMMARY frontmatter from the merged diff, not the plan.** Decisions overturned by review otherwise persist as authoritative-looking archaeology.
+4. **A tool that silently emits plausible-but-wrong output is worse than one that errors.** The accomplishment extractor, the never-raises bench harness that reported a fake `0/100` on a 403, and the head-slice `--limit` are the same failure shape: confident, wrong, and unlabelled.
+
+### Cost Observations
+- Model mix: opus for orchestration/planning, sonnet for executors/checkers/verifiers/reviewers/fixers.
+- Suite grew 549 → 749 tests; coverage held ~92.2% throughout.
+- Two Critical review findings (Phase 9 extension-load window, Phase 10 FTS5 gate), both caught pre-close.
+- CPU embedding is the practical bottleneck for bench work: bge-base over 500 LongMemEval instances runs ~30–40 min.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -126,6 +167,7 @@
 | v0.3.0 | 2 | Adopted GSD for Phase 2; coarse granularity for solo maintainer |
 | v0.4.0 | 3 | Full autonomous chain (new-milestone → plan → execute → verify → complete); plan-checker as a load-bearing gate |
 | v0.5.0 | 3 | Added code-review→fix as a per-phase gate distinct from verification; review findings carried forward as next-phase planning constraints |
+| v0.6.0 | 3 | First optional-dependency seam; code review escalated from "catches bugs" to "caught a Critical design inversion that would have nullified the milestone" |
 
 ### Cumulative Quality
 
@@ -134,10 +176,12 @@
 | v0.3.0 | ≥80% (enforced) | doctor, repair, status --markdown, hook gating — all pure-Python, no new runtime deps |
 | v0.4.0 | 92.85% | pack, CANON, fixtures, build_context_prefix, kickoff — repomix is external (Node CLI/MCP), still zero new Python deps |
 | v0.5.0 | 92.25% | journal, gotchas, verify + `flowstate journal`/`gotchas`/`verify` commands — pure-Python (stdlib hashlib/re/xml.etree), zero new Python deps, zero bridge imports |
+| v0.6.0 | 92.19% | embeddings + vec0 store + semantic KNN — fastembed is an **optional `[semantic]` extra**, not a core dep; sqlite-vec was already a (previously unused) core dep; default install and all default paths unchanged |
 
 ### Top Lessons (Verified Across Milestones)
 
-1. Close milestones at ship time to keep state and audits trustworthy. (v0.3 missed it; v0.4 confirmed the payoff.)
+1. Close milestones at ship time to keep state and audits trustworthy. (v0.3 missed it; v0.4 confirmed the payoff; v0.6 drifted a month before archiving.)
 2. Safe-by-default for any destructive CLI operation.
 3. The plan-checker pays for itself — adversarial pre-execution review catches real bugs (migration guards, success-criteria errors, repo pollution).
-4. The SDK accomplishment extractor needs a manual pass at milestone close.
+4. The SDK accomplishment extractor needs a manual pass at milestone close. **Four for four.** In v0.6.0 it emitted plausible-but-wrong content rather than blanks — verify, don't skim.
+5. Silent-wrong beats loud-wrong only for the tool's author. Prefer erroring over emitting a confident artifact (fake scores from a never-raises harness, mis-extracted accomplishments, biased head-slice subsets).
