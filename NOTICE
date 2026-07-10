@@ -7,6 +7,15 @@ This product includes software developed by third parties:
   pydantic (MIT) — https://github.com/pydantic/pydantic
   rich (MIT) — https://github.com/willmcgugan/rich
 
+This product includes vendored skill sets, redistributed under the MIT License.
+Each set's upstream LICENSE is retained verbatim under flowstate/skills/<name>/LICENSE:
+
+  gstack skills (MIT) — Copyright (c) 2026 Garry Tan
+    https://github.com/garrytan/gstack
+
+  superpowers skills (MIT) — Copyright (c) 2025 Jesse Vincent
+    https://github.com/obra/superpowers
+
 This product integrates with but does not include:
 
   Claude Code by Anthropic PBC (proprietary) — use subject to

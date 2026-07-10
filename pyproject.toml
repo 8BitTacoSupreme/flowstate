@@ -21,6 +21,9 @@ flowstate = "flowstate.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["flowstate"]
+# Vendored skill sets are non-Python data (markdown + assets); force their
+# inclusion in the wheel so FlowState ships self-contained.
+artifacts = ["flowstate/skills/**/*"]
 
 [project.optional-dependencies]
 dev = [
@@ -42,7 +45,7 @@ addopts = "--cov=flowstate --cov-report=term-missing --cov-report=html --cov-fai
 
 [tool.coverage.run]
 source = ["flowstate"]
-omit = ["flowstate/__pycache__/*"]
+omit = ["flowstate/__pycache__/*", "flowstate/skills/*"]
 
 [tool.coverage.report]
 fail_under = 80
