@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.6.1
 milestone_name: Make the Names Real
 status: executing
-stopped_at: "v0.6.1 "Make the Names Real" opened as the active milestone, inserted before v0.7.0 per the user's "fix the gaps before we benchmark any further." Scope: undead the adapter stubs. v0.7.0 (retrieval bench) and the v0.8.0 seed are deferred; they renumber automatically when they start (GSD continues from the last shipped phase). v0.7.0's requirements preserved at `.planning/deferred/v0.7.0-REQUIREMENTS.md`."
-last_updated: "2026-07-10T23:38:22.580Z"
+stopped_at: "Completed 15-02-PLAN.md (GSD-02): installer lays down GSD unconditionally"
+last_updated: "2026-07-10T23:53:03.203Z"
 last_activity: 2026-07-10
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 15
-  completed_plans: 11
-  percent: 73
+  completed_plans: 12
+  percent: 75
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 ## Current Position
 
 Phase: 15 (Bundle GSD) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-07-10
 
@@ -65,6 +65,7 @@ Last activity: 2026-07-10
 | Phase 14 P14-03 | 180 | 2 tasks | 3 files |
 | Phase 14 P14-04 | 6 | 3 tasks | 5 files |
 | Phase 15 P15-01 | 360 | 2 tasks | 8 files |
+| Phase 15 P15-02 | 1200 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,7 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 14-01 VEND-01/02: vendored gstack@7c9df1c (59) + superpowers@d884ae0 (14) as data-only trees; pruned build tooling 36M->4.4M for no-bin/T-14-02
 - [Phase ?]: launch handoffs gated on installed .claude/skills/<namespace>; absent emits install-skills prompt (T-14-12)
 - [Phase ?]: README test count reconciled to post-phase --collect-only total (1000), never hardcoded (T-14-15)
+- [Phase ?]: [Phase 15-02 / GSD-02]: install_skills installs GSD unconditionally (no detect/prompt); full node_modules copied to .claude/get-shit-done/node_modules so gsd-sdk resolves deps by walking up (byte-identical to 15-01's proven tree); commands/gsd converted to .claude/skills/gsd-<cmd>/SKILL.md; copy-as-data, path-safe, idempotent, no shim
 
 ### Pending Todos
 
@@ -120,8 +122,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-10T23:38:22.576Z
-Stopped at: v0.6.1 "Make the Names Real" opened as the active milestone, inserted before v0.7.0 per the user's "fix the gaps before we benchmark any further." Scope: undead the adapter stubs. v0.7.0 (retrieval bench) and the v0.8.0 seed are deferred; they renumber automatically when they start (GSD continues from the last shipped phase). v0.7.0's requirements preserved at `.planning/deferred/v0.7.0-REQUIREMENTS.md`.
+Last session: 2026-07-10T23:53:03.200Z
+Stopped at: Completed 15-02-PLAN.md (GSD-02): installer lays down GSD unconditionally
 
 **Why v0.6.1 exists (verified this session, file:line):**
 

@@ -33,7 +33,7 @@ Each maps to exactly one roadmap phase.
 ### Bundle GSD (GSD) — reverses the "no cross-harness packaging" decision (user-directed 2026-07-10)
 
 - [x] **GSD-01**: A pinned GSD distribution — skills + `get-shit-done/` Node runtime + `gsd-sdk` CLI — is vendored into `flowstate/vendor/gsd/` from the canonical MIT repo (`gsd-build/get-shit-done`, © Lex Christopherson), with the upstream `LICENSE` captured verbatim and a recorded `VERSION`/commit for provenance. `NOTICE` carries the GSD MIT attribution.
-- [ ] **GSD-02**: `flowstate install-skills` (extended from VEND-03) installs GSD **unconditionally** into the project's `.claude/skills/` + `.claude/get-shit-done/` and makes `gsd-sdk` invokable — no detection, no prompt, no separate user install.
+- [x] **GSD-02**: `flowstate install-skills` (extended from VEND-03) installs GSD **unconditionally** into the project's `.claude/skills/` + `.claude/get-shit-done/` and makes `gsd-sdk` invokable — no detection, no prompt, no separate user install.
 - [ ] **GSD-03**: `flowstate launch gsd <N>` works against the vendored GSD with nothing separately installed; the launcher's GSD detect-and-suggest path is neutralized (GSD is assumed present because FlowState installed it).
 - [ ] **GSD-04**: A documented refresh/staleness path for the pinned GSD (mirroring the `flowstate pack` manifest/staleness pattern) lets the vendored snapshot be updated deliberately, not silently.
 - [ ] **GSD-05**: The GSD acknowledgment + install docs in README are updated to describe the bundled-and-auto-installed reality ("FlowState vendors and installs GSD; no separate GSD install required") rather than the old "generates the context files GSD consumes … hand off to native GSD execution" delegate-only framing. Prerequisites section drops "GSD (optional, install separately)".
@@ -75,7 +75,7 @@ Acknowledged, deferred — not in this milestone's roadmap.
 | VEND-04 | Phase 14 | Complete |
 | VEND-05 | Phase 14 | Complete |
 | GSD-01 | Phase 15 | Complete |
-| GSD-02 | Phase 15 | Pending |
+| GSD-02 | Phase 15 | Complete |
 | GSD-03 | Phase 15 | Pending |
 | GSD-04 | Phase 15 | Pending |
 | GSD-05 | Phase 15 | Pending |
