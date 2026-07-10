@@ -96,23 +96,40 @@ measures recall/precision against gold evidence sets.
 
 ---
 
-## Dead-alias table
+## Renamed-adapter table — what the names promise vs what the code does
 
-| old key | maps to | what it actually is |
-|---|---|---|
-| `autoresearch` | `research` | split-topic `claude --print` calls |
-| `gstack` | `strategy` | one `claude --print` pressure-test call |
-| `superpowers` | `discipline` | pure-Python git/tests/hooks audit — **ZERO LLM calls** (`flowstate/discipline.py:1` docstring: "Discipline module — pure Python project audit (replaces superpowers.py).") |
+> **ERRATUM (2026-07-10).** An earlier revision of this section called `autoresearch` /
+> `gstack` / `superpowers` "dead aliases" and asserted that "no such layers exist." **That
+> was wrong.** All three are real, well-known upstream projects, and FlowState's own README
+> credits them as the explicit inspirations for its `research` / `strategy` / `discipline`
+> adapters. The v0.1.0 tool keys were *named after* them. The v0.2.0 rename genericized the
+> names; it did not delete a fiction. The corrected statement is below.
 
-Source: `flowstate/state.py:63-65` (`_OLD_TOOL_KEYS`). These keys are **deleted on state
-migration**, asserted at `tests/test_state.py:92-94`.
+| v0.1.0 key | renamed to | upstream project | what upstream does | what FlowState's adapter does |
+|---|---|---|---|---|
+| `autoresearch` | `research` | [karpathy/autoresearch](https://github.com/karpathy/autoresearch) | propose → run → **measure** → keep/discard on validation loss; `program.md` carries instructions + constraints + stopping criteria | fan-out one `claude --print` call per comma-separated topic, concatenate. **No loop, no measurement, no keep/discard.** |
+| `gstack` | `strategy` | [garrytan/gstack](https://github.com/garrytan/gstack) | 23 role-skills; `/office-hours` = six forcing questions; CEO/eng/design reviews; `/cso` OWASP+STRIDE | one `claude --print` call with a 5-point prompt. **No scoring, no rubric, no gate.** |
+| `superpowers` | `discipline` | [obra/superpowers](https://github.com/obra/superpowers) | mandatory RED-GREEN-REFACTOR; *"deletes code written before tests"*; git worktrees; skills | seven `Path.exists()` checks. **`success=True` is hardcoded** (`flowstate/discipline.py:56`) and `orchestrator.py:315-319` marks the step COMPLETED without ever reading `.checks`. **Enforces nothing; cannot fail.** |
 
-State plainly: an external review mistook these three dead aliases for a three-tier
-"Cialdini persuasion / trust-boundary / deep-domain-hunting" compliance architecture.
-**No such layers exist**; none are installed as skills or plugins. `flowstate/`'s only
-enforcement primitive is `flowstate/verify.py`'s mechanical acceptance gates (coverage
-threshold + produced-artifact integrity, `flowstate/verify.py:57-129`) — everything else
-honestly SKIPs.
+Sources: `flowstate/state.py:63-65` (`_OLD_TOOL_KEYS`); keys are deleted on state migration
+(`tests/test_state.py:92-94`). The adapters' own docstrings are candid — `research.py:7`:
+*"this is NOT Karpathy's autoresearch"*; `strategy.py:6`: *"this is NOT using Gstack slash
+commands."*
+
+**What remains true about the external review's claims.** None of the three upstream tools is
+installed in this environment, and `flowstate/` never invokes any of them — it reimplements a
+thin slice of each in-process. So the review's *operational* claims have no referent here:
+there is no Cialdini/persuasion layer, no pressure-scenario framework, no mandatory
+skill-check, and no trust-boundary gate that halts a pipeline. (Neither upstream Superpowers
+nor Gstack mentions Cialdini either.) `flowstate/`'s only enforcement primitive is
+`flowstate/verify.py`'s mechanical acceptance gates (coverage threshold + produced-artifact
+integrity, `flowstate/verify.py:57-129`) — everything else honestly SKIPs.
+
+**What the review got right, and this doc originally missed.** If FlowState's "execution
+enforcement" layer is `discipline.py`, then it enforces nothing and cannot fail — so a
+benchmark of compliance/enforcement would indeed measure nothing. The names are, at present,
+close to strings. Closing that gap is the subject of the v0.6.1 milestone (see
+`.planning/seeds/`), which must land **before** any further harness benchmarking.
 
 ---
 
@@ -121,7 +138,12 @@ honestly SKIPs.
 - Never cite a Track-1 number to license a Track-2 claim, or vice versa.
 - Never quote a harness-value number as if token/cost/latency accounting existed — it
   does not; `prefix_tokens` is a `len()//4` estimate, not measured usage.
-- Never present the dead-alias trio (`autoresearch`/`gstack`/`superpowers`) as an
-  architecture — they are deleted-on-migration state keys, nothing more.
+- Never describe FlowState's `research`/`strategy`/`discipline` adapters as if they *were*
+  Autoresearch / Gstack / Superpowers. They are named after those projects and implement a
+  thin slice of each; the adapters' own docstrings say so. Equally: never assert the upstream
+  projects are fictional — they are real, credited in the README, and this doc got that wrong
+  once already (see the erratum above).
+- Never present a step as passing when its success flag is hardcoded (`discipline.py:56`).
+  Until v0.6.1 lands, "Discipline: completed" in `flowstate status` carries no information.
 - Name the track alongside every metric ("Track 1: recall_all@5 = 0.866" not just
   "0.866").
