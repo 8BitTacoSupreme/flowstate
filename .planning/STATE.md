@@ -4,13 +4,13 @@ milestone: v0.6.1
 milestone_name: Make the Names Real
 status: executing
 stopped_at: "v0.6.1 "Make the Names Real" opened as the active milestone, inserted before v0.7.0 per the user's "fix the gaps before we benchmark any further." Scope: undead the adapter stubs. v0.7.0 (retrieval bench) and the v0.8.0 seed are deferred; they renumber automatically when they start (GSD continues from the last shipped phase). v0.7.0's requirements preserved at `.planning/deferred/v0.7.0-REQUIREMENTS.md`."
-last_updated: "2026-07-10T17:24:30.681Z"
-last_activity: 2026-07-10 -- Phase 13 planning complete
+last_updated: "2026-07-10T18:07:46.342Z"
+last_activity: 2026-07-10
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 6
-  completed_plans: 3
+  completed_plans: 4
   percent: 25
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Phase 12 — Honesty & Failure-Capability
+**Current focus:** Phase 13 — adapters-earn-their-names
 
 ## Current Position
 
-Phase: 12 (Honesty & Failure-Capability) — EXECUTING
-Plan: 1 of 3
+Phase: 13 (adapters-earn-their-names) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-07-10 -- Phase 13 planning complete
+Last activity: 2026-07-10 -- Plan 13-01 complete (MECH-01: research groundedness measure->keep/discard)
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Last activity: 2026-07-10 -- Phase 13 planning complete
 | Phase 09 P01 | 281 | 2 tasks | 3 files |
 | Phase 09 P02 | 420 | 2 tasks | 2 files |
 | Phase 11-semantic-wiki-retrieval P01 | 25 | 2 tasks | 2 files |
+| Phase 13 P01 | ~720 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,7 @@ Last activity: 2026-07-10 -- Phase 13 planning complete
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 13-01 / MECH-01]: research adapter gets Autoresearch's measure->keep/discard over OUTPUT — score each section vs the fixture's `retrieval_questions` (threshold 0.6, one bounded retry, discard-if-still-weak); the prompt is reused byte-identical on regeneration (no prompt self-modification in the runtime). All-discarded -> produced==0 -> success=False (preserves Phase 12 HON-03 fail-loud).
 - [v0.7.0 roadmap]: Phase order is measurement-first — Phase 12 (dumps + significance tests + stratified split) lands before any config change, so every later phase's claims are falsifiable from the start rather than retrofitted
 - [v0.7.0 roadmap]: Coarse granularity (6 phases, 12-17) — dependency chain is strictly linear (12→13→14→15→16→17) except Phase 16, which depends on 13 (prefix/cache) and reuses Phase 15's `rerank()`, but not Phase 14's chunk/rollup sweep (LoCoMo docs are short, never chunked)
 - [v0.7.0 roadmap]: RERANK-01 is a hard gate inside Phase 15 — the cross-encoder (RERANK-02/03) is only built if the pool-ceiling analysis from Phase 12's dumps justifies it; a failed gate is a valid phase outcome, not a blocker
@@ -109,7 +111,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-10
+Last session: 2026-07-10T18:07:46.339Z
 Stopped at: v0.6.1 "Make the Names Real" opened as the active milestone, inserted before v0.7.0 per the user's "fix the gaps before we benchmark any further." Scope: undead the adapter stubs. v0.7.0 (retrieval bench) and the v0.8.0 seed are deferred; they renumber automatically when they start (GSD continues from the last shipped phase). v0.7.0's requirements preserved at `.planning/deferred/v0.7.0-REQUIREMENTS.md`.
 
 **Why v0.6.1 exists (verified this session, file:line):**
