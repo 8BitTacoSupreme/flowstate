@@ -25,10 +25,11 @@ def test_install_creates_both_namespaces(tmp_path: Path):
 def test_install_returns_namespace_paths(tmp_path: Path):
     result = install_skills(tmp_path)
     names = {p.name for p in result}
-    assert names == {"gstack", "superpowers"}
+    # gstack + superpowers land under .claude/skills; GSD adds its own dests too.
+    assert {"gstack", "superpowers"} <= names
     for p in result:
         assert p == p.resolve()
-        assert (tmp_path / ".claude" / "skills") in p.parents
+        assert (tmp_path / ".claude") in p.parents
 
 
 def test_install_is_idempotent(tmp_path: Path):
@@ -56,8 +57,8 @@ def test_install_does_not_clobber_user_skills(tmp_path: Path):
 def test_dry_run_writes_nothing(tmp_path: Path):
     result = install_skills(tmp_path, dry_run=True)
     assert not (tmp_path / ".claude").exists()
-    # dry_run still reports what WOULD be written.
-    assert {p.name for p in result} == {"gstack", "superpowers"}
+    # dry_run still reports what WOULD be written (skills + GSD dests).
+    assert {"gstack", "superpowers"} <= {p.name for p in result}
 
 
 def test_dry_run_does_not_touch_manifest(tmp_path: Path):
@@ -73,9 +74,10 @@ def test_manifest_records_both_namespaces(tmp_path: Path):
     paths = {e.path for e in state.install_manifest}
     assert ".claude/skills/gstack" in paths
     assert ".claude/skills/superpowers" in paths
-    for e in state.install_manifest:
+    # Scope the owner/kind assertions to the vendored-skills namespaces; GSD
+    # registers its own entries under owner="gsd".
+    for e in (e for e in state.install_manifest if e.owner == "skills"):
         assert e.kind == "artifact"
-        assert e.owner == "skills"
         assert e.checksum is None
 
 
@@ -83,8 +85,8 @@ def test_manifest_idempotent_on_reinstall(tmp_path: Path):
     state = FlowStateModel()
     install_skills(tmp_path, state=state)
     install_skills(tmp_path, state=state)
-    skill_entries = [e for e in state.install_manifest if e.path.startswith(".claude/skills/")]
-    # Exactly two entries (one per namespace) — no duplicates.
+    skill_entries = [e for e in state.install_manifest if e.owner == "skills"]
+    # Exactly two entries (one per vendored-skills namespace) — no duplicates.
     assert len(skill_entries) == 2
 
 
@@ -116,9 +118,10 @@ def test_source_symlink_is_skipped(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     assert (dest_root / ".claude/skills/gstack/office-hours/SKILL.md").exists()
 
 
-def test_destination_confined_to_skills_dir(tmp_path: Path):
-    """install_skills only ever writes under root/.claude/skills."""
+def test_destination_confined_to_claude_dir(tmp_path: Path):
+    """install_skills only ever writes under root/.claude (skills + GSD runtime)."""
     install_skills(tmp_path)
+    claude_root = (tmp_path / ".claude").resolve()
     for p in (tmp_path / ".claude").rglob("*"):
-        skills_root = (tmp_path / ".claude" / "skills").resolve()
-        assert skills_root == p.resolve() or skills_root in p.resolve().parents
+        resolved = p.resolve()
+        assert claude_root == resolved or claude_root in resolved.parents
