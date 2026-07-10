@@ -8,10 +8,16 @@ Renamed from gstack.py — this is NOT using Gstack slash commands.
 
 from __future__ import annotations
 
+import re
 from textwrap import dedent
 
 from flowstate.state import InterviewAnswers
 from flowstate.tools.base import ToolAdapter, ToolResult
+
+# Gstack's core mechanism (MECH-02): a scored review, not a free-form call.
+# The five dimensions mirror the numbered evaluation axes in STRATEGY_SYSTEM_PROMPT.
+_RUBRIC_DIMENSIONS = ("problem_clarity", "ten_x_potential", "feasibility", "risk", "recommendation")
+_VERDICTS = ("ship", "pivot", "kill")
 
 MOCK_STRATEGY = """\
 # Strategy: Pressure Test
@@ -43,7 +49,51 @@ STRATEGY_SYSTEM_PROMPT = dedent("""\
     5. **Recommendation**: Ship, pivot, or kill — with rationale.
 
     Output a structured Markdown document. Be direct and honest.
+
+    After the prose, you MUST APPEND a machine-readable rubric as a fenced code
+    block. Emit exactly one `dimension: <0-10>` line per dimension key below
+    (integer scores only), then a `verdict:` line with one of ship/pivot/kill:
+
+    ```rubric
+    problem_clarity: <0-10>
+    ten_x_potential: <0-10>
+    feasibility: <0-10>
+    risk: <0-10>
+    recommendation: <0-10>
+    verdict: <ship|pivot|kill>
+    ```
 """).strip()
+
+
+def _parse_rubric(output: str) -> tuple[dict[str, int], str] | None:
+    """Parse the model's scored rubric from raw bridge output.
+
+    Extracts a `dimension: N` pair for each key in ``_RUBRIC_DIMENSIONS`` (N an
+    integer clamped-validated to 0-10) plus a `verdict:` line validated against
+    ``_VERDICTS`` (case-insensitive, normalized to lowercase). The search is
+    tolerant — it scans the whole output rather than requiring the fenced block —
+    but strictly regex-only: no dynamic evaluation of untrusted model text.
+
+    Returns ``(scores, verdict)`` only when ALL five dimensions AND a valid
+    verdict are present and in-range; otherwise returns ``None`` so the caller
+    can surface an HON-04 failure instead of writing a weak artifact.
+    """
+    scores: dict[str, int] = {}
+    for dim in _RUBRIC_DIMENSIONS:
+        match = re.search(rf"\b{re.escape(dim)}\s*:\s*(\d+)\b", output, re.IGNORECASE)
+        if match is None:
+            return None
+        value = int(match.group(1))
+        if not 0 <= value <= 10:
+            return None
+        scores[dim] = value
+
+    verdict_match = re.search(r"\bverdict\s*:\s*(ship|pivot|kill)\b", output, re.IGNORECASE)
+    if verdict_match is None:
+        return None
+    verdict = verdict_match.group(1).lower()
+
+    return scores, verdict
 
 
 def _build_pressure_test_prompt(answers: InterviewAnswers) -> str:
@@ -104,10 +154,25 @@ class StrategyAdapter(ToolAdapter):
         )
 
         if br.success and br.output.strip():
-            strategy_path.write_text(br.output)
+            parsed = _parse_rubric(br.output)
+            if parsed is None:
+                # MECH-02: an unparseable/missing rubric is a FAILURE, not a
+                # silently-written weak artifact — surfaced via the HON-04 path.
+                return ToolResult(
+                    success=False,
+                    output=br.output,
+                    error="unparseable rubric: missing per-dimension 0-10 scores "
+                    "or ship/pivot/kill verdict",
+                    artifacts=[],
+                )
+            scores, verdict = parsed
+            score_lines = "\n".join(f"- {dim}: {scores[dim]}" for dim in _RUBRIC_DIMENSIONS)
+            rubric_section = f"\n\n## Rubric\n\n{score_lines}\n- **Verdict:** {verdict}\n"
+            strategy_path.write_text(br.output + rubric_section)
+            score_summary = " ".join(f"{dim}={scores[dim]}" for dim in _RUBRIC_DIMENSIONS)
             return ToolResult(
                 success=True,
-                output=f"Strategy report written to {strategy_path}",
+                output=f"Strategy verdict: {verdict} ({score_summary})",
                 artifacts=[str(strategy_path)],
             )
 
