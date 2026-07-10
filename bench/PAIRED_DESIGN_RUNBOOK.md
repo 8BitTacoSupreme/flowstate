@@ -5,6 +5,10 @@ improve output **quality** on a real project, with the baseline-noise confound r
 and the **pack (RAG)** layer attributed separately from the **memory/gotchas
 (compounding)** layers.
 
+**See also:** `BENCHMARKING_SCOPE.md` (the two-track model — what a Track-2 harness-value
+result like this one can and cannot license) and `BENCHMARK_HANDOFF.md` (Track-1
+retrieval-ranking measured results).
+
 ## Why this run (context)
 
 Prior results on the synthetic `bench/fixtures/sample_project` (toy, near-ceiling ~6/10):
@@ -19,10 +23,14 @@ Two confounds this run fixes:
    baselines. Fix: **normalize each trial to its own run-0** (paired within-trial).
 2. **Pack vs compounding conflation** — `--inject on/off` toggles the *whole* prefix, so
    any gain mixes current-code RAG (pack) with accumulation (memory/gotchas). Fix: a
-   **per-layer toggle** so RAG and compounding are attributed separately. Expectation
+   **per-layer toggle** so RAG and compounding are attributed separately. ~~Expectation
    (from the landscape): most quality gain on a large repo comes from the **pack/RAG**,
    not compounding; FTS5/BM25 retrieval over a large memory store is the suspected
-   bottleneck for the compounding layers.
+   bottleneck for the compounding layers.~~ **SUPERSEDED** — the later grounding bench
+   measured raw code pack ≈ none (no gain), while distilled wiki + semantic retrieval hit
+   0.825 ≈ oracle 0.800 (surfaced the right article 17/20 vs BM25's 3/20). The gain does
+   not come from the raw code pack; it comes from distilled knowledge + semantic
+   retrieval. See "Corrected expectation" below.
 
 ## Existing artifacts (all committed on `main`)
 - `bench/compound_eval.py` — runner; has `--mode real --inject on|off --judge --allow-llm`.
@@ -33,9 +41,21 @@ Two confounds this run fixes:
 - `bench/replicate.py` — N-trial driver; `_agg()` + `_cohens_d()`. Writes summary JSON.
 - `bench/metrics.py` / `bench/capture.py` / `bench/report.py` — scorecard + snapshot + render.
 
-## Prerequisite code changes (do these first)
+## Prerequisite code changes
 
-### 1. Per-layer toggle in `bench/compound_eval.py`
+Status as of 2026-07-10: **#1 and #2 are LANDED.** #3 is the only remaining unbuilt item.
+
+### 1. Per-layer toggle in `bench/compound_eval.py` — **LANDED**
+`_LAYERS_MAP` at `bench/compound_eval.py:60-66` replaces the binary `--inject on|off`
+with `--layers {full,none,pack,memory,wiki}` (a `wiki` arm was also added, beyond the
+original proposal). The shipped implementation is **better** than what this runbook
+originally proposed: it threads a first-class `include_layers` kwarg into
+`build_context_prefix` at assembly time via a monkeypatch in `_run_one`
+(`bench/compound_eval.py:169-179`), rather than the post-hoc `## `-heading string
+filtering originally suggested below (kept for historical reference, superseded):
+
+<details><summary>Original proposal (superseded — see above)</summary>
+
 Replace the binary `--inject on|off` with `--layers {full,none,pack,memory}`:
 - `full` = current `inject=on` (all layers).
 - `none` = current `inject=off` (empty prefix) — the control.
@@ -51,16 +71,21 @@ block is headerless XML, `## Gotchas`, `## Prior Knowledge` (memory, emitted by
 `memory.py::get_context`), `## Since Last Run` (journal). Keep the no-raise discipline.
 Add a unit test mirroring `test_run_one_inject_off_suppresses_and_restores` for each mode.
 
-### 2. Within-trial normalization in `bench/replicate.py`
-Add a `--paired` mode (or make it default): before aggregating, **subtract each trial's
-run-0 score from its own scores** so trajectories start at 0. Aggregate the *normalized*
-per-run means ±std and the normalized improvement. This cancels the cross-arm run-0 noise
-that produced the spurious d=0.62. Keep raw numbers too for reference. Add the arm dimension:
-loop over `--layers {full,pack,memory,none}` instead of just on/off.
+</details>
 
-### 3. (Optional, recommended) Multi-judge to cut noise
-Judge std was ~1.3–1.8 on a 0–10 scale. In `judge.py`, run the judge with 2–3 models/seeds
-(e.g. add `--judge-model` list) and average per run. Halves grading variance.
+### 2. Within-trial normalization in `bench/replicate.py` — **LANDED**
+`_paired_normalize` at `bench/replicate.py:60-67` (`[[s - t[0] for s in t] for t in
+trials]`) subtracts each trial's run-0 score from its own scores so trajectories start
+at 0, cancelling the cross-arm run-0 noise that produced the spurious d=0.62. Raw and
+paired metrics are both computed; the `--paired` flag selects which drives Cohen's d.
+The `--layers` arm dimension ships as a `nargs="+"` list at `bench/replicate.py:100-106`
+(default: all four of `full`, `pack`, `memory`, `none`; `wiki` also selectable).
+
+### 3. Multi-judge to cut noise — **STILL UNBUILT** (the only remaining item)
+Judge std was ~1.3–1.8 on a 0–10 scale. `bench/judge.py` still runs a single judge model
+per run. `bench/grounding.py` already has the pattern to copy: `--judge-models` default
+`"sonnet,sonnet,opus"` at `bench/grounding.py:1136`, majority vote + `_wilson`. Port that
+pattern into `judge.py` to halve grading variance before the next real-repo run.
 
 ## Prepare the real project
 
@@ -83,6 +108,26 @@ Judge std was ~1.3–1.8 on a 0–10 scale. In `judge.py`, run the judge with 2�
 **Disk/time note:** `_worktree()` copies the whole `--root` per run. For a large repo ×
 (arms × N × K) copies this is heavy — consider excluding `.git`/`.venv`/build dirs from the
 copy, or caching the pack so it isn't regenerated every run.
+
+## Corrected expectation: where the gain actually comes from
+
+The original "most quality gain on a large repo comes from the pack/RAG" expectation
+(see "Two confounds this run fixes" above) is **superseded**. The later grounding bench
+measured: raw code pack ≈ none (no gain over the vanilla control); distilled wiki +
+semantic retrieval hit **0.825 ≈ oracle 0.800** (full recovery), surfacing the right
+article **17/20** vs BM25's **3/20**. The `wiki` arm added to `_LAYERS_MAP`
+(`bench/compound_eval.py:65`) exists for exactly this reason.
+
+**The wiki gap (WIKI-F1, deferred):** the one layer with a proven lift never fires in
+production. No `flowstate/` module passes `include_layers={"wiki"}` — every caller is a
+bench/test driver. Neither `.planning/codebase/wiki.md` nor `.planning/codebase/wiki/`
+exists on disk, so there is no corpus to retrieve from even if a caller wired it up.
+There is also a **corpus-shape mismatch**: `bench/wikigen.py` writes the single-file
+`wiki.md`, while the Phase-11 semantic wiki retriever reads the ARTICLE DIRECTORY
+`.planning/codebase/wiki` (`flowstate/context_prefix.py:54,64` — `_WIKI_PATH` is the
+single file, `_WIKI_CORPUS_DIR` is the directory the retriever actually consumes). Fixing
+the wiki no-caller/no-corpus/shape-mismatch gap is a prerequisite to any real-repo run
+that wants to test the wiki arm, not just `pack`/`memory`/`none`.
 
 ## Run procedure
 
