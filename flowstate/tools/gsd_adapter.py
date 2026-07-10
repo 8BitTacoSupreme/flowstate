@@ -5,7 +5,7 @@ runs natively inside Claude Code sessions. Use `flowstate launch gsd <phase>`
 to get the exact commands.
 
 This adapter handles initial project setup by delegating to context.py
-for file generation, with optional LLM enrichment.
+for file generation.
 """
 
 from __future__ import annotations

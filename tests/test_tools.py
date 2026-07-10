@@ -250,7 +250,8 @@ def test_research_retries_then_succeeds(tmp_path: Path):
 
 
 def test_research_all_attempts_fail(tmp_path: Path):
-    """All attempts fail — placeholder appears in report; bridge called _RESEARCH_MAX_ATTEMPTS times."""
+    """All attempts fail — placeholder appears in report; bridge called _RESEARCH_MAX_ATTEMPTS times;
+    result reports success=False (HON-03: the notice never coexists with success=True)."""
     from unittest.mock import MagicMock
 
     from flowstate.bridge import BridgeResult
@@ -261,12 +262,39 @@ def test_research_all_attempts_fail(tmp_path: Path):
 
     adapter = ResearchAdapter(root=tmp_path, dry_run=False, bridge=bridge)
     answers = InterviewAnswers(research_focus="websockets")
-    adapter.execute(answers)
+    result = adapter.execute(answers)
 
     assert bridge.run.call_count == _RESEARCH_MAX_ATTEMPTS
     report = (tmp_path / "research" / "report.md").read_text()
     assert "*Research failed:" in report
     assert "boom" in report
+    assert result.success is False
+    assert result.error is not None
+
+
+def test_research_partial_success_stays_true(tmp_path: Path):
+    """One topic fails all attempts, the other succeeds — result stays success=True and
+    the report contains both the successful output and the failure notice (HON-03)."""
+    from unittest.mock import MagicMock
+
+    from flowstate.bridge import BridgeResult
+
+    bridge = MagicMock()
+    bridge.run.side_effect = [
+        BridgeResult(success=False, output="", exit_code=1, error="boom"),
+        BridgeResult(success=False, output="", exit_code=1, error="boom"),
+        BridgeResult(success=False, output="", exit_code=1, error="boom"),
+        BridgeResult(success=True, output="GOOD SECTION", exit_code=0),
+    ]
+
+    adapter = ResearchAdapter(root=tmp_path, dry_run=False, bridge=bridge)
+    answers = InterviewAnswers(research_focus="websockets, gRPC")
+    result = adapter.execute(answers)
+
+    assert result.success is True
+    report = (tmp_path / "research" / "report.md").read_text()
+    assert "GOOD SECTION" in report
+    assert "*Research failed:" in report
 
 
 def test_research_first_try_success_no_retry(tmp_path: Path):
@@ -338,3 +366,41 @@ def test_research_dry_run_zero_bridge_calls(tmp_path: Path):
 
     assert bridge.run.call_count == 0
     assert (tmp_path / "research" / "report.md").exists()
+
+
+# -- Adapters surface failure honestly (Phase 12: HON-04) --
+
+
+def test_strategy_empty_output_fails(tmp_path: Path):
+    """Bridge succeeds but returns whitespace-only output — strategy reports success=False
+    and does not write strategy.md."""
+    from unittest.mock import MagicMock
+
+    from flowstate.bridge import BridgeResult
+
+    bridge = MagicMock()
+    bridge.run.return_value = BridgeResult(success=True, output="   ", exit_code=0)
+
+    adapter = StrategyAdapter(root=tmp_path, dry_run=False, bridge=bridge)
+    answers = InterviewAnswers(core_problem="Slow deploys", ten_x_vision="Fast")
+    result = adapter.pressure_test(answers)
+
+    assert result.success is False
+    assert not (tmp_path / "research" / "strategy.md").exists()
+
+
+def test_strategy_bridge_failure_fails(tmp_path: Path):
+    """Bridge call itself fails — strategy reports success=False and does not write strategy.md."""
+    from unittest.mock import MagicMock
+
+    from flowstate.bridge import BridgeResult
+
+    bridge = MagicMock()
+    bridge.run.return_value = BridgeResult(success=False, output="", exit_code=1, error="boom")
+
+    adapter = StrategyAdapter(root=tmp_path, dry_run=False, bridge=bridge)
+    answers = InterviewAnswers(core_problem="Slow deploys", ten_x_vision="Fast")
+    result = adapter.pressure_test(answers)
+
+    assert result.success is False
+    assert not (tmp_path / "research" / "strategy.md").exists()
