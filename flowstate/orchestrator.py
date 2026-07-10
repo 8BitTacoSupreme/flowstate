@@ -312,10 +312,10 @@ def run_pipeline(state: FlowStateModel, root: Path) -> FlowStateModel:
 
     # Step 5: Discipline — pure Python audit
     def _run_discipline() -> ToolResult:
-        audit = check_setup(root)
+        audit = check_setup(root, dry_run=dry_run)
         error = None
         if not audit.success:
-            failed = [key for key in ("git_repo", "pytest_config") if not audit.checks.get(key)]
+            failed = [key for key in audit.required if not audit.checks.get(key)]
             error = f"required check(s) failed: {', '.join(failed)}"
         return ToolResult(success=audit.success, output=audit.summary, error=error)
 
