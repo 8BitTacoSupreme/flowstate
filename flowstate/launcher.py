@@ -50,14 +50,45 @@ def detect_tools(root: Path) -> dict[str, bool]:
     return results
 
 
+# Vendored-skill handoffs (VEND-04): each surfaces ONLY when its namespace is
+# installed under .claude/skills/. Fixed literals — no vendored content is ever
+# interpolated into the emitted command (threat T-14-13).
+# (launch tool, installed namespace, "cd … && claude → {handoff}" payload).
+_SKILL_HANDOFFS: dict[str, tuple[str, str]] = {
+    "strategy": ("gstack", "/office-hours"),
+    "discipline": ("superpowers", "Use the superpowers test-driven-development skill"),
+}
+
+
+def _skill_installed(root: Path, namespace: str) -> bool:
+    """True when a vendored skill namespace is present under .claude/skills/.
+
+    Phase 15 extends the launch surface by adding entries to ``_SKILL_HANDOFFS``;
+    this presence check stays the single gate for every vendored handoff.
+    """
+    return (root / ".claude" / "skills" / namespace).exists()
+
+
+def _install_prompt(namespace: str) -> str:
+    """Guidance shown when a required skill namespace is not yet installed."""
+    return f"# {namespace} skills not installed — run: flowstate install-skills"
+
+
 def launch_command(tool: str, phase: int | None = None, root: Path | None = None) -> str:
     """Generate the exact claude invocation command for a tool."""
-    project_dir = str(root or Path.cwd())
+    root = root or Path.cwd()
+    project_dir = str(root)
+
+    # Skill-gated handoffs: surface only when the vendored namespace is installed.
+    if tool in _SKILL_HANDOFFS:
+        namespace, handoff = _SKILL_HANDOFFS[tool]
+        if not _skill_installed(root, namespace):
+            return _install_prompt(namespace)
+        return f"cd {project_dir} && claude\n  → {handoff}"
 
     commands = {
         "gsd": _gsd_command(phase),
         "research": "# Research runs via flowstate init (claude --print)",
-        "strategy": "# Strategy runs via flowstate init (claude --print)",
     }
 
     cmd = commands.get(tool)

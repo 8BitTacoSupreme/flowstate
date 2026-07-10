@@ -34,8 +34,10 @@ class TestLaunchCommand:
         assert "flowstate init" in cmd
 
     def test_strategy_command(self, tmp_path: Path):
+        # strategy is now a skill-gated handoff (VEND-04); with no gstack skills
+        # installed it directs the user to install them (see test_launcher_skills).
         cmd = launch_command("strategy", None, tmp_path)
-        assert "flowstate init" in cmd
+        assert "install-skills" in cmd
 
     def test_unknown_tool(self, tmp_path: Path):
         cmd = launch_command("nonexistent", None, tmp_path)
