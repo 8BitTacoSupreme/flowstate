@@ -16,10 +16,11 @@ FlowState is a CLI-first orchestrator that prepares context files for agentic fr
 
 ```
 ┌──────────────────────────────────────────────────┐
-│                   flowstate CLI                   │
+│                   flowstate CLI                  │
 │  init · kickoff · status · run · launch · context│
 │  memory · journal · gotchas · verify · pack      │
-│  doctor · repair · fresh · check · config        │
+│  discipline · doctor · repair                    │
+│  fresh · check · config                          │
 └─────────────────────┬────────────────────────────┘
                       │
 ┌─────────────────────▼────────────────────────────┐
@@ -214,6 +215,7 @@ Beyond the core pipeline, FlowState ships commands for fast scaffolding, the com
 | `flowstate gotchas` | List accumulated failure signals (the `## Gotchas` layer); `--prune` to trim |
 | `flowstate verify` | Run fixture acceptance-gates against produced artifacts (CI-composable exit code) |
 | `flowstate pack` | Generate/refresh the repomix codebase pack used by the CAG context layer |
+| `flowstate discipline` | Live pure-Python audit — runs the project's tests, reads real git state, checks hook contents (the Discipline stage, standalone) |
 | `flowstate doctor` | Pure-Python health checks (manifest, memory schema, root, claude CLI, orphans) |
 | `flowstate repair` | Apply safe fixes for `doctor` findings (`--apply-destructive` gates risky ones) |
 | `flowstate fresh` | Remove FlowState-owned files per the install manifest (orphans reported, not nuked) |
@@ -249,7 +251,7 @@ flowstate/
 │       ├── research.py     # Research adapter (split-topic)
 │       ├── strategy.py     # Strategy adapter (pressure-test)
 │       └── gsd_adapter.py  # Management adapter (context files)
-├── tests/                  # 803 tests, 92% coverage
+├── tests/                  # 985 tests, 92% coverage
 ├── bench/                  # research harness: grounding eval, RGB axes, arms, promptab/sysab A/B, tune_loop
 ├── research/               # Generated research artifacts
 ├── flowstate.json          # Pipeline state (gitignored)
