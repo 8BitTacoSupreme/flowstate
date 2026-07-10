@@ -273,7 +273,7 @@ def run(
 
 
 @main.command("launch")
-@click.argument("tool", type=click.Choice(["gsd", "research", "strategy"]))
+@click.argument("tool", type=click.Choice(["gsd", "research", "strategy", "discipline"]))
 @click.argument("phase", type=int, required=False)
 @click.option(
     "--root",
@@ -285,8 +285,10 @@ def launch(tool: str, phase: int | None, root: Path | None):
     """Print the native Claude Code command for a tool.
 
     Examples:
-        flowstate launch gsd 1      — Print /gsd:plan-phase 1 command
-        flowstate launch gsd        — Print /gsd:progress command
+        flowstate launch gsd 1       — Print /gsd:plan-phase 1 command
+        flowstate launch gsd         — Print /gsd:progress command
+        flowstate launch strategy    — Hand off to gstack /office-hours (needs install-skills)
+        flowstate launch discipline  — Hand off to superpowers test-driven-development
     """
     from flowstate.launcher import launch_command
 
