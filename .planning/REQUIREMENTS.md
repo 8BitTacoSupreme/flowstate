@@ -28,7 +28,7 @@ Each maps to exactly one roadmap phase.
 - [ ] **VEND-02**: Superpowers' MIT skill assets (`obra/superpowers`, © Jesse Vincent) are vendored into `flowstate/skills/superpowers/`, with the MIT attribution added to `NOTICE`.
 - [ ] **VEND-03**: `flowstate install-skills` (also invoked from `init`/`kickoff`) copies the vendored skills into the project's `.claude/skills/`, so the user installs nothing manually.
 - [ ] **VEND-04**: `flowstate launch strategy` surfaces gstack's `/office-hours`, and `flowstate launch discipline` surfaces the superpowers TDD skill, when the vendored skills are installed — mirroring the existing `flowstate launch gsd <N>` delegation.
-- [ ] **VEND-05**: README corrections caught in passing: test count `803 → 947`; the Superpowers acknowledgment URL `obra/claude-code-superpowers` (404) → `obra/superpowers`.
+- [ ] **VEND-05**: **README reconciliation** — make every claim match the v0.6.1 code, landing in the same phase as the code that makes it true. (a) Factual bugs, independent of adapters: test count `803 → 947`; the Superpowers URL `obra/claude-code-superpowers` (404) → `obra/superpowers`; `flowstate doctor` "5 checks" → **6** (adds `stale_status`); the sqlite-vec + fastembed acknowledgment implies both are optional — sqlite-vec is a **core** dep, only fastembed is behind `[semantic]`. (b) Adapter Acknowledgments, now that Phase 13 makes them real: rewrite the Autoresearch/Gstack/Superpowers lines from "draws on the idea / implements a similar" to describe what the adapters *actually now do* (research measure→keep/discard over output; strategy scored rubric + verdict; discipline runs tests + real git state + hook contents that can fail). No claim may describe an unbuilt mechanism.
 
 ### Bundle GSD (GSD) — reverses the "no cross-harness packaging" decision (user-directed 2026-07-10)
 
@@ -36,6 +36,7 @@ Each maps to exactly one roadmap phase.
 - [ ] **GSD-02**: `flowstate install-skills` (extended from VEND-03) installs GSD **unconditionally** into the project's `.claude/skills/` + `.claude/get-shit-done/` and makes `gsd-sdk` invokable — no detection, no prompt, no separate user install.
 - [ ] **GSD-03**: `flowstate launch gsd <N>` works against the vendored GSD with nothing separately installed; the launcher's GSD detect-and-suggest path is neutralized (GSD is assumed present because FlowState installed it).
 - [ ] **GSD-04**: A documented refresh/staleness path for the pinned GSD (mirroring the `flowstate pack` manifest/staleness pattern) lets the vendored snapshot be updated deliberately, not silently.
+- [ ] **GSD-05**: The GSD acknowledgment + install docs in README are updated to describe the bundled-and-auto-installed reality ("FlowState vendors and installs GSD; no separate GSD install required") rather than the old "generates the context files GSD consumes … hand off to native GSD execution" delegate-only framing. Prerequisites section drops "GSD (optional, install separately)".
 
 ## Future Requirements
 
@@ -77,10 +78,11 @@ Acknowledged, deferred — not in this milestone's roadmap.
 | GSD-02 | Phase 15 | Pending |
 | GSD-03 | Phase 15 | Pending |
 | GSD-04 | Phase 15 | Pending |
+| GSD-05 | Phase 15 | Pending |
 
 **Coverage:**
-- Milestone requirements: 18 total
-- Mapped to phases: 18 (12–15)
+- Milestone requirements: 19 total
+- Mapped to phases: 19 (12–15)
 - Unmapped: 0
 
 ---
