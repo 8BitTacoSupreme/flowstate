@@ -170,8 +170,7 @@ def run_pipeline(state: FlowStateModel, root: Path) -> FlowStateModel:
 
     mode_tag = "[yellow](dry-run)[/yellow]" if dry_run else "[green](live)[/green]"
     if not dry_run and not bridge.available:
-        mode_tag = "[red](no claude CLI — falling back to dry-run)[/red]"
-        bridge = ClaudeBridge(config=bridge.config, dry_run=True)
+        mode_tag = "[red](no claude CLI — bridge steps will be blocked)[/red]"
 
     # Set up memory store and event bus
     from uuid import uuid4

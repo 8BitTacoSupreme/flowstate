@@ -34,16 +34,49 @@ def test_print_status_with_artifacts(tmp_path: Path, capsys):
     print_status(tmp_path)
 
 
-def test_pipeline_no_bridge_falls_back(tmp_path: Path):
-    """Pipeline with live mode but no claude CLI should fall back to dry-run."""
+def test_pipeline_live_no_cli_blocks_loud(tmp_path: Path, monkeypatch):
+    """Live mode with no locatable claude CLI must BLOCK bridge steps, not fake success."""
+    monkeypatch.setattr("flowstate.bridge._find_claude", lambda: "")
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "pyproject.toml").write_text("[tool.pytest]")
+
     state = FlowStateModel()
     state.preferences.dry_run = False
     state.interview.research_focus = "testing"
     save_state(state, tmp_path)
 
     result = run_pipeline(state, tmp_path)
-    # Should complete — falls back to dry-run
-    assert result is not None
+
+    assert result.tools["research"].status == ToolStatus.BLOCKED
+    assert result.tools["strategy"].status == ToolStatus.BLOCKED
+
+    report_path = tmp_path / "research" / "report.md"
+    if report_path.exists():
+        assert "[dry-run] claude prompt" not in report_path.read_text()
+
+    strategy_path = tmp_path / "research" / "strategy.md"
+    if strategy_path.exists():
+        assert "[dry-run] claude prompt" not in strategy_path.read_text()
+
+
+def test_pipeline_dry_run_still_succeeds(tmp_path: Path):
+    """Genuine --dry-run must remain untouched: all tools COMPLETED with MOCK artifacts."""
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "pyproject.toml").write_text("[tool.pytest]")
+
+    state = FlowStateModel()
+    state.preferences.dry_run = True
+    state.interview.research_focus = "testing"
+    save_state(state, tmp_path)
+
+    result = run_pipeline(state, tmp_path)
+
+    for tool_name in ("research", "strategy", "gsd", "discipline"):
+        assert result.tools[tool_name].status == ToolStatus.COMPLETED
+
+    report_path = tmp_path / "research" / "report.md"
+    assert report_path.exists()
+    assert "Analysis pending research integration" in report_path.read_text()
 
 
 def test_print_status_shows_context_files(tmp_path: Path, capsys):
