@@ -28,7 +28,7 @@ Each maps to exactly one roadmap phase.
 - [x] **VEND-02**: Superpowers' MIT skill assets (`obra/superpowers`, © Jesse Vincent) are vendored into `flowstate/skills/superpowers/`, with the MIT attribution added to `NOTICE`.
 - [ ] **VEND-03**: `flowstate install-skills` (also invoked from `init`/`kickoff`) copies the vendored skills into the project's `.claude/skills/`, so the user installs nothing manually.
 - [ ] **VEND-04**: `flowstate launch strategy` surfaces gstack's `/office-hours`, and `flowstate launch discipline` surfaces the superpowers TDD skill, when the vendored skills are installed — mirroring the existing `flowstate launch gsd <N>` delegation.
-- [ ] **VEND-05**: **README reconciliation** — make every claim match the v0.6.1 code, landing in the same phase as the code that makes it true. (a) Factual bugs, independent of adapters: test count reconciled to the real `pytest --collect-only` count (985 at Wave 1; re-derived in 14-04); the Superpowers URL `obra/claude-code-superpowers` (404) → `obra/superpowers`; `flowstate doctor` "5 checks" → **6** (adds `stale_status`); the sqlite-vec + fastembed acknowledgment implies both are optional — sqlite-vec is a **core** dep, only fastembed is behind `[semantic]`. (b) Adapter Acknowledgments, now that Phase 13 makes them real: rewrite the Autoresearch/Gstack/Superpowers lines from "draws on the idea / implements a similar" to describe what the adapters *actually now do* (research measure→keep/discard over output; strategy scored rubric + verdict; discipline runs tests + real git state + hook contents that can fail). No claim may describe an unbuilt mechanism.
+- [x] **VEND-05**: **README reconciliation** — make every claim match the v0.6.1 code, landing in the same phase as the code that makes it true. (a) Factual bugs, independent of adapters: test count reconciled to the real `pytest --collect-only` count (985 at Wave 1; re-derived in 14-04); the Superpowers URL `obra/claude-code-superpowers` (404) → `obra/superpowers`; `flowstate doctor` "5 checks" → **6** (adds `stale_status`); the sqlite-vec + fastembed acknowledgment implies both are optional — sqlite-vec is a **core** dep, only fastembed is behind `[semantic]`. (b) Adapter Acknowledgments, now that Phase 13 makes them real: rewrite the Autoresearch/Gstack/Superpowers lines from "draws on the idea / implements a similar" to describe what the adapters *actually now do* (research measure→keep/discard over output; strategy scored rubric + verdict; discipline runs tests + real git state + hook contents that can fail). No claim may describe an unbuilt mechanism.
 
 ### Bundle GSD (GSD) — reverses the "no cross-harness packaging" decision (user-directed 2026-07-10)
 
@@ -73,7 +73,7 @@ Acknowledged, deferred — not in this milestone's roadmap.
 | VEND-02 | Phase 14 | Complete |
 | VEND-03 | Phase 14 | Pending |
 | VEND-04 | Phase 14 | Pending |
-| VEND-05 | Phase 14 | Pending |
+| VEND-05 | Phase 14 | Complete |
 | GSD-01 | Phase 15 | Pending |
 | GSD-02 | Phase 15 | Pending |
 | GSD-03 | Phase 15 | Pending |

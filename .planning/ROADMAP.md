@@ -107,7 +107,7 @@ Full detail: [`milestones/v0.6.0-ROADMAP.md`](./milestones/v0.6.0-ROADMAP.md)
   4. README shows the real current test count (985, not 803/947) and the Superpowers URL is `obra/superpowers` (not the 404 `obra/claude-code-superpowers`)
 **Plans**: 4 plans
 - [x] 14-01-PLAN.md — Vendor gstack + superpowers MIT SKILL.md trees + LICENSE + NOTICE (VEND-01, VEND-02)
-- [ ] 14-02-PLAN.md — README reconciliation: URL, doctor count, sqlite-vec wording, adapter acknowledgments (VEND-05)
+- [x] 14-02-PLAN.md — README reconciliation: URL, doctor count, sqlite-vec wording, adapter acknowledgments (VEND-05)
 - [ ] 14-03-PLAN.md — `flowstate install-skills` installer + init/kickoff auto-invoke (VEND-03)
 - [ ] 14-04-PLAN.md — `flowstate launch strategy|discipline` skill handoffs (VEND-04)
 
@@ -146,7 +146,7 @@ Scoped and roadmapped this session, then deferred so the adapter stubs get fixed
 | 11. Semantic Wiki Retrieval | v0.6.0 | 1/1 | Complete | 2026-06-18 |
 | 12. Honesty & Failure-Capability | v0.6.1 | 3/3 | Complete   | 2026-07-10 |
 | 13. Adapters Earn Their Names | v0.6.1 | 3/3 | Complete    | 2026-07-10 |
-| 14. Vendor & Surface | v0.6.1 | 1/4 | In Progress|  |
+| 14. Vendor & Surface | v0.6.1 | 2/4 | In Progress|  |
 | 15. Bundle GSD | v0.6.1 | 0/? | Not started | - |
 | _v0.7.0 Retrieval Benchmark Rigor_ | v0.7.0 | deferred | renumbers 16-21 on start | - |
 
