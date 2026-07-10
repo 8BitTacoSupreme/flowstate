@@ -90,7 +90,10 @@ Full detail: [`milestones/v0.6.0-ROADMAP.md`](./milestones/v0.6.0-ROADMAP.md)
   2. The strategy adapter emits parseable per-dimension scores (0–10) and a verdict (ship/pivot/kill); an unparseable rubric is a failure (via HON-04) — Gstack's scored-review pattern
   3. The discipline adapter runs the project's tests (captures pass/fail), reads real git state (dirty/branch/ahead-behind), and checks hook contents (non-empty/executable) — Superpowers' RED-GREEN gate; the result feeds HON-01's required-set
   4. All three mechanisms are covered by offline tests (injected bridge / temp git repo / subprocess stub) and the `--dry-run` MOCK paths are unchanged
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 13-01-PLAN.md — MECH-01: research groundedness measure→keep/discard over output
+- [ ] 13-02-PLAN.md — MECH-02: strategy scored rubric + ship/pivot/kill verdict
+- [ ] 13-03-PLAN.md — MECH-03: discipline runs tests + real git state + hook contents
 
 ### Phase 14: Vendor & Surface
 **Goal**: The two MIT skill sets ship inside FlowState and install themselves, so `flowstate launch` surfaces the real upstream tools with zero manual user install — self-contained from this repo.
