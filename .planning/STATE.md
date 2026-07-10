@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 Phase: 12 of 17 (Falsifiable Measurement)
 Plan: — (not yet planned)
 Status: Ready to plan
-Last activity: 2026-07-10 — ROADMAP.md created for v0.7.0: 6 phases (12-17), 18/18 requirements mapped, 100% coverage
+Last activity: 2026-07-10 — Completed quick task 260710-ffo: corrected the benchmarking record (bench/BENCHMARKING_SCOPE.md + PAIRED_DESIGN_RUNBOOK.md)
 
 ## Performance Metrics
 
@@ -104,6 +104,7 @@ None yet.
 | 260709-j8q | Build bench/locomo_qa.py — LoCoMo QA-accuracy layer (official stemmed-F1 + exact-match, no LLM judge; per-category 1-5 + Wilson CI; adversarial rule; retrieval+oracle arms; reader claude|openai w/ Task E resilience) | complete | 2026-07-09 | 5067807, 597579e |
 | 260709-qte | Chunk-level semantic retrieval (semantic_rank_chunked + --chunk-tokens): fixes measured truncation — 94.6% of LongMemEval sessions exceed bge 512-tok cap (median 2500 tok) | complete | 2026-07-09 | 7a67cec, 585ae5e |
 | 260709-rep | Add --corpus turns|observations arm to bench/locomo.py (paper's best RAG corpus; observation docs carry dia_id provenance; summaries excluded — no provenance) | complete | 2026-07-09 | a07259b, 2fb5113 |
+| 260710-ffo | Correct the benchmarking record — new bench/BENCHMARKING_SCOPE.md (two-track model: Track 1 retrieval/deterministic where BM25 is the incumbent counterfactual, vs Track 2 harness-value; dead-alias debunk of autoresearch/gstack/superpowers) + fix stale PAIRED_DESIGN_RUNBOOK.md (prereqs #1/#2 LANDED, #3 unbuilt; pack≈none vs wiki 0.825≈oracle) | complete | 2026-07-10 | 9790284, c268cc9, e61ebe1 |
 
 ## Session Continuity
 
