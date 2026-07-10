@@ -111,4 +111,9 @@ class StrategyAdapter(ToolAdapter):
                 artifacts=[str(strategy_path)],
             )
 
-        return self.bridge_to_result(br)
+        return ToolResult(
+            success=False,
+            output=br.output,
+            error=br.error or "strategy produced empty output",
+            artifacts=[],
+        )
