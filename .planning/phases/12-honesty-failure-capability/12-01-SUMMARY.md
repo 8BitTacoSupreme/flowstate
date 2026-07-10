@@ -100,3 +100,7 @@ None - no external service configuration required.
 ---
 *Phase: 12-honesty-failure-capability*
 *Completed: 2026-07-10*
+
+## Self-Check: PASSED
+
+All modified files and all task commit hashes (8b3e79e, cb730db, 0b04b6a) verified present on disk / in git log.
