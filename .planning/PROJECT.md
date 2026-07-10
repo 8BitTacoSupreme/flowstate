@@ -31,6 +31,23 @@ If everything else fails, that compounding loop is what FlowState exists to deli
 
 </details>
 
+## Current Milestone: v0.7.0 Retrieval Benchmark Rigor
+
+**Goal:** Convert FlowState's "just ahead of BM25" retrieval result into a defensible, statistically significant, production-viable win — or honestly conclude it isn't there.
+
+**Target features:**
+- Per-instance result dumps + a paired-significance layer (`bench/stats.py` McNemar-exact + paired bootstrap, `bench/compare.py`). Today's harnesses emit only aggregate means, so the 0.866-vs-0.844 lead is literally untestable.
+- Stratified dev/test split (`bench/_split.py`) keyed on `question_type`. LongMemEval-S is type-blocked (6 types in 7 contiguous runs), so the existing `--limit` head-slice silently biases every subset run.
+- Query/document embedding asymmetry (`make_embedders` + prefix registry in `bench/_retrieval.py`). BGE v1.5's query instruction prefix is currently never applied — fastembed's `query_embed()` is a no-op passthrough.
+- Chunk-size / stride / rollup sweep on dev-200, then a CPU-feasible cross-encoder reranker with **stage-matched arms** (bm25, dense, bm25+rerank, dense+rerank).
+- LoCoMo parity (dumps, prefix, rerank, per-category breakdown) + structural-ceiling reporting.
+
+**Key context:** This milestone directly discharges v0.6.0's Out-of-Scope deferral — *"Reranking / hybrid lexical+semantic fusion: unjustified complexity **until measured to help**."* v0.7.0 is that measurement.
+
+The insight driving the phase order: `recall_any@5` is already **0.966 for both** BM25 and chunked-semantic, while `recall_all@5` is 0.866 and `recall_all@10` is 0.946. Gold sessions are already retrieved — they sit at ranks 6–10. This is a **ranking** problem, not a recall problem, which is exactly what a cross-encoder fixes. It also means the reranking ceiling needs no experiment: a perfect reranker over a top-R pool scores exactly `recall_all@R`, so dense→rerank@10 caps at 0.946 while BM25→rerank@10 caps at 0.904.
+
+Constraints: `bench/grounding.py` is **ADD-ONLY**. No new runtime deps — the installed fastembed 0.8 already ships the cross-encoders (`Xenova/ms-marco-MiniLM-L-6-v2`, 80MB) and 8192-token embedders. Reranking must be **production-viable** (CPU-feasible, shippable), not bench-only. Config is selected on dev-200; test-300 is touched once. A reranked arm never ships without its stage-matched baseline. Datasets are gitignored (LoCoMo is CC BY-NC).
+
 ## Requirements
 
 ### Validated
@@ -67,9 +84,16 @@ If everything else fails, that compounding loop is what FlowState exists to deli
 
 ### Active
 
-<!-- v0.6.0 Semantic Retrieval complete (Phases 9–11). Next milestone not yet scoped. -->
+<!-- v0.7.0 Retrieval Benchmark Rigor (Phases 12–18). REQ-IDs in REQUIREMENTS.md. -->
 
-(None — v0.6.0 shipped; run /gsd-complete-milestone to archive, then /gsd-new-milestone.)
+- [ ] **STAT-01..03**: per-instance dumps; McNemar-exact + paired bootstrap; `compare.py` paired-diff CLI
+- [ ] **SPLT-01..02**: stratified dev/test split by `question_type`; `--split dev|test|all` wired into both harnesses
+- [ ] **PFX-01..02**: query/document embedder asymmetry + prefix registry; prefix must never reach the BM25 query string
+- [ ] **CACHE-01**: bench-only embedding cache keyed `sha256(model|kind|prefix|text)`
+- [ ] **SWEEP-01..03**: tokenizer-accurate chunking; chunk-size/stride sweep; rollup ablation (max-sim vs mean-top-m)
+- [ ] **RERANK-01..03**: pool-ceiling analysis gate; CPU cross-encoder rerank; stage-matched arm set
+- [ ] **LOCO-01..03**: LoCoMo dumps/prefix/rerank; per-category breakdown; `full_cov@5` structural ceiling
+- [ ] **RPT-01**: final test-300 run + `BENCHMARK_HANDOFF.md` update
 
 ### Out of Scope
 

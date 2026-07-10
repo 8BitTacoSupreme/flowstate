@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.6.0
-milestone_name: Semantic Retrieval
-status: Awaiting next milestone
-stopped_at: "v0.6.0 Semantic Retrieval archived (phases 9-11, 749 tests @ 92.19%). Retrieval-benchmark arc left BM25 unbeaten in the strict sense: chunked-semantic recall_all@5 0.866 vs BM25 0.844 with OVERLAPPING Wilson CIs and no paired significance test run. Next milestone v0.7.0 exists to settle that."
-last_updated: "2026-07-10T14:19:11.273Z"
-last_activity: 2026-07-10 — Milestone v0.6.0 completed and archived
+milestone: v0.7.0
+milestone_name: Retrieval Benchmark Rigor
+status: planning
+last_updated: "2026-07-10T14:26:06.467Z"
+last_activity: 2026-07-10
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 ## Current Position
 
-Phase: Milestone v0.6.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-07-10 — Milestone v0.6.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-07-10 — Milestone v0.7.0 started
 
 ## Performance Metrics
 
@@ -105,11 +104,23 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-09
-Stopped at: Task D (260709-d64) complete. FINDINGS on real LongMemEval_S: RETRIEVAL (n=500) — FlowState semantic reaches BM25-parity with bge-base (recall_all@5 0.840≈BM25 0.844; recall_all@10 0.930>0.904); bge-small (33M) 0.806. QA (n=100 representative): claude judge retrieval 0.450/oracle 0.410; gpt-4-turbo judge retrieval 0.410/oracle 0.480 (restored oracle>retrieval). Judge swap barely moved it → the gap to paper's 0.870 oracle is the READER (claude sonnet + generic prompt + truncation), not retrieval/judge. Discovered key's project lacks gpt-4o access (only gpt-3.5/gpt-4-turbo) — silent 0/100 bug fixed by Task D canary. bge-base embed on CPU is slow (~30-40min/500).
-Resume file: None
-Next step: Improved-QA reruns (bge-base, sample 100, tuned reader): (a) claude reader + gpt-4-turbo judge, (b) gpt-4-turbo reader + gpt-4-turbo judge — does tuned/stronger reader lift oracle 0.48→toward 0.87? Then push batch (held). Rotate the OPENAI_API_KEY that was pasted in chat.
+Last session: 2026-07-10
+Stopped at: v0.6.0 archived + tagged; v0.7.0 Retrieval Benchmark Rigor opened (phases 12–18).
+
+**Established facts for v0.7.0 (verified this session, not estimates):**
+- `recall_any@5` = 0.966 for **both** BM25 and chunked-semantic; `recall_all@5` = 0.866 vs 0.844; `recall_all@10` = 0.946 vs 0.904. Gold sessions are already retrieved, at ranks 6–10 → a **ranking** problem. A perfect reranker over a top-R pool scores exactly `recall_all@R`, so dense→rerank@10 caps at 0.946 and BM25→rerank@10 caps at 0.904.
+- The 0.866-vs-0.844 lead is **not currently testable**: both harnesses emit only aggregate means + Wilson CI, no per-instance records. McNemar flips around b+c ≈ 27 discordant pairs — it could land either side of p<0.05.
+- LongMemEval-S is **type-blocked** (6 `question_type`s in 7 contiguous runs). `--limit 100` yields 70 `single-session-user` + 30 `multi-session` and zero temporal-reasoning/knowledge-update. Every historical `--limit` run was on a biased subset. Use stratified sampling.
+- `|gold|` reaches 6 (3 instances), so `recall_all@5` has a structural ceiling of **0.994**, not 1.0. 0 abstentions in the file.
+- `bench/grounding.py::_default_embedder` calls `model.embed()` for docs *and* queries; fastembed's `query_embed()` is a no-op passthrough → BGE's query instruction prefix is **never applied**. Free win, needs an `embed_fn` interface change (build it in `_retrieval.py`; grounding.py is ADD-ONLY).
+- fastembed L2-normalizes (`_post_process_onnx_output` → `normalize()`), so `semantic_rank`'s L2 ordering ≡ cosine ordering. **Not a bug** — don't spend time there.
+- Installed fastembed 0.8 ships cross-encoders (`Xenova/ms-marco-MiniLM-L-6-v2` 80MB, `jinaai/jina-reranker-v1-turbo-en` 150MB, `BAAI/bge-reranker-base` 1.04GB) and 8192-token embedders (`jina-embeddings-v2-base-en`, `nomic-embed-text-v1.5-Q` 130MB). **Zero new deps needed.**
+
+Resume file: approved plan at `~/.claude/plans/take-a-look-in-dreamy-pelican.md`
+Data: `data/longmemeval_s_cleaned.json` (265MB) + `data/locomo10.json` present; `data/` is now gitignored (LoCoMo is CC BY-NC).
+Next step: `/gsd-plan-phase 12` — per-instance dumps + `bench/stats.py` + `compare.py` + stratified split. Phase 12 may kill the current headline claim; that is its purpose.
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan the first v0.7.0 phase with `/gsd-plan-phase 12`
+- Rotate the `OPENAI_API_KEY` pasted in an earlier chat session, if not already done
