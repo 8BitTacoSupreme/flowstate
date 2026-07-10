@@ -30,12 +30,18 @@ Each maps to exactly one roadmap phase.
 - [ ] **VEND-04**: `flowstate launch strategy` surfaces gstack's `/office-hours`, and `flowstate launch discipline` surfaces the superpowers TDD skill, when the vendored skills are installed — mirroring the existing `flowstate launch gsd <N>` delegation.
 - [ ] **VEND-05**: README corrections caught in passing: test count `803 → 947`; the Superpowers acknowledgment URL `obra/claude-code-superpowers` (404) → `obra/superpowers`.
 
+### Bundle GSD (GSD) — reverses the "no cross-harness packaging" decision (user-directed 2026-07-10)
+
+- [ ] **GSD-01**: A pinned GSD distribution — skills + `get-shit-done/` Node runtime + `gsd-sdk` CLI — is vendored into `flowstate/vendor/gsd/` from the canonical MIT repo (`gsd-build/get-shit-done`, © Lex Christopherson), with the upstream `LICENSE` captured verbatim and a recorded `VERSION`/commit for provenance. `NOTICE` carries the GSD MIT attribution.
+- [ ] **GSD-02**: `flowstate install-skills` (extended from VEND-03) installs GSD **unconditionally** into the project's `.claude/skills/` + `.claude/get-shit-done/` and makes `gsd-sdk` invokable — no detection, no prompt, no separate user install.
+- [ ] **GSD-03**: `flowstate launch gsd <N>` works against the vendored GSD with nothing separately installed; the launcher's GSD detect-and-suggest path is neutralized (GSD is assumed present because FlowState installed it).
+- [ ] **GSD-04**: A documented refresh/staleness path for the pinned GSD (mirroring the `flowstate pack` manifest/staleness pattern) lets the vendored snapshot be updated deliberately, not silently.
+
 ## Future Requirements
 
 Acknowledged, deferred — not in this milestone's roadmap.
 
 - **MECH-F1**: Wire the existing `bench/tune_loop.py` mine→propose→gate loop into the runtime — explicitly deferred; it reverses the locked "prompt self-improvement lives in bench/, never auto-applies" decision. Only revisit with a deliberate decision to change that.
-- **VEND-F1**: Vendor the MIT GSD prompt-skill set for full self-containment — deferred; GSD-2 is a standalone TS CLI and PROJECT.md's Out-of-Scope rejects cross-harness packaging. GSD stays detect-and-delegate.
 - **DEAD-F1**: Remove or wire the dead surface (`ClaudeBridge.invoke_skill` with zero callers, `output_format="json"` with zero callers, `include_layers`/wiki with no production caller) — the json path and wiki caller are v0.8.0 "Harness Tax & Value" work (SEED-001); `invoke_skill` removal is low-priority cleanup.
 - **DEG-F1**: Log a visible warning when the `pack` CAG layer is silently dropped because repomix/`repomix-pack.xml` is absent (`context_prefix.py:405-411`).
 
@@ -43,7 +49,7 @@ Acknowledged, deferred — not in this milestone's roadmap.
 
 | Feature | Reason |
 |---------|--------|
-| Full GSD vendoring / GSD-2 CLI integration | GSD-2 is a TypeScript CLI on the Pi SDK, not Python-vendorable; PROJECT.md explicitly rejects cross-harness packaging. FlowState generates GSD's context files and delegates via `flowstate launch gsd`. |
+| Codex / OpenCode / Cursor **adapters** (running FlowState *on* other host harnesses) | Still out of scope. The 2026-07-10 reversal bundles GSD (a tool FlowState delegates *to*); it does not open FlowState to other host harnesses. GSD-2/gsd-pi's TS CLI is not what we vendor — GSD-01 vendors the MIT `get-shit-done` skill+runtime distribution FlowState already uses. |
 | Prompt self-modification in the runtime | Locked PROJECT.md decision: prompt tuning lives in `bench/`, is eval-gated, never auto-applies. MECH-01 loops over *output*, not prompts. |
 | Reimplementing gstack's full 23-skill / superpowers' full methodology in Python | The adapters implement each namesake's core *mechanism*; the full skill suites are surfaced by vendoring + `flowstate launch`, not reimplemented in-process. |
 | New runtime dependencies | Vendored skills are markdown assets, not Python imports; the mechanisms use stdlib + subprocess + the existing `claude --print` bridge. The dep-free-default install is untouched. |
@@ -67,10 +73,14 @@ Acknowledged, deferred — not in this milestone's roadmap.
 | VEND-03 | Phase 14 | Pending |
 | VEND-04 | Phase 14 | Pending |
 | VEND-05 | Phase 14 | Pending |
+| GSD-01 | Phase 15 | Pending |
+| GSD-02 | Phase 15 | Pending |
+| GSD-03 | Phase 15 | Pending |
+| GSD-04 | Phase 15 | Pending |
 
 **Coverage:**
-- Milestone requirements: 14 total
-- Mapped to phases: 14 (12–14)
+- Milestone requirements: 18 total
+- Mapped to phases: 18 (12–15)
 - Unmapped: 0
 
 ---

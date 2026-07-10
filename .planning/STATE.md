@@ -119,7 +119,7 @@ Stopped at: v0.6.1 "Make the Names Real" opened as the active milestone, inserte
 - All three upstreams are **MIT** (verified) → vendorable with NOTICE attribution. gstack/superpowers are Claude Code skill-markdown; GSD-2 is a TS CLI (stays detect-and-delegate); autoresearch is a training script (pattern reimplemented, not vendored).
 - **Correction:** an earlier `bench/BENCHMARKING_SCOPE.md` claim that these were "dead aliases / no such layers exist" was WRONG; fixed by erratum eab8ae8.
 
-Next step: `/gsd-plan-phase 12` — Phase 12 "Honesty & Failure-Capability" (make broken runs fail instead of reporting clean). Then Phase 13 (in-process mechanisms), Phase 14 (vendor gstack+superpowers, auto-install, surface via `flowstate launch`).
+Next step: `/gsd-plan-phase 12` — Phase 12 "Honesty & Failure-Capability" (make broken runs fail instead of reporting clean). Then Phase 13 (in-process mechanisms), Phase 14 (vendor gstack+superpowers, auto-install, surface via `flowstate launch`), Phase 15 (bundle GSD full-runtime — **reverses "no cross-harness packaging"** per user direction 2026-07-10; GSD is MIT © Lex Christopherson, vendored into `flowstate/vendor/gsd/` and installed unconditionally, no detect/prompt).
 
 ---
 

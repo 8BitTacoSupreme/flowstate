@@ -6,8 +6,8 @@
 - ✅ **v0.4.0 Context Compaction & Compounding** — Phases 3-5 (shipped 2026-06-06)
 - ✅ **v0.5.0 Compounding Loop** — Phases 6-8 (shipped 2026-06-09)
 - ✅ **v0.6.0 Semantic Retrieval** — Phases 9-11 (shipped 2026-07-10)
-- 🚧 **v0.6.1 Make the Names Real** — Phases 12-14 (in progress)
-- 📋 **v0.7.0 Retrieval Benchmark Rigor** — deferred behind v0.6.1; renumbers to 15-20 on start (spec: `deferred/v0.7.0-REQUIREMENTS.md`)
+- 🚧 **v0.6.1 Make the Names Real** — Phases 12-15 (in progress)
+- 📋 **v0.7.0 Retrieval Benchmark Rigor** — deferred behind v0.6.1; renumbers to 16-21 on start (spec: `deferred/v0.7.0-REQUIREMENTS.md`)
 - 📋 **v0.8.0 Harness Tax & Value** — SEED-001; renumbers after v0.7.0
 
 ## Phases
@@ -62,6 +62,7 @@ Full detail: [`milestones/v0.6.0-ROADMAP.md`](./milestones/v0.6.0-ROADMAP.md)
 - [ ] **Phase 12: Honesty & Failure-Capability** — Stop the pipeline reporting broken runs as clean. Discipline can fail; research/strategy surface failure; a live run with no `claude` CLI fails loud instead of writing stub text as artifacts.
 - [ ] **Phase 13: Adapters Earn Their Names** — In-process mechanisms: research measure→keep/discard over output; strategy scored rubric + verdict; discipline runs tests + reads real git state + checks hook contents.
 - [ ] **Phase 14: Vendor & Surface** — Vendor gstack + superpowers MIT SKILL.md into `flowstate/skills/`, auto-install to `.claude/skills/`, surface via `flowstate launch strategy|discipline`; NOTICE + README fixes.
+- [ ] **Phase 15: Bundle GSD** — Vendor the pinned MIT GSD full runtime (skills + `get-shit-done/` + `gsd-sdk`) into `flowstate/vendor/gsd/`; install unconditionally (no detect, no prompt); documented refresh path. **Reverses "no cross-harness packaging."**
 
 ## Phase Details
 
@@ -99,8 +100,19 @@ Full detail: [`milestones/v0.6.0-ROADMAP.md`](./milestones/v0.6.0-ROADMAP.md)
   4. README shows `947` tests (not `803`) and the Superpowers URL is `obra/superpowers` (not the 404 `obra/claude-code-superpowers`)
 **Plans**: TBD
 
+### Phase 15: Bundle GSD
+**Goal**: GSD ships inside FlowState and installs itself — the user never installs GSD separately, and FlowState never detects or prompts for it. Reverses the "no cross-harness packaging" decision per user direction (2026-07-10): *"It should be there, by whatever legal means."* GSD (`gsd-build/get-shit-done`) is MIT (© Lex Christopherson), so the path is legal with attribution.
+**Depends on**: Phase 14 (extends the `flowstate install-skills` installer)
+**Requirements**: GSD-01, GSD-02, GSD-03, GSD-04
+**Success Criteria** (what must be TRUE):
+  1. `flowstate/vendor/gsd/` contains a pinned GSD distribution (skills + `get-shit-done/` Node runtime + `gsd-sdk`) with the upstream MIT `LICENSE` captured verbatim and a recorded `VERSION`/commit; `NOTICE` carries the GSD attribution
+  2. `flowstate install-skills` (and `init`/`kickoff`) installs GSD unconditionally into `.claude/skills/` + `.claude/get-shit-done/` and makes `gsd-sdk` invokable — no detect gate, no prompt
+  3. In a fresh project with no separately-installed GSD, `flowstate launch gsd <N>` produces a working handoff against the vendored GSD (the launcher's GSD detect-and-suggest path is neutralized)
+  4. A documented refresh path (mirroring `flowstate pack` staleness/manifest) updates the pinned GSD snapshot deliberately; the vendored VERSION is inspectable
+**Plans**: TBD
+
 <details>
-<summary>📋 v0.7.0 Retrieval Benchmark Rigor (deferred behind v0.6.1 — renumbers to 15-20 on start)</summary>
+<summary>📋 v0.7.0 Retrieval Benchmark Rigor (deferred behind v0.6.1 — renumbers to 16-21 on start)</summary>
 
 Scoped and roadmapped this session, then deferred so the adapter stubs get fixed first (a harness whose enforcement layer cannot fail can't be meaningfully benchmarked). The full 6-phase plan, success criteria, and 18 requirements are preserved at `.planning/deferred/v0.7.0-REQUIREMENTS.md`. When v0.6.1 ships, `/gsd-new-milestone` for v0.7.0 will continue numbering from v0.6.1's last phase (→ phases 15-20). Headline facts (verified): `recall_any@5` = 0.966 for both arms; the 0.866-vs-0.844 lead is untestable until per-instance dumps land; LongMemEval-S is type-blocked so `--limit` is biased. See `bench/BENCHMARK_HANDOFF.md` and STATE.md's deferred-facts block.
 
@@ -124,13 +136,14 @@ Scoped and roadmapped this session, then deferred so the adapter stubs get fixed
 | 12. Honesty & Failure-Capability | v0.6.1 | 0/? | Not started | - |
 | 13. Adapters Earn Their Names | v0.6.1 | 0/? | Not started | - |
 | 14. Vendor & Surface | v0.6.1 | 0/? | Not started | - |
-| _v0.7.0 Retrieval Benchmark Rigor_ | v0.7.0 | deferred | renumbers 15-20 on start | - |
+| 15. Bundle GSD | v0.6.1 | 0/? | Not started | - |
+| _v0.7.0 Retrieval Benchmark Rigor_ | v0.7.0 | deferred | renumbers 16-21 on start | - |
 
 ## Backlog
 
 Items deferred from completed milestones. Promote via `/gsd-review-backlog`.
 
-- **v0.7.0 Retrieval Benchmark Rigor** (deferred behind v0.6.1, 2026-07-10) — Fully scoped: 6 phases, 18 requirements, spec at `.planning/deferred/v0.7.0-REQUIREMENTS.md`. Pushed back so the adapter stubs (v0.6.1) are fixed first — no further harness benchmarking until the enforcement layer can fail. Resumes via `/gsd-new-milestone` after v0.6.1 ships; renumbers to phases 15-20.
+- **v0.7.0 Retrieval Benchmark Rigor** (deferred behind v0.6.1, 2026-07-10) — Fully scoped: 6 phases, 18 requirements, spec at `.planning/deferred/v0.7.0-REQUIREMENTS.md`. Pushed back so the adapter stubs (v0.6.1) are fixed first — no further harness benchmarking until the enforcement layer can fail. Resumes via `/gsd-new-milestone` after v0.6.1 ships; renumbers to phases 16-21 (v0.6.1 grew to 4 phases with GSD bundling).
 - **WIKI-F1** (deferred at v0.6.0 close) — No production caller passes `include_layers={"wiki"}`, so the semantic wiki retrieval mechanism built in Phase 11 never fires in practice. Needs a curated `.planning/codebase/wiki/` corpus plus orchestrator wiring. The mechanism is implemented, tested, and dormant. **Promoted into [`SEED-001`](./seeds/SEED-001-harness-tax-and-value.md) Phase 20** — this is FlowState's only context layer with a proven lift (0.825 ≈ oracle 0.800) and it is switched off, while the layer that does fire (pack) measured ≈ none.
 - **SEED-001 — v0.8.0 "Harness Tax & Value"** ([seed](./seeds/SEED-001-harness-tax-and-value.md)) — Proposed 4-phase milestone (18–21): measure token/latency cost (none exists today; `prefix_tokens` is a `len()//4` estimate), enforce evaluator independence, **activate the wiki**, then run the paired-design verdict on a real repo using the already-built `--layers`/`--paired` rig. Surfaces automatically at the next `/gsd-new-milestone`. Answers the harness-value question that v0.7.0 (retrieval-only) deliberately does not. See `bench/BENCHMARKING_SCOPE.md`.
 - **RERANK-F1** (v0.7.0 Future Requirement) — Wiring a reranker into FlowState's production `MemoryStore.get_context()` path. v0.7.0 measures it on the bench first; production wiring only if RERANK-03 shows the embeddings (not merely the reranker) carry the win.

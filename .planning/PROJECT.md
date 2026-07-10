@@ -42,9 +42,11 @@ If everything else fails, that compounding loop is what FlowState exists to deli
 
 **Key context:** Prompted by an external review claiming FlowState does "execution enforcement," and a README audit showing the three adapters barely implement their namesakes. A stub inventory confirmed the Discipline stage cannot fail and two adapters report success on total failure — so **benchmarking harness compliance would currently measure nothing.** This milestone blocks v0.7.0.
 
-Constraints: no new runtime deps (vendored skills are markdown, not imports; mechanisms use stdlib + subprocess + the `claude --print` bridge). No prompt self-modification in the runtime — research loops over *output*, honoring the locked "prompt tuning lives in bench/, never auto-applies" decision. GSD stays detect-and-delegate (PROJECT.md rejects cross-harness packaging); autoresearch's pattern is reimplemented, not vendored (it's a training script). All three upstreams verified MIT → vendorable with NOTICE attribution.
+**GSD is now bundled (decision reversed 2026-07-10).** Per user direction — *"Let's break my no cross-harness packaging… It should be there, by whatever legal means. I don't want to detect or prompt for it"* — Phase 15 vendors GSD (`gsd-build/get-shit-done`, MIT © Lex Christopherson) **full-runtime** (skills + `get-shit-done/` Node runtime + `gsd-sdk`) into `flowstate/vendor/gsd/` and installs it unconditionally. No detection, no prompt, no separate user install. FlowState becomes a GSD redistributor and owns a pinned-version refresh path. (This does not reopen Codex/OpenCode/Cursor *adapters* — bundling a tool FlowState delegates *to* is a different axis from running FlowState *on* another harness.)
 
-<details><summary>📋 Deferred: v0.7.0 Retrieval Benchmark Rigor (resumes after v0.6.1; renumbers to phases 15-20)</summary>
+Constraints: no new runtime deps of a new class (vendored gstack/superpowers are markdown; the mechanisms use stdlib + subprocess + the `claude --print` bridge; the vendored `gsd-sdk` is a Node CLI FlowState shells out to, and Node is already a prereq). No prompt self-modification in the runtime — research loops over *output*, honoring the locked "prompt tuning lives in bench/, never auto-applies" decision. autoresearch's pattern is reimplemented, not vendored (it's a training script). All four upstreams (gstack, superpowers, GSD, and the reference to autoresearch) verified MIT/permissive → vendorable with NOTICE attribution.
+
+<details><summary>📋 Deferred: v0.7.0 Retrieval Benchmark Rigor (resumes after v0.6.1; renumbers to phases 16-21)</summary>
 
 **Goal:** Convert FlowState's "just ahead of BM25" retrieval result into a defensible, statistically significant, production-viable win — or honestly conclude it isn't there. Discharges v0.6.0's deferred reranking/fusion decision. Full 18-requirement spec preserved at `.planning/deferred/v0.7.0-REQUIREMENTS.md`.
 
@@ -88,13 +90,14 @@ Headline insight (verified): `recall_any@5` is **0.966 for both** BM25 and chunk
 
 ### Active
 
-<!-- v0.6.1 Make the Names Real (Phases 12–14). REQ-IDs in REQUIREMENTS.md. v0.7.0 requirements deferred to .planning/deferred/v0.7.0-REQUIREMENTS.md. -->
+<!-- v0.6.1 Make the Names Real (Phases 12–15). REQ-IDs in REQUIREMENTS.md. v0.7.0 requirements deferred to .planning/deferred/v0.7.0-REQUIREMENTS.md. -->
 
 - [ ] **HON-01..06**: discipline can fail; orchestrator reads the audit + BLOCKED; research/strategy surface failure; live-no-CLI fails loud (no stub artifacts); `gsd_adapter` docstring reconciled; `flowstate discipline` CLI
 - [ ] **MECH-01**: research measure→keep/discard over output (groundedness vs fixture `retrieval_questions`), not prompts
 - [ ] **MECH-02**: strategy scored rubric (per-dimension 0–10 + ship/pivot/kill verdict), gate-able
 - [ ] **MECH-03**: discipline runs tests + reads real git state + checks hook contents (Superpowers RED-GREEN gate)
 - [ ] **VEND-01..05**: vendor MIT gstack + superpowers `SKILL.md`; `flowstate install-skills` auto-install; `flowstate launch strategy|discipline` surfacing; NOTICE + README fixes (947 tests, `obra/superpowers` URL)
+- [ ] **GSD-01..04** *(reverses "no cross-harness packaging")*: vendor the pinned MIT GSD full runtime (skills + `get-shit-done/` + `gsd-sdk`) into `flowstate/vendor/gsd/`; install unconditionally (no detect/prompt); documented refresh path; NOTICE attribution
 
 ### Out of Scope
 
@@ -149,6 +152,8 @@ Headline insight (verified): `recall_any@5` is **0.966 for both** BM25 and chunk
 | Embedder ships as an optional `[semantic]` extra, never a core dep | fastembed pulls ~200MB of transitive deps + a model download on every install; the dep-free default install is a hard constraint. Optional extra + byte-identical FTS5 fallback preserves it | ✓ Validated (EMB-01..04, v0.6 — `import flowstate.embeddings` succeeds without fastembed) |
 | Semantic no-match gated by an L2 **distance floor**, NOT an FTS5 pre-gate | An FTS5 gate would only fire semantic KNN when BM25 already matched — suppressing the lexically-disjoint-but-semantically-relevant case that is the entire point of the milestone. `_SEMANTIC_MAX_DISTANCE = 0.89` (≈ cosine 0.60) instead | ✓ Validated (MEM-01/02, v0.6 — caught as a **Critical** code-review finding and fixed before close; `10-01-SUMMARY.md` frontmatter still records the superseded gate decision, the code is authoritative) |
 | Reranking / hybrid lexical+semantic fusion deferred out of v0.6 | Pure semantic KNN already recovered oracle-level grounding (0.825 ≈ 0.800) on the wiki bench; fusion is unjustified complexity **until measured to help** | — Pending (v0.7.0 exists to run exactly that measurement, on LongMemEval/LoCoMo, with stage-matched baselines) |
+| **Adapters must be able to fail** (v0.6.1) | `discipline.py:56` hardcodes `success=True` and the orchestrator never reads the audit; research/strategy report success on total failure. A compounding loop can't compound if it can't tell success from failure, and benchmarking an enforcement layer that cannot fail measures nothing | — Pending (v0.6.1 Phase 12) |
+| **REVERSED: bundle GSD full-runtime, don't detect/delegate** (v0.6.1, 2026-07-10) | Prior stance was "GSD stays detect-and-delegate; no cross-harness packaging." User directive: *"break my no cross-harness packaging… it should be there, by whatever legal means. I don't want to detect or prompt for it."* GSD is MIT (© Lex Christopherson) → vendor the pinned full runtime + `gsd-sdk` and install unconditionally. FlowState becomes a GSD redistributor and owns a version-pinned refresh path | — Pending (v0.6.1 Phase 15). Supersedes the delegate-only stance; does NOT reopen Codex/OpenCode/Cursor host adapters |
 
 ## Evolution
 
