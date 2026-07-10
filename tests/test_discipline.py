@@ -8,7 +8,7 @@ from flowstate.discipline import check_setup
 class TestCheckSetup:
     def test_empty_dir(self, tmp_path: Path):
         result = check_setup(tmp_path)
-        assert result.success
+        assert not result.success
         assert not result.checks["git_repo"]
         assert not result.checks["tests_dir"]
         assert "Audit:" in result.summary
@@ -60,3 +60,16 @@ class TestCheckSetup:
         result = check_setup(tmp_path)
         assert "Audit:" in result.summary
         assert "[+]" in result.summary or "[-]" in result.summary
+
+    def test_required_set_git_only_fails(self, tmp_path: Path):
+        (tmp_path / ".git").mkdir()
+        result = check_setup(tmp_path)
+        assert not result.success
+
+    def test_required_set_both_present_succeeds(self, tmp_path: Path):
+        (tmp_path / ".git").mkdir()
+        (tmp_path / "pyproject.toml").write_text("[tool.pytest]")
+        result = check_setup(tmp_path)
+        assert result.success
+        assert not result.checks["tests_dir"]
+        assert not result.checks["pre_commit_config"]

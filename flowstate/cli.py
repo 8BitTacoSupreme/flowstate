@@ -845,6 +845,34 @@ def doctor(root: Path | None):
         sys.exit(errors)
 
 
+@main.command("discipline")
+@click.option(
+    "--root",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Project root directory.",
+)
+def discipline(root: Path | None):
+    """Run the pure-Python discipline audit (git repo + test config, plus advisories).
+
+    Exits non-zero when the required-set (git_repo AND pytest_config) fails, so
+    it composes in CI / pre-commit hooks alongside `flowstate doctor`/`verify`.
+    """
+    import sys
+
+    from flowstate.discipline import check_setup
+
+    root = resolve_root(root, option_was_explicit=_root_was_explicit())
+    console.print(Panel(BANNER, title="v" + __version__, border_style="blue", expand=False))
+
+    audit = check_setup(root)
+    style = "green" if audit.success else "red"
+    console.print(f"[{style}]{audit.summary}[/{style}]")
+
+    if not audit.success:
+        sys.exit(1)
+
+
 @main.command("verify")
 @click.option(
     "--root",

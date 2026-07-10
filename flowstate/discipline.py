@@ -52,8 +52,13 @@ def check_setup(root: Path) -> AuditResult:
 
     summary = f"Audit: {passed}/{total} checks passed\n" + "\n".join(lines)
 
+    # Required-set: the floor for "healthy enough to proceed." The other five
+    # checks are informational (reported in summary, never gating success).
+    required = ("git_repo", "pytest_config")
+    success = all(checks[key] for key in required)
+
     return AuditResult(
-        success=True,
+        success=success,
         checks=checks,
         summary=summary,
     )
