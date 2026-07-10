@@ -17,6 +17,10 @@ def test_dry_run_pipeline(tmp_path: Path):
     state.interview.test_coverage = 85
     state.interview.architecture_pattern = "hexagonal"
 
+    # Healthy repo so Discipline's required-set (git_repo AND pytest_config) passes.
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "pyproject.toml").write_text("[tool.pytest]")
+
     result = run_pipeline(state, tmp_path)
 
     # All tools should complete in dry-run
@@ -349,9 +353,27 @@ def test_run_pipeline_harvest_failure_does_not_abort(tmp_path: Path, monkeypatch
     state = FlowStateModel()
     state.preferences.dry_run = True
 
+    # Healthy repo so Discipline's required-set (git_repo AND pytest_config) passes.
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "pyproject.toml").write_text("[tool.pytest]")
+
     with patch("flowstate.gotchas.harvest_planning_gotchas", side_effect=exploding_harvest):
         result = run_pipeline(state, tmp_path)
 
     # Pipeline still completed all tools
     for name, ts in result.tools.items():
         assert ts.status == ToolStatus.COMPLETED, f"{name} not completed: {ts.status}"
+
+
+def test_discipline_blocks_on_unhealthy_repo(tmp_path: Path):
+    """A bare repo (no .git, no pytest config) makes Discipline BLOCKED, not COMPLETED."""
+    state = FlowStateModel()
+    state.preferences.dry_run = True
+
+    result = run_pipeline(state, tmp_path)
+
+    assert result.tools["discipline"].status == ToolStatus.BLOCKED
+    assert result.tools["discipline"].error is not None
+
+    blocked = sum(1 for ts in result.tools.values() if ts.status == ToolStatus.BLOCKED)
+    assert blocked >= 1
