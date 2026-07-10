@@ -2,18 +2,25 @@
 
 from pathlib import Path
 
-from flowstate.launcher import detect_tools, launch_command
+from flowstate import launcher
+from flowstate.launcher import detect_tools, launch_command, print_next_steps
+from flowstate.state import FlowStateModel
 
 
 class TestDetectTools:
-    def test_no_tools(self, tmp_path: Path):
+    def test_builtin_tools_available(self, tmp_path: Path):
         tools = detect_tools(tmp_path)
-        assert not tools["gsd"]
         # strategy and discipline are built-in, always available
         assert tools["strategy"]
         assert tools["discipline"]
 
-    def test_gsd_detected(self, tmp_path: Path):
+    def test_gsd_always_available(self, tmp_path: Path):
+        # GSD is vendored + installed unconditionally (GSD-03); no marker gate.
+        # A fresh project with no .planning dir still reports gsd available.
+        tools = detect_tools(tmp_path)
+        assert tools["gsd"]
+
+    def test_gsd_available_with_planning(self, tmp_path: Path):
         (tmp_path / ".planning").mkdir()
         tools = detect_tools(tmp_path)
         assert tools["gsd"]
@@ -39,6 +46,26 @@ class TestLaunchCommand:
         cmd = launch_command("strategy", None, tmp_path)
         assert "install-skills" in cmd
 
+    def test_gsd_fresh_project_no_planning(self, tmp_path: Path):
+        # No .planning dir — the handoff must still work, with no "not detected" text.
+        cmd = launch_command("gsd", 1, tmp_path)
+        assert "/gsd:plan-phase 1" in cmd
+        assert "not detected" not in cmd
+        assert "new-project" not in cmd
+
     def test_unknown_tool(self, tmp_path: Path):
         cmd = launch_command("nonexistent", None, tmp_path)
         assert "Unknown tool" in cmd
+
+
+class TestPrintNextSteps:
+    def test_no_gsd_not_detected_branch(self, tmp_path: Path):
+        # A project without .planning must never surface the old
+        # "GSD not detected / run /gsd:new-project" suggestion (GSD-03).
+        state = FlowStateModel()
+        with launcher.console.capture() as cap:
+            print_next_steps(state, tmp_path)
+        out = cap.get()
+        assert "not detected" not in out
+        assert "new-project" not in out
+        assert "flowstate launch gsd 1" in out

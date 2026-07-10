@@ -18,8 +18,9 @@ console = Console()
 
 # Known tool markers — files/dirs that indicate a tool is installed.
 # strategy and discipline are built-in (no external plugin needed).
+# GSD is intentionally NOT gated here — FlowState vendors and installs it
+# unconditionally (GSD-02/GSD-03), so it is always treated as present.
 TOOL_MARKERS = {
-    "gsd": [".planning"],
     "strategy": [],
     "discipline": [],
 }
@@ -27,7 +28,9 @@ TOOL_MARKERS = {
 
 def detect_tools(root: Path) -> dict[str, bool]:
     """Check what Claude Code extensions are installed/available."""
-    results = {}
+    # GSD is vendored + installed unconditionally by FlowState (GSD-03); it is
+    # always available. No `.planning` marker proxy gates it any longer.
+    results: dict[str, bool] = {"gsd": True}
     home = Path.home()
 
     for tool, markers in TOOL_MARKERS.items():
@@ -41,11 +44,6 @@ def detect_tools(root: Path) -> dict[str, bool]:
                 found = True
                 break
         results[tool] = found
-
-    # GSD skills are loaded if any /gsd:* skills are available
-    # Check for .planning dir as proxy (GSD creates it)
-    gsd_skills = (root / ".planning").exists()
-    results["gsd"] = gsd_skills or results.get("gsd", False)
 
     return results
 
@@ -134,12 +132,9 @@ def print_next_steps(state: FlowStateModel, root: Path) -> None:
     # Suggest next action
     console.print("\n[bold]Suggested commands:[/bold]")
 
-    if tools.get("gsd"):
-        console.print("  [cyan]flowstate launch gsd 1[/cyan]  — Plan phase 1 with GSD")
-    else:
-        console.print(
-            "  [dim]GSD not detected. Run /gsd:new-project in a Claude Code session.[/dim]"
-        )
+    # GSD is always present (vendored + installed by FlowState, GSD-03), so the
+    # launch handoff is offered unconditionally — no detect-and-suggest branch.
+    console.print("  [cyan]flowstate launch gsd 1[/cyan]  — Plan phase 1 with GSD")
 
     # Check what pipeline steps completed
     research_done = state.tools.get("research", state.tools.get("autoresearch"))
