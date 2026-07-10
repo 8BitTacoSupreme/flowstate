@@ -33,13 +33,18 @@ Two confounds this run fixes:
    retrieval. See "Corrected expectation" below.
 
 ## Existing artifacts (all committed on `main`)
-- `bench/compound_eval.py` — runner; has `--mode real --inject on|off --judge --allow-llm`.
-  `_run_one(inject=...)` patches `flowstate.orchestrator.build_context_prefix` (whole-prefix
-  on/off). `_worktree()` copies `--root` to a tmp dir per run (source stays pristine).
+- `bench/compound_eval.py` — runner; `--mode cheap|real --layers {full,none,pack,memory,wiki}
+  --judge --allow-llm`. `_run_one()` monkeypatches `orch.build_context_prefix` with a wrapper
+  that sets `include_layers` (`:169-179`); the `full` arm patches nothing. `_worktree()` copies
+  `--root` to a tmp dir per run (source stays pristine). **Note:** the binary `--inject on|off`
+  and `_run_one(inject=...)` described in earlier revisions of this runbook no longer exist —
+  see "Prerequisite code changes" §1.
 - `bench/judge.py` — Tier-2 LLM judge (scores artifacts vs fixture rubric; subprocess to
-  `claude`, never-raises). `summarize()` gives trend.
-- `bench/replicate.py` — N-trial driver; `_agg()` + `_cohens_d()`. Writes summary JSON.
+  `claude`, never-raises). `summarize()` gives trend. Single judge model — see §3.
+- `bench/replicate.py` — N-trial driver; `_agg()` + `_cohens_d()` + `_paired_normalize()`.
+  Writes summary JSON.
 - `bench/metrics.py` / `bench/capture.py` / `bench/report.py` — scorecard + snapshot + render.
+  `metrics.py` is the **authoritative deterministic** score; the LLM judge is excluded from it.
 
 ## Prerequisite code changes
 
