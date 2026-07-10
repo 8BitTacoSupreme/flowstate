@@ -24,8 +24,8 @@ Each maps to exactly one roadmap phase.
 
 ### Vendor & Surface (VEND)
 
-- [ ] **VEND-01**: Gstack's MIT `SKILL.md` assets (`garrytan/gstack`, © Garry Tan) are vendored into `flowstate/skills/gstack/`, with the MIT attribution added to `NOTICE`.
-- [ ] **VEND-02**: Superpowers' MIT skill assets (`obra/superpowers`, © Jesse Vincent) are vendored into `flowstate/skills/superpowers/`, with the MIT attribution added to `NOTICE`.
+- [x] **VEND-01**: Gstack's MIT `SKILL.md` assets (`garrytan/gstack`, © Garry Tan) are vendored into `flowstate/skills/gstack/`, with the MIT attribution added to `NOTICE`.
+- [x] **VEND-02**: Superpowers' MIT skill assets (`obra/superpowers`, © Jesse Vincent) are vendored into `flowstate/skills/superpowers/`, with the MIT attribution added to `NOTICE`.
 - [ ] **VEND-03**: `flowstate install-skills` (also invoked from `init`/`kickoff`) copies the vendored skills into the project's `.claude/skills/`, so the user installs nothing manually.
 - [ ] **VEND-04**: `flowstate launch strategy` surfaces gstack's `/office-hours`, and `flowstate launch discipline` surfaces the superpowers TDD skill, when the vendored skills are installed — mirroring the existing `flowstate launch gsd <N>` delegation.
 - [ ] **VEND-05**: **README reconciliation** — make every claim match the v0.6.1 code, landing in the same phase as the code that makes it true. (a) Factual bugs, independent of adapters: test count `803 → 947`; the Superpowers URL `obra/claude-code-superpowers` (404) → `obra/superpowers`; `flowstate doctor` "5 checks" → **6** (adds `stale_status`); the sqlite-vec + fastembed acknowledgment implies both are optional — sqlite-vec is a **core** dep, only fastembed is behind `[semantic]`. (b) Adapter Acknowledgments, now that Phase 13 makes them real: rewrite the Autoresearch/Gstack/Superpowers lines from "draws on the idea / implements a similar" to describe what the adapters *actually now do* (research measure→keep/discard over output; strategy scored rubric + verdict; discipline runs tests + real git state + hook contents that can fail). No claim may describe an unbuilt mechanism.
@@ -69,8 +69,8 @@ Acknowledged, deferred — not in this milestone's roadmap.
 | MECH-01 | Phase 13 | Complete |
 | MECH-02 | Phase 13 | Complete |
 | MECH-03 | Phase 13 | Complete |
-| VEND-01 | Phase 14 | Pending |
-| VEND-02 | Phase 14 | Pending |
+| VEND-01 | Phase 14 | Complete |
+| VEND-02 | Phase 14 | Complete |
 | VEND-03 | Phase 14 | Pending |
 | VEND-04 | Phase 14 | Pending |
 | VEND-05 | Phase 14 | Pending |
