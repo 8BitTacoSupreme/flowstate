@@ -89,29 +89,29 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| STAT-01 | TBD | Pending |
-| STAT-02 | TBD | Pending |
-| STAT-03 | TBD | Pending |
-| SPLT-01 | TBD | Pending |
-| SPLT-02 | TBD | Pending |
-| PFX-01 | TBD | Pending |
-| PFX-02 | TBD | Pending |
-| CACHE-01 | TBD | Pending |
-| SWEEP-01 | TBD | Pending |
-| SWEEP-02 | TBD | Pending |
-| SWEEP-03 | TBD | Pending |
-| RERANK-01 | TBD | Pending |
-| RERANK-02 | TBD | Pending |
-| RERANK-03 | TBD | Pending |
-| LOCO-01 | TBD | Pending |
-| LOCO-02 | TBD | Pending |
-| LOCO-03 | TBD | Pending |
-| RPT-01 | TBD | Pending |
+| STAT-01 | Phase 12 | Pending |
+| STAT-02 | Phase 12 | Pending |
+| STAT-03 | Phase 12 | Pending |
+| SPLT-01 | Phase 12 | Pending |
+| SPLT-02 | Phase 12 | Pending |
+| PFX-01 | Phase 13 | Pending |
+| PFX-02 | Phase 13 | Pending |
+| CACHE-01 | Phase 13 | Pending |
+| SWEEP-01 | Phase 14 | Pending |
+| SWEEP-02 | Phase 14 | Pending |
+| SWEEP-03 | Phase 14 | Pending |
+| RERANK-01 | Phase 15 | Pending |
+| RERANK-02 | Phase 15 | Pending |
+| RERANK-03 | Phase 15 | Pending |
+| LOCO-01 | Phase 16 | Pending |
+| LOCO-02 | Phase 16 | Pending |
+| LOCO-03 | Phase 16 | Pending |
+| RPT-01 | Phase 17 | Pending |
 
 **Coverage:**
 - Milestone requirements: 18 total
-- Mapped to phases: 0 (populated by roadmapper)
-- Unmapped: 18
+- Mapped to phases: 18 (populated by roadmapper)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-07-10*

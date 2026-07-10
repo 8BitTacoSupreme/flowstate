@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Retrieval Benchmark Rigor
 status: planning
-last_updated: "2026-07-10T14:26:06.467Z"
+last_updated: "2026-07-10T15:00:00.000Z"
 last_activity: 2026-07-10
 progress:
-  total_phases: 0
+  total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Planning next milestone (v0.7.0 Retrieval Benchmark Rigor)
+**Current focus:** Phase 12: Falsifiable Measurement (v0.7.0 Retrieval Benchmark Rigor)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-07-10 — Milestone v0.7.0 started
+Phase: 12 of 17 (Falsifiable Measurement)
+Plan: — (not yet planned)
+Status: Ready to plan
+Last activity: 2026-07-10 — ROADMAP.md created for v0.7.0: 6 phases (12-17), 18/18 requirements mapped, 100% coverage
 
 ## Performance Metrics
 
@@ -65,12 +65,15 @@ Last activity: 2026-07-10 — Milestone v0.7.0 started
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [v0.7.0 roadmap]: Phase order is measurement-first — Phase 12 (dumps + significance tests + stratified split) lands before any config change, so every later phase's claims are falsifiable from the start rather than retrofitted
+- [v0.7.0 roadmap]: Coarse granularity (6 phases, 12-17) — dependency chain is strictly linear (12→13→14→15→16→17) except Phase 16, which depends on 13 (prefix/cache) and reuses Phase 15's `rerank()`, but not Phase 14's chunk/rollup sweep (LoCoMo docs are short, never chunked)
+- [v0.7.0 roadmap]: RERANK-01 is a hard gate inside Phase 15 — the cross-encoder (RERANK-02/03) is only built if the pool-ceiling analysis from Phase 12's dumps justifies it; a failed gate is a valid phase outcome, not a blocker
+- [v0.7.0 roadmap]: Test split is touched exactly once, in Phase 17, after the config is frozen on dev-200 in Phase 14 — prevents tuning-on-test
+- [v0.7.0 roadmap]: `bench/grounding.py` stays ADD-ONLY across all 6 phases; the query/document embedder interface and cache land in `bench/_retrieval.py`/`bench/_embed_cache.py` instead
 - [v0.6.0 roadmap]: Coarse granularity (3 phases) — single maintainer; phases 9/10/11 follow natural dependency boundary (foundation → memory seam → wiki seam)
 - [v0.6.0 roadmap]: Phase 10 and 11 kept separate (not merged) — each maps to a distinct integration seam (memory.py vs context_prefix.py) that can be independently planned and verified
 - [v0.6.0 roadmap]: Phase 10 and 11 both depend on Phase 9 only; Phase 11 does not depend on Phase 10 (parallel seams over the same vector foundation)
 - [v0.6.0 roadmap]: Embedder is optional [semantic] extra — FTS5 fallback preserved on every path; default install stays dep-free; golden context_prefix tests must stay byte-identical
-- [v0.6.0 roadmap]: Tests must inject a fake embed_fn (deterministic vectors) and skipif sqlite_vec — no model/network required; mirrors bench/grounding.py test patterns
-- [v0.6.0 roadmap]: memory.db change is additive only (vec0 table + backfill); flowstate.json schema unchanged; no migration ladder bump needed
 - [Phase ?]: rowid resolution pattern for vec0 embed-on-write
 - [Phase ?]: enable_load_extension security re-scope after vec load
 
@@ -105,7 +108,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-07-10
-Stopped at: v0.6.0 archived + tagged; v0.7.0 Retrieval Benchmark Rigor opened (phases 12–18).
+Stopped at: ROADMAP.md, STATE.md, and REQUIREMENTS.md traceability written for v0.7.0 (Phases 12-17, 18/18 requirements mapped, 100% coverage). No phase planning started yet.
 
 **Established facts for v0.7.0 (verified this session, not estimates):**
 - `recall_any@5` = 0.966 for **both** BM25 and chunked-semantic; `recall_all@5` = 0.866 vs 0.844; `recall_all@10` = 0.946 vs 0.904. Gold sessions are already retrieved, at ranks 6–10 → a **ranking** problem. A perfect reranker over a top-R pool scores exactly `recall_all@R`, so dense→rerank@10 caps at 0.946 and BM25→rerank@10 caps at 0.904.
@@ -115,8 +118,9 @@ Stopped at: v0.6.0 archived + tagged; v0.7.0 Retrieval Benchmark Rigor opened (p
 - `bench/grounding.py::_default_embedder` calls `model.embed()` for docs *and* queries; fastembed's `query_embed()` is a no-op passthrough → BGE's query instruction prefix is **never applied**. Free win, needs an `embed_fn` interface change (build it in `_retrieval.py`; grounding.py is ADD-ONLY).
 - fastembed L2-normalizes (`_post_process_onnx_output` → `normalize()`), so `semantic_rank`'s L2 ordering ≡ cosine ordering. **Not a bug** — don't spend time there.
 - Installed fastembed 0.8 ships cross-encoders (`Xenova/ms-marco-MiniLM-L-6-v2` 80MB, `jinaai/jina-reranker-v1-turbo-en` 150MB, `BAAI/bge-reranker-base` 1.04GB) and 8192-token embedders (`jina-embeddings-v2-base-en`, `nomic-embed-text-v1.5-Q` 130MB). **Zero new deps needed.**
+- LoCoMo currently **loses** to BM25 on semantic full-cov@5 (0.459 vs 0.481) — Phase 16 needs to report this honestly per-category, not paper over it.
 
-Resume file: approved plan at `~/.claude/plans/take-a-look-in-dreamy-pelican.md`
+Resume file: None (roadmap approved this session)
 Data: `data/longmemeval_s_cleaned.json` (265MB) + `data/locomo10.json` present; `data/` is now gitignored (LoCoMo is CC BY-NC).
 Next step: `/gsd-plan-phase 12` — per-instance dumps + `bench/stats.py` + `compare.py` + stratified split. Phase 12 may kill the current headline claim; that is its purpose.
 
@@ -124,3 +128,4 @@ Next step: `/gsd-plan-phase 12` — per-instance dumps + `bench/stats.py` + `com
 
 - Plan the first v0.7.0 phase with `/gsd-plan-phase 12`
 - Rotate the `OPENAI_API_KEY` pasted in an earlier chat session, if not already done
+</content>
