@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.6.1
 milestone_name: Make the Names Real
-status: executing
+status: verifying
 stopped_at: "v0.6.1 "Make the Names Real" opened as the active milestone, inserted before v0.7.0 per the user's "fix the gaps before we benchmark any further." Scope: undead the adapter stubs. v0.7.0 (retrieval bench) and the v0.8.0 seed are deferred; they renumber automatically when they start (GSD continues from the last shipped phase). v0.7.0's requirements preserved at `.planning/deferred/v0.7.0-REQUIREMENTS.md`."
-last_updated: "2026-07-10T20:38:08.492Z"
+last_updated: "2026-07-10T20:43:51.345Z"
 last_activity: 2026-07-10
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 10
-  completed_plans: 9
-  percent: 50
+  completed_plans: 10
+  percent: 75
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 Phase: 14 (Vendor & Surface) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-10
 
 ## Performance Metrics
@@ -62,6 +62,7 @@ Last activity: 2026-07-10
 | Phase 13 P01 | ~720 | 2 tasks | 2 files |
 | Phase 14 P14-01 | 720 | 2 tasks | 170 files |
 | Phase 14 P14-03 | 180 | 2 tasks | 3 files |
+| Phase 14 P14-04 | 6 | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,8 @@ Recent decisions affecting current work:
 - [Phase ?]: rowid resolution pattern for vec0 embed-on-write
 - [Phase ?]: enable_load_extension security re-scope after vec load
 - [Phase ?]: Phase 14-01 VEND-01/02: vendored gstack@7c9df1c (59) + superpowers@d884ae0 (14) as data-only trees; pruned build tooling 36M->4.4M for no-bin/T-14-02
+- [Phase ?]: launch handoffs gated on installed .claude/skills/<namespace>; absent emits install-skills prompt (T-14-12)
+- [Phase ?]: README test count reconciled to post-phase --collect-only total (1000), never hardcoded (T-14-15)
 
 ### Pending Todos
 
@@ -115,7 +118,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-10T20:38:08.489Z
+Last session: 2026-07-10T20:43:45.958Z
 Stopped at: v0.6.1 "Make the Names Real" opened as the active milestone, inserted before v0.7.0 per the user's "fix the gaps before we benchmark any further." Scope: undead the adapter stubs. v0.7.0 (retrieval bench) and the v0.8.0 seed are deferred; they renumber automatically when they start (GSD continues from the last shipped phase). v0.7.0's requirements preserved at `.planning/deferred/v0.7.0-REQUIREMENTS.md`.
 
 **Why v0.6.1 exists (verified this session, file:line):**
