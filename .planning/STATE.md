@@ -4,13 +4,13 @@ milestone: v0.6.1
 milestone_name: Make the Names Real
 status: executing
 stopped_at: "v0.6.1 "Make the Names Real" opened as the active milestone, inserted before v0.7.0 per the user's "fix the gaps before we benchmark any further." Scope: undead the adapter stubs. v0.7.0 (retrieval bench) and the v0.8.0 seed are deferred; they renumber automatically when they start (GSD continues from the last shipped phase). v0.7.0's requirements preserved at `.planning/deferred/v0.7.0-REQUIREMENTS.md`."
-last_updated: "2026-07-10T18:07:46.342Z"
+last_updated: "2026-07-10T18:13:17.834Z"
 last_activity: 2026-07-10
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 6
-  completed_plans: 4
+  completed_plans: 5
   percent: 25
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 ## Current Position
 
 Phase: 13 (adapters-earn-their-names) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
-Last activity: 2026-07-10 -- Plan 13-01 complete (MECH-01: research groundedness measure->keep/discard)
+Last activity: 2026-07-10
 
 ## Performance Metrics
 
