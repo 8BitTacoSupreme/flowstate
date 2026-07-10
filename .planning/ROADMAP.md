@@ -121,7 +121,7 @@ Full detail: [`milestones/v0.6.0-ROADMAP.md`](./milestones/v0.6.0-ROADMAP.md)
   3. In a fresh project with no separately-installed GSD, `flowstate launch gsd <N>` produces a working handoff against the vendored GSD (the launcher's GSD detect-and-suggest path is neutralized)
   4. A documented refresh path (mirroring `flowstate pack` staleness/manifest) updates the pinned GSD snapshot deliberately; the vendored VERSION is inspectable
 **Plans**: 5 plans
-- [ ] 15-01-PLAN.md — Vendor the pinned MIT GSD distribution + LICENSE/VERSION/NOTICE + coverage/collection exclusions (GSD-01)
+- [x] 15-01-PLAN.md — Vendor the pinned MIT GSD distribution + LICENSE/VERSION/NOTICE + coverage/collection exclusions (GSD-01)
 - [ ] 15-02-PLAN.md — Extend the installer to lay down GSD unconditionally into .claude/skills + .claude/get-shit-done + invokable gsd-sdk (GSD-02)
 - [ ] 15-03-PLAN.md — Neutralize the launcher GSD detect-and-suggest path so launch gsd is unconditional (GSD-03)
 - [ ] 15-04-PLAN.md — Documented GSD refresh/staleness path mirroring flowstate pack + inspectable VERSION (GSD-04)
@@ -152,7 +152,7 @@ Scoped and roadmapped this session, then deferred so the adapter stubs get fixed
 | 12. Honesty & Failure-Capability | v0.6.1 | 3/3 | Complete   | 2026-07-10 |
 | 13. Adapters Earn Their Names | v0.6.1 | 3/3 | Complete    | 2026-07-10 |
 | 14. Vendor & Surface | v0.6.1 | 4/4 | Complete    | 2026-07-10 |
-| 15. Bundle GSD | v0.6.1 | 0/5 | Planned | - |
+| 15. Bundle GSD | v0.6.1 | 1/5 | In Progress|  |
 | _v0.7.0 Retrieval Benchmark Rigor_ | v0.7.0 | deferred | renumbers 16-21 on start | - |
 
 ## Backlog
