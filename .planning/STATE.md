@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.6.1
 milestone_name: Make the Names Real
-status: executing
+status: verifying
 stopped_at: "v0.6.1 "Make the Names Real" opened as the active milestone, inserted before v0.7.0 per the user's "fix the gaps before we benchmark any further." Scope: undead the adapter stubs. v0.7.0 (retrieval bench) and the v0.8.0 seed are deferred; they renumber automatically when they start (GSD continues from the last shipped phase). v0.7.0's requirements preserved at `.planning/deferred/v0.7.0-REQUIREMENTS.md`."
-last_updated: "2026-07-10T18:13:17.834Z"
+last_updated: "2026-07-10T18:21:37.893Z"
 last_activity: 2026-07-10
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 6
-  completed_plans: 5
-  percent: 25
+  completed_plans: 6
+  percent: 50
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 Phase: 13 (adapters-earn-their-names) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-10
 
 ## Performance Metrics
@@ -111,7 +111,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-10T18:07:46.339Z
+Last session: 2026-07-10T18:21:37.890Z
 Stopped at: v0.6.1 "Make the Names Real" opened as the active milestone, inserted before v0.7.0 per the user's "fix the gaps before we benchmark any further." Scope: undead the adapter stubs. v0.7.0 (retrieval bench) and the v0.8.0 seed are deferred; they renumber automatically when they start (GSD continues from the last shipped phase). v0.7.0's requirements preserved at `.planning/deferred/v0.7.0-REQUIREMENTS.md`.
 
 **Why v0.6.1 exists (verified this session, file:line):**

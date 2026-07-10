@@ -20,7 +20,7 @@ Each maps to exactly one roadmap phase.
 
 - [x] **MECH-01**: The research adapter scores each generated topic section for groundedness against the active fixture's `retrieval_questions` and retries-or-discards a weak section within a bounded budget — Autoresearch's measure→keep/discard applied to **output** (not prompts; the "prompt self-improvement stays in bench/" decision is untouched). Discarded/kept sections are recorded.
 - [x] **MECH-02**: The strategy adapter's five evaluation dimensions become a **scored rubric**: the bridge call emits parseable per-dimension scores (0–10) and a verdict (ship/pivot/kill), which the adapter validates; an unparseable or missing rubric is a failure (HON-04).
-- [ ] **MECH-03**: The discipline adapter **runs the project's tests** (captures pass/fail), reads **real git state** (dirty tree / branch / ahead-behind, not just `.git` existence), and checks hook **contents** (non-empty/executable, not just presence) — Superpowers' RED-GREEN gate, in pure Python + subprocess. The result feeds HON-01's required-set.
+- [x] **MECH-03**: The discipline adapter **runs the project's tests** (captures pass/fail), reads **real git state** (dirty tree / branch / ahead-behind, not just `.git` existence), and checks hook **contents** (non-empty/executable, not just presence) — Superpowers' RED-GREEN gate, in pure Python + subprocess. The result feeds HON-01's required-set.
 
 ### Vendor & Surface (VEND)
 
@@ -68,7 +68,7 @@ Acknowledged, deferred — not in this milestone's roadmap.
 | HON-06 | Phase 12 | Pending |
 | MECH-01 | Phase 13 | Complete |
 | MECH-02 | Phase 13 | Complete |
-| MECH-03 | Phase 13 | Pending |
+| MECH-03 | Phase 13 | Complete |
 | VEND-01 | Phase 14 | Pending |
 | VEND-02 | Phase 14 | Pending |
 | VEND-03 | Phase 14 | Pending |
