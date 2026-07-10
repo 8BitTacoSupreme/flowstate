@@ -16,12 +16,22 @@ Each set's upstream LICENSE is retained verbatim under flowstate/skills/<name>/L
   superpowers skills (MIT) — Copyright (c) 2025 Jesse Vincent
     https://github.com/obra/superpowers
 
+This product bundles a lean, full-parity GSD distribution, redistributed under the
+MIT License. GSD's upstream LICENSE is retained verbatim under
+flowstate/vendor/gsd/LICENSE:
+
+  GSD — get-shit-done-cc (MIT) — Copyright (c) 2025 Lex Christopherson
+    https://github.com/gsd-build/get-shit-done
+    npm: get-shit-done-cc@1.42.3 — provenance in flowstate/vendor/gsd/VERSION
+
+  The vendored GSD tree bundles ~100 third-party Node packages (MIT/ISC/Apache-2.0)
+  under flowstate/vendor/gsd/node_modules/. Each package retains its own LICENSE
+  file in that tree; refer to those files for the individual dependency terms.
+
 This product integrates with but does not include:
 
   Claude Code by Anthropic PBC (proprietary) — use subject to
   Anthropic's Commercial Terms of Service
   https://www.anthropic.com/legal/commercial-terms
-
-  GSD (MIT) — https://github.com/gsd-build/gsd-2
 
   Flox plugins (Apache 2.0) — https://github.com/flox
