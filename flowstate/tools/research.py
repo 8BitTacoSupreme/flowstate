@@ -9,6 +9,9 @@ Renamed from autoresearch.py — this is NOT Karpathy's autoresearch.
 
 from __future__ import annotations
 
+import json
+import re
+from pathlib import Path
 from textwrap import dedent
 
 from flowstate.state import InterviewAnswers
@@ -16,6 +19,12 @@ from flowstate.tools.base import ToolAdapter, ToolResult
 
 _RESEARCH_MAX_TURNS = 6
 _RESEARCH_MAX_ATTEMPTS = 3
+
+# Groundedness measure->keep/discard (MECH-01, Autoresearch's core mechanism).
+# Applied to adapter OUTPUT only — never to the prompt (prompt tuning lives in bench/).
+_FIXTURE_PATH = ".planning/fixtures/starter.json"
+_GROUNDEDNESS_THRESHOLD = 0.6
+_GROUNDEDNESS_MAX_RETRIES = 1
 
 MOCK_REPORT = """\
 # Research Report
@@ -52,6 +61,21 @@ def _split_topics(research_focus: str) -> list[str]:
     return topics if topics else [research_focus or "general research"]
 
 
+def _load_retrieval_questions(root: Path) -> list[str]:
+    """Read the active fixture's ``retrieval_questions`` list.
+
+    Reads ``.planning/fixtures/starter.json`` and json.loads it inside a
+    try/except; returns ``[]`` on any failure (missing file, malformed JSON,
+    missing/oddly-typed key) so scoring degrades gracefully to "keep all".
+    """
+    try:
+        data = json.loads((root / _FIXTURE_PATH).read_text())
+        questions = data.get("retrieval_questions", [])
+        return questions if isinstance(questions, list) else []
+    except Exception:
+        return []
+
+
 def _build_topic_prompt(topic: str, answers: InterviewAnswers) -> str:
     """Build a focused research prompt for a single topic."""
     parts = [f"# Research: {topic}"]
@@ -69,8 +93,59 @@ def _build_topic_prompt(topic: str, answers: InterviewAnswers) -> str:
 class ResearchAdapter(ToolAdapter):
     name = "research"
 
+    def _generate_section(self, prompt: str) -> tuple[str | None, str | None]:
+        """Run the bridge-success retry loop for one topic prompt.
+
+        Returns ``(section_text, error)``. ``section_text`` is ``None`` when the
+        bridge never returns usable output within ``_RESEARCH_MAX_ATTEMPTS``.
+        The prompt is passed through unmodified on every attempt (MECH-01).
+        """
+        br = None
+        for _ in range(_RESEARCH_MAX_ATTEMPTS):
+            br = self.bridge.run(
+                prompt,
+                system_prompt=RESEARCH_SYSTEM_PROMPT,
+                allowed_tools=["WebSearch", "WebFetch"],
+                max_turns=_RESEARCH_MAX_TURNS,
+                model="sonnet",
+            )
+            if br.success and br.output.strip():
+                return br.output.strip(), None
+        return None, (br.error if br else None) or "no output"
+
+    def _score_groundedness(self, section: str, questions: list[str]) -> float:
+        """Score how well a research SECTION is grounded in ``retrieval_questions``.
+
+        Issues ONE scoring bridge call (a measurement over OUTPUT, never a prompt
+        change). The model returns a 0-10 integer; it is parsed with a strict
+        bounded regex and clamped — NEVER eval/exec/literal_eval on model text.
+        Returns a float normalized to 0.0-1.0; bridge failure or unparseable
+        output returns 0.0 (treated as weak, not a crash).
+        """
+        q_block = "\n".join(f"- {q}" for q in questions)
+        prompt = (
+            "Rate, on an integer scale from 0 to 10, how well the following research "
+            "SECTION is grounded in and directly addresses these retrieval questions.\n\n"
+            f"Retrieval questions:\n{q_block}\n\n"
+            f"Research section:\n{section}\n\n"
+            "Output ONLY the integer score (0-10). No words, no explanation."
+        )
+        br = self.bridge.run(
+            prompt,
+            allowed_tools=[],
+            max_turns=2,
+            model="sonnet",
+        )
+        if not br.success:
+            return 0.0
+        match = re.search(r"-?\d{1,3}", br.output)
+        if match is None:
+            return 0.0
+        score = max(0, min(10, int(match.group())))
+        return score / 10.0
+
     def execute(self, answers: InterviewAnswers) -> ToolResult:
-        """Run research — one bridge call per topic, merge results."""
+        """Run research — one bridge call per topic, then measure->keep/discard."""
         report_dir = self.root / "research"
         report_dir.mkdir(exist_ok=True)
         report_path = report_dir / "report.md"
@@ -92,43 +167,79 @@ class ResearchAdapter(ToolAdapter):
         # This enables Anthropic's server-side prompt cache to hit across topics
         # (and across Research -> Strategy -> GSD) within the 5-min TTL.
         prior = self.prior_knowledge or ""
+        # Groundedness scoring measures each section against the fixture's
+        # retrieval_questions. Empty -> scoring skipped (graceful degrade).
+        questions = _load_retrieval_questions(self.root)
         sections = []
         failed_topics = []
+        discarded_topics = []
         produced = 0
         for topic in topics:
             prompt = _build_topic_prompt(topic, answers)
             if prior:
                 prompt = prior + "\n\n---\n\n" + prompt
-            br = None
-            for _ in range(_RESEARCH_MAX_ATTEMPTS):
-                br = self.bridge.run(
-                    prompt,
-                    system_prompt=RESEARCH_SYSTEM_PROMPT,
-                    allowed_tools=["WebSearch", "WebFetch"],
-                    max_turns=_RESEARCH_MAX_TURNS,
-                    model="sonnet",
-                )
-                if br.success and br.output.strip():
-                    sections.append(br.output.strip())
-                    produced += 1
-                    break
-            else:
-                sections.append(f"## {topic}\n\n*Research failed: {br.error or 'no output'}*\n")
-                failed_topics.append(topic)
 
-        report = "# Research Report\n\n" + "\n\n---\n\n".join(sections) + "\n"
-        report_path.write_text(report)
+            section, error = self._generate_section(prompt)
+            if section is None:
+                sections.append(f"## {topic}\n\n*Research failed: {error}*\n")
+                failed_topics.append(topic)
+                continue
+
+            if not questions:
+                # No fixture / empty retrieval_questions -> keep all successes.
+                sections.append(section)
+                produced += 1
+                continue
+
+            # Measure -> keep/discard over OUTPUT within a bounded budget.
+            # The SAME prompt is reused on regeneration — never mutated (MECH-01).
+            score = self._score_groundedness(section, questions)
+            retries = 0
+            while score < _GROUNDEDNESS_THRESHOLD and retries < _GROUNDEDNESS_MAX_RETRIES:
+                regenerated, _ = self._generate_section(prompt)
+                retries += 1
+                if regenerated is None:
+                    break
+                section = regenerated
+                score = self._score_groundedness(section, questions)
+
+            if score >= _GROUNDEDNESS_THRESHOLD:
+                sections.append(section)
+                produced += 1
+            else:
+                discarded_topics.append(topic)
+
+        report_body = "# Research Report\n\n" + "\n\n---\n\n".join(sections) + "\n"
+        if not questions:
+            grounding_block = (
+                f"\n## Groundedness\n\n- Kept: {produced} sections\n"
+                "- Discarded: none (scoring skipped: no fixture)\n"
+            )
+        else:
+            discarded_str = ", ".join(discarded_topics) if discarded_topics else "none"
+            grounding_block = (
+                f"\n## Groundedness\n\n- Kept: {produced} sections\n- Discarded: {discarded_str}\n"
+            )
+        report_path.write_text(report_body + grounding_block)
 
         if produced == 0:
+            reasons = []
+            if failed_topics:
+                reasons.append(f"bridge-failed: {', '.join(failed_topics)}")
+            if discarded_topics:
+                reasons.append(f"ungrounded/discarded: {', '.join(discarded_topics)}")
+            detail = "; ".join(reasons) or "no topics"
             return ToolResult(
                 success=False,
-                output=f"Research failed for all topics: {', '.join(failed_topics)}",
-                error=f"All {len(topics)} topic(s) exhausted retries: {', '.join(failed_topics)}",
+                output=f"Research produced no grounded sections "
+                f"(kept=0 discarded={len(discarded_topics)})",
+                error=f"All {len(topics)} topic(s) failed: {detail}",
                 artifacts=[str(report_path)],
             )
 
         return ToolResult(
             success=True,
-            output=f"Research report written to {report_path} ({len(topics)} topics)",
+            output=f"Research report written to {report_path} "
+            f"(kept={produced} discarded={len(discarded_topics)})",
             artifacts=[str(report_path)],
         )
