@@ -76,7 +76,10 @@ Full detail: [`milestones/v0.6.0-ROADMAP.md`](./milestones/v0.6.0-ROADMAP.md)
   3. `research.py::execute()` returns `ToolResult(success=False)` when all topics fail; no artifact contains "*Research failed*" text alongside a success result
   4. A live run with `FLOWSTATE_CLAUDE_BIN` pointing at a missing binary marks steps `BLOCKED` and writes no `[dry-run] claude prompt` text into `report.md`/`strategy.md`
   5. `gsd_adapter.py`'s "optional LLM enrichment" docstring matches the code (claim removed or implemented)
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 12-01-PLAN.md — Discipline can fail (required-set) + orchestrator routing via _run_step + `flowstate discipline` CLI (HON-01, HON-02)
+- [ ] 12-02-PLAN.md — research/strategy surface failure + gsd_adapter docstring reconciled (HON-03, HON-04, HON-06)
+- [ ] 12-03-PLAN.md — live run with no `claude` CLI fails loud (remove silent dry-run swap) (HON-05)
 
 ### Phase 13: Adapters Earn Their Names
 **Goal**: Each adapter performs the core mechanism its namesake is built on, in pure Python + `claude --print`, with no new runtime deps and no prompt self-modification.
