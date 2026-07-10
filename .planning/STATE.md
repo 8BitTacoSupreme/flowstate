@@ -1,12 +1,12 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.7.0
-milestone_name: Retrieval Benchmark Rigor
+milestone: v0.6.1
+milestone_name: Make the Names Real
 status: planning
-last_updated: "2026-07-10T15:00:00.000Z"
+last_updated: "2026-07-10T15:55:12.786Z"
 last_activity: 2026-07-10
 progress:
-  total_phases: 6
+  total_phases: 0
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Phase 12: Falsifiable Measurement (v0.7.0 Retrieval Benchmark Rigor)
+**Current focus:** v0.6.1 "Make the Names Real" — undead the adapter stubs before benchmarking (v0.7.0 deferred)
 
 ## Current Position
 
-Phase: 12 of 17 (Falsifiable Measurement)
-Plan: — (not yet planned)
-Status: Ready to plan
-Last activity: 2026-07-10 — Completed quick task 260710-ffo: corrected the benchmarking record (bench/BENCHMARKING_SCOPE.md + PAIRED_DESIGN_RUNBOOK.md)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-07-10 — Milestone v0.6.1 started
 
 ## Performance Metrics
 
@@ -104,14 +104,27 @@ None yet.
 | 260709-j8q | Build bench/locomo_qa.py — LoCoMo QA-accuracy layer (official stemmed-F1 + exact-match, no LLM judge; per-category 1-5 + Wilson CI; adversarial rule; retrieval+oracle arms; reader claude|openai w/ Task E resilience) | complete | 2026-07-09 | 5067807, 597579e |
 | 260709-qte | Chunk-level semantic retrieval (semantic_rank_chunked + --chunk-tokens): fixes measured truncation — 94.6% of LongMemEval sessions exceed bge 512-tok cap (median 2500 tok) | complete | 2026-07-09 | 7a67cec, 585ae5e |
 | 260709-rep | Add --corpus turns|observations arm to bench/locomo.py (paper's best RAG corpus; observation docs carry dia_id provenance; summaries excluded — no provenance) | complete | 2026-07-09 | a07259b, 2fb5113 |
-| 260710-ffo | Correct the benchmarking record — new bench/BENCHMARKING_SCOPE.md (two-track model: Track 1 retrieval/deterministic where BM25 is the incumbent counterfactual, vs Track 2 harness-value; dead-alias debunk of autoresearch/gstack/superpowers) + fix stale PAIRED_DESIGN_RUNBOOK.md (prereqs #1/#2 LANDED, #3 unbuilt; pack≈none vs wiki 0.825≈oracle) | complete | 2026-07-10 | 9790284, c268cc9, e61ebe1 |
+| 260710-ffo | Correct the benchmarking record — new bench/BENCHMARKING_SCOPE.md (two-track model: Track 1 retrieval/deterministic where BM25 is the incumbent counterfactual, vs Track 2 harness-value) + fix stale PAIRED_DESIGN_RUNBOOK.md (prereqs #1/#2 LANDED, #3 unbuilt; pack≈none vs wiki 0.825≈oracle). NOTE: its "dead-alias" claim about autoresearch/gstack/superpowers was WRONG and later corrected by erratum eab8ae8 — those are real MIT upstreams FlowState's adapters are named after and barely implement (v0.6.1 fixes that). | complete | 2026-07-10 | 9790284, c268cc9, e61ebe1, eab8ae8 |
 
 ## Session Continuity
 
 Last session: 2026-07-10
-Stopped at: ROADMAP.md, STATE.md, and REQUIREMENTS.md traceability written for v0.7.0 (Phases 12-17, 18/18 requirements mapped, 100% coverage). No phase planning started yet.
+Stopped at: v0.6.1 "Make the Names Real" opened as the active milestone, inserted before v0.7.0 per the user's "fix the gaps before we benchmark any further." Scope: undead the adapter stubs. v0.7.0 (retrieval bench) and the v0.8.0 seed are deferred; they renumber automatically when they start (GSD continues from the last shipped phase). v0.7.0's requirements preserved at `.planning/deferred/v0.7.0-REQUIREMENTS.md`.
 
-**Established facts for v0.7.0 (verified this session, not estimates):**
+**Why v0.6.1 exists (verified this session, file:line):**
+- `discipline.py:56` hardcodes `AuditResult(success=True)`; `orchestrator.py:315-319` marks the Discipline step COMPLETED without reading `.checks`. **The enforcement stage cannot fail** — a repo passing 0/7 checks reports "All steps succeeded."
+- `research.py:113-122` writes "*Research failed*" into `report.md` then returns `ToolResult(success=True)`; no `success=False` path exists.
+- `orchestrator.py:171-173`: a live run with no `claude` CLI writes `[dry-run] claude prompt...` stub text as real artifacts, reports success.
+- The `research`/`strategy`/`discipline` adapters are named after real MIT upstreams (Karpathy Autoresearch, Garry Tan Gstack, Jesse Vincent Superpowers) but implement almost none of them: research = fan-out+concat (no measure/keep-discard); strategy = one call (no rubric/gate); discipline = 7 `Path.exists()` checks (no test run, no git state, no hook contents).
+- All three upstreams are **MIT** (verified) → vendorable with NOTICE attribution. gstack/superpowers are Claude Code skill-markdown; GSD-2 is a TS CLI (stays detect-and-delegate); autoresearch is a training script (pattern reimplemented, not vendored).
+- **Correction:** an earlier `bench/BENCHMARKING_SCOPE.md` claim that these were "dead aliases / no such layers exist" was WRONG; fixed by erratum eab8ae8.
+
+Next step: `/gsd-plan-phase 12` — Phase 12 "Honesty & Failure-Capability" (make broken runs fail instead of reporting clean). Then Phase 13 (in-process mechanisms), Phase 14 (vendor gstack+superpowers, auto-install, surface via `flowstate launch`).
+
+---
+
+**DEFERRED — established facts for v0.7.0 (verified, carry forward when v0.7.0 starts; phases renumber to 15-20):**
+
 - `recall_any@5` = 0.966 for **both** BM25 and chunked-semantic; `recall_all@5` = 0.866 vs 0.844; `recall_all@10` = 0.946 vs 0.904. Gold sessions are already retrieved, at ranks 6–10 → a **ranking** problem. A perfect reranker over a top-R pool scores exactly `recall_all@R`, so dense→rerank@10 caps at 0.946 and BM25→rerank@10 caps at 0.904.
 - The 0.866-vs-0.844 lead is **not currently testable**: both harnesses emit only aggregate means + Wilson CI, no per-instance records. McNemar flips around b+c ≈ 27 discordant pairs — it could land either side of p<0.05.
 - LongMemEval-S is **type-blocked** (6 `question_type`s in 7 contiguous runs). `--limit 100` yields 70 `single-session-user` + 30 `multi-session` and zero temporal-reasoning/knowledge-update. Every historical `--limit` run was on a biased subset. Use stratified sampling.
@@ -121,12 +134,12 @@ Stopped at: ROADMAP.md, STATE.md, and REQUIREMENTS.md traceability written for v
 - Installed fastembed 0.8 ships cross-encoders (`Xenova/ms-marco-MiniLM-L-6-v2` 80MB, `jinaai/jina-reranker-v1-turbo-en` 150MB, `BAAI/bge-reranker-base` 1.04GB) and 8192-token embedders (`jina-embeddings-v2-base-en`, `nomic-embed-text-v1.5-Q` 130MB). **Zero new deps needed.**
 - LoCoMo currently **loses** to BM25 on semantic full-cov@5 (0.459 vs 0.481) — Phase 16 needs to report this honestly per-category, not paper over it.
 
-Resume file: None (roadmap approved this session)
-Data: `data/longmemeval_s_cleaned.json` (265MB) + `data/locomo10.json` present; `data/` is now gitignored (LoCoMo is CC BY-NC).
-Next step: `/gsd-plan-phase 12` — per-instance dumps + `bench/stats.py` + `compare.py` + stratified split. Phase 12 may kill the current headline claim; that is its purpose.
+Data: `data/longmemeval_s_cleaned.json` (265MB) + `data/locomo10.json` present; `data/` is gitignored (LoCoMo is CC BY-NC). Held for v0.7.0.
 
 ## Operator Next Steps
 
-- Plan the first v0.7.0 phase with `/gsd-plan-phase 12`
+- Plan the first v0.6.1 phase with `/gsd-plan-phase 12` (Honesty & Failure-Capability)
+- v0.7.0 (retrieval bench) resumes after v0.6.1 ships; its spec waits at `.planning/deferred/v0.7.0-REQUIREMENTS.md`
 - Rotate the `OPENAI_API_KEY` pasted in an earlier chat session, if not already done
+
 </content>
