@@ -17,6 +17,9 @@ memory.db
 htmlcov/
 coverage.xml
 
+# Generated codebase pack (regenerate with `flowstate pack`; large, not versioned)
+.planning/codebase/repomix-pack.xml
+
 # Local artifacts (downloaded apps, scratch dirs)
 Claude Console-darwin-arm64/
 
