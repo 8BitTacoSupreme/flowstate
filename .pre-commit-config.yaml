@@ -10,12 +10,18 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^flowstate/skills/
+        exclude: ^flowstate/(skills|vendor)/
       - id: end-of-file-fixer
-        exclude: ^flowstate/skills/
+        exclude: ^flowstate/(skills|vendor)/
       - id: check-yaml
+        exclude: ^flowstate/vendor/
       - id: check-added-large-files
+        # Global 500KB threshold is deliberately UNCHANGED. The vendored GSD tree
+        # (flowstate/vendor/) carries a handful of legitimately large JS/mjs bundles
+        # (largest ~1.5M) that must ship byte-verbatim, so it is excluded here rather
+        # than raising the threshold for the whole repo.
         args: [--maxkb=500]
+        exclude: ^flowstate/vendor/
       - id: check-merge-conflict
       - id: debug-statements
 

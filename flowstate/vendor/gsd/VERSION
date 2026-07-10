@@ -1,0 +1,18 @@
+# Vendored GSD — provenance
+
+package:          get-shit-done-cc
+npm_version:      1.42.3
+resolved:         https://registry.npmjs.org/get-shit-done-cc/-/get-shit-done-cc-1.42.3.tgz
+integrity:        sha512-3sQoRYFl7v7dju3LXq7sE3pnufGHF7R6xfDU1DaH2+YYe4V6+dhoaUo4KoBHvjtLQ8UATUX3hWofHg+tAUUALQ==
+license:          MIT (© 2025 Lex Christopherson) — see ./LICENSE (verbatim)
+gsd_sdk_version:  1.42.3 (node bin/gsd-sdk.js --version)
+
+# Reproducible dependency set
+lockfile:         ./package-lock.json (lockfileVersion 3, 119 locked packages)
+install_command:  npm install get-shit-done-cc@1.42.3 --omit=optional --omit=dev
+vendored_tree:    ./node_modules/  (~51M, 100 production packages)
+platform_binary:  EXCLUDED — the optional ~197M @anthropic-ai/claude-agent-sdk-<platform>/claude
+                  binary is deliberately NOT vendored (--omit=optional). The gsd-sdk query path
+                  never needs it; agent-session spawning falls back to the user's own `claude`.
+
+# See ../VENDORING.md for the canonical, reproducible vendoring procedure.
