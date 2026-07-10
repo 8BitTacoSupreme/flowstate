@@ -1,5 +1,26 @@
 # Milestones
 
+## v0.6.0 Semantic Retrieval (Shipped: 2026-07-10)
+
+**Phases completed:** 3 phases, 4 plans, 4 tasks
+
+**Key accomplishments:**
+
+- **Embedding provider (Phase 9, 09-01)** — `flowstate/embeddings.py` adds `get_embedder()`/`Embedder` behind an optional `[semantic]` extra (`fastembed>=0.3`). fastembed is imported lazily inside `_ensure_model()`, never at module top-level, so `import flowstate.embeddings` succeeds without it. Model-name precedence (`FLOWSTATE_EMBED_MODEL` env > `.planning/config.json` > `BAAI/bge-small-en-v1.5`) mirrors `context_prefix._load_budget`. Injected `embed_fn` keeps all 20 tests fully offline.
+- **Vector store (Phase 9, 09-02)** — `MemoryStore` gained a `memories_vec` sqlite-vec `vec0` table with embed-on-write, delete-then-insert upsert, and an idempotent never-raises lazy backfill on open. `enable_load_extension(False)` immediately after `sqlite_vec.load()` re-scopes the extension-load surface (T-09-03). Dim is derived from `embedder.dim` at open time.
+- **Semantic memory retrieval (Phase 10, MEM-01/02)** — `MemoryStore.get_context()` now serves semantic KNN when vectors exist and falls back to a byte-identical FTS5/BM25 path when they don't. Relevance is gated by an L2 distance threshold (`_SEMANTIC_MAX_DISTANCE = 0.89`, ≈ cosine 0.60), **not** by an FTS5 pre-gate — a Critical code-review catch, since a lexical gate would have suppressed exactly the lexically-disjoint-but-semantically-relevant case the milestone exists to serve.
+- **Semantic wiki retrieval (Phase 11)** — ephemeral in-memory `vec0` KNN over a wiki article corpus feeds per-run top-k articles into the opt-in `context_prefix` wiki layer, with a byte-identical default (no `include_layers`) path and a never-raises static fallback.
+
+**Quality:** 749 tests passing at 92.19% coverage. Core install stays dependency-free; every semantic path degrades silently to FTS5 when `[semantic]` is absent, and all default code paths are byte-identical to v0.5.0.
+
+**Known deferred items at close:** 1
+
+- **WIKI-F1** — no production caller passes `include_layers={"wiki"}` yet. The wiki retrieval mechanism is implemented and tested, but firing it needs a curated `.planning/codebase/wiki/` corpus plus orchestrator wiring. Carried into the backlog.
+
+**Errata:** `10-01-SUMMARY.md` frontmatter records a decision ("FTS5 relevance gate added inside `_semantic_results`") that the shipped code contradicts — `_semantic_results` uses the distance threshold and its docstring explicitly rejects an FTS5 gate. The summary frontmatter drifted from the final post-review implementation; the code is authoritative.
+
+---
+
 ## v0.5.0 Compounding Loop (Shipped: 2026-06-09)
 
 **Phases completed:** 3 phases, 10 plans, 18 tasks

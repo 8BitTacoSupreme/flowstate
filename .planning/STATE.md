@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.6.0
 milestone_name: Semantic Retrieval
-status: milestone_complete
-stopped_at: Milestone complete (Phase 11 was final phase)
-last_updated: 2026-06-18T20:17:19.328Z
-last_activity: 2026-06-18
+status: Awaiting next milestone
+stopped_at: "v0.6.0 Semantic Retrieval archived (phases 9-11, 749 tests @ 92.19%). Retrieval-benchmark arc left BM25 unbeaten in the strict sense: chunked-semantic recall_all@5 0.866 vs BM25 0.844 with OVERLAPPING Wilson CIs and no paired significance test run. Next milestone v0.7.0 exists to settle that."
+last_updated: "2026-07-10T14:19:11.273Z"
+last_activity: 2026-07-10 — Milestone v0.6.0 completed and archived
 progress:
   total_phases: 3
   completed_phases: 3
   total_plans: 4
-  completed_plans: 5
+  completed_plans: 4
   percent: 100
 ---
 
@@ -18,19 +18,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-18)
+See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Milestone complete
+**Current focus:** Planning next milestone (v0.7.0 Retrieval Benchmark Rigor)
 
 ## Current Position
 
-Phase: 11
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-07-08 - Completed quick task 260708-jy5: deterministic supersession in memory.py
-
-Progress: [██████████] 100%
+Phase: Milestone v0.6.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-07-10 — Milestone v0.6.0 completed and archived
 
 ## Performance Metrics
 
@@ -83,7 +81,8 @@ None yet.
 
 ### Blockers/Concerns
 
-None at roadmap start. Key implementation constraint: every caller path must check embedder.available() before computing vectors — the FTS5 fallback is the correctness gate, not an afterthought. Confirm sqlite-vec loads cleanly on the existing MemoryStore._conn before Phase 9 planning.
+- **SECURITY (carried forward, unresolved):** an `OPENAI_API_KEY` was pasted into a chat session during the v0.6.0-era benchmark work. Rotate it if that has not already been done. Tracked here so the milestone reset does not erase it.
+- **Benchmark integrity:** `bench/BENCHMARK_HANDOFF.md` §4 records that `_READER_INSTRUCTION` is a measured QA regression that is still the default reader prompt. Out of scope for v0.7.0 (retrieval-only), but no QA number should be quoted until it is addressed.
 
 ## Quick Tasks Completed
 
@@ -110,3 +109,7 @@ Last session: 2026-07-09
 Stopped at: Task D (260709-d64) complete. FINDINGS on real LongMemEval_S: RETRIEVAL (n=500) — FlowState semantic reaches BM25-parity with bge-base (recall_all@5 0.840≈BM25 0.844; recall_all@10 0.930>0.904); bge-small (33M) 0.806. QA (n=100 representative): claude judge retrieval 0.450/oracle 0.410; gpt-4-turbo judge retrieval 0.410/oracle 0.480 (restored oracle>retrieval). Judge swap barely moved it → the gap to paper's 0.870 oracle is the READER (claude sonnet + generic prompt + truncation), not retrieval/judge. Discovered key's project lacks gpt-4o access (only gpt-3.5/gpt-4-turbo) — silent 0/100 bug fixed by Task D canary. bge-base embed on CPU is slow (~30-40min/500).
 Resume file: None
 Next step: Improved-QA reruns (bge-base, sample 100, tuned reader): (a) claude reader + gpt-4-turbo judge, (b) gpt-4-turbo reader + gpt-4-turbo judge — does tuned/stronger reader lift oracle 0.48→toward 0.87? Then push batch (held). Rotate the OPENAI_API_KEY that was pasted in chat.
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

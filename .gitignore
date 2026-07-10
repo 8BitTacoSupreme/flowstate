@@ -19,3 +19,8 @@ coverage.xml
 
 # Local artifacts (downloaded apps, scratch dirs)
 Claude Console-darwin-arm64/
+
+# Benchmark datasets — never committed.
+# LoCoMo (locomo10.json) is CC BY-NC: do not redistribute.
+# Re-fetch via the commands in bench/BENCHMARK_HANDOFF.md §7.
+data/
