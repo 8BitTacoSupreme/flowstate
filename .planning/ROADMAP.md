@@ -104,8 +104,12 @@ Full detail: [`milestones/v0.6.0-ROADMAP.md`](./milestones/v0.6.0-ROADMAP.md)
   1. `flowstate/skills/gstack/` and `flowstate/skills/superpowers/` contain the vendored MIT `SKILL.md` assets, and `NOTICE` carries both MIT attributions (© Garry Tan, © Jesse Vincent)
   2. `flowstate install-skills` (and `init`/`kickoff`) copies the vendored skills into the project's `.claude/skills/`; a fresh project needs no manual skill install
   3. `flowstate launch strategy` prints the `claude` + `/office-hours` handoff and `flowstate launch discipline` prints the superpowers TDD-skill handoff when the vendored skills are installed
-  4. README shows `947` tests (not `803`) and the Superpowers URL is `obra/superpowers` (not the 404 `obra/claude-code-superpowers`)
-**Plans**: TBD
+  4. README shows the real current test count (985, not 803/947) and the Superpowers URL is `obra/superpowers` (not the 404 `obra/claude-code-superpowers`)
+**Plans**: 4 plans
+- [ ] 14-01-PLAN.md — Vendor gstack + superpowers MIT SKILL.md trees + LICENSE + NOTICE (VEND-01, VEND-02)
+- [ ] 14-02-PLAN.md — README reconciliation: URL, doctor count, sqlite-vec wording, adapter acknowledgments (VEND-05)
+- [ ] 14-03-PLAN.md — `flowstate install-skills` installer + init/kickoff auto-invoke (VEND-03)
+- [ ] 14-04-PLAN.md — `flowstate launch strategy|discipline` skill handoffs (VEND-04)
 
 ### Phase 15: Bundle GSD
 **Goal**: GSD ships inside FlowState and installs itself — the user never installs GSD separately, and FlowState never detects or prompts for it. Reverses the "no cross-harness packaging" decision per user direction (2026-07-10): *"It should be there, by whatever legal means."* GSD (`gsd-build/get-shit-done`) is MIT (© Lex Christopherson), so the path is legal with attribution.
