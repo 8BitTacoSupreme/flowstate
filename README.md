@@ -251,7 +251,7 @@ flowstate/
 │       ├── research.py     # Research adapter (split-topic)
 │       ├── strategy.py     # Strategy adapter (pressure-test)
 │       └── gsd_adapter.py  # Management adapter (context files)
-├── tests/                  # 985 tests, 92% coverage
+├── tests/                  # 1000 tests, 92% coverage
 ├── bench/                  # research harness: grounding eval, RGB axes, arms, promptab/sysab A/B, tune_loop
 ├── research/               # Generated research artifacts
 ├── flowstate.json          # Pipeline state (gitignored)
