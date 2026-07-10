@@ -7,8 +7,9 @@
 - ✅ **v0.5.0 Compounding Loop** — Phases 6-8 (shipped 2026-06-09)
 - ✅ **v0.6.0 Semantic Retrieval** — Phases 9-11 (shipped 2026-07-10)
 - 🚧 **v0.6.1 Make the Names Real** — Phases 12-15 (in progress)
-- 📋 **v0.7.0 Retrieval Benchmark Rigor** — deferred behind v0.6.1; renumbers to 16-21 on start (spec: `deferred/v0.7.0-REQUIREMENTS.md`)
-- 📋 **v0.8.0 Harness Tax & Value** — SEED-001; renumbers after v0.7.0
+- 📋 **v0.6.2 Make the Harness Real** — the eval harness runs E2E and fails loud; **gates all further benchmarking** (SEED-002; phases 16-18 after v0.6.1)
+- 📋 **v0.7.0 Retrieval Benchmark Rigor** — deferred behind v0.6.1 → v0.6.2; renumbers after v0.6.2 (spec: `deferred/v0.7.0-REQUIREMENTS.md`)
+- 📋 **v0.8.0 Harness Tax & Value** — SEED-001; follows v0.7.0
 
 ## Phases
 

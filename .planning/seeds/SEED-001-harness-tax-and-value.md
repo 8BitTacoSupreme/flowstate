@@ -64,6 +64,13 @@ candidates. That is a legitimate outcome.
 Surface after v0.7.0 Phase 17 completes. v0.7.0 is the deterministic *retrieval* track and
 must not be derailed; this is the *harness-value* track.
 
+**Prerequisite (added 2026-07-10):** v0.6.2 "Make the Harness Real" ([[SEED-002]]) must land
+first — it builds the bench-side plumbing this milestone assumes (mode-honest reporting, no
+silent no-op arms, the memory→wiki distiller + article-corpus producer, and multi-sample CIs
+wired into `compound_eval`). With v0.6.2 shipped, this milestone's Phase 19/20 shrink to the
+*production* half: enforce judge-model ≠ producer-model, add the production wiki caller +
+manifest/staleness, and the tax accounting — the bench-side halves are already real.
+
 ## Scope Estimate
 
 **4 phases (18–21), ~14 requirements.** Continuing numbering from v0.7.0's Phase 17.
