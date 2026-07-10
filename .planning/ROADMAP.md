@@ -123,7 +123,7 @@ Full detail: [`milestones/v0.6.0-ROADMAP.md`](./milestones/v0.6.0-ROADMAP.md)
 **Plans**: 5 plans
 - [x] 15-01-PLAN.md — Vendor the pinned MIT GSD distribution + LICENSE/VERSION/NOTICE + coverage/collection exclusions (GSD-01)
 - [x] 15-02-PLAN.md — Extend the installer to lay down GSD unconditionally into .claude/skills + .claude/get-shit-done + invokable gsd-sdk (GSD-02)
-- [ ] 15-03-PLAN.md — Neutralize the launcher GSD detect-and-suggest path so launch gsd is unconditional (GSD-03)
+- [x] 15-03-PLAN.md — Neutralize the launcher GSD detect-and-suggest path so launch gsd is unconditional (GSD-03)
 - [ ] 15-04-PLAN.md — Documented GSD refresh/staleness path mirroring flowstate pack + inspectable VERSION (GSD-04)
 - [ ] 15-05-PLAN.md — README reconciliation to the bundled-and-auto-installed reality + true test count (GSD-05)
 
@@ -152,7 +152,7 @@ Scoped and roadmapped this session, then deferred so the adapter stubs get fixed
 | 12. Honesty & Failure-Capability | v0.6.1 | 3/3 | Complete   | 2026-07-10 |
 | 13. Adapters Earn Their Names | v0.6.1 | 3/3 | Complete    | 2026-07-10 |
 | 14. Vendor & Surface | v0.6.1 | 4/4 | Complete    | 2026-07-10 |
-| 15. Bundle GSD | v0.6.1 | 2/5 | In Progress|  |
+| 15. Bundle GSD | v0.6.1 | 3/5 | In Progress|  |
 | _v0.7.0 Retrieval Benchmark Rigor_ | v0.7.0 | deferred | renumbers 16-21 on start | - |
 
 ## Backlog
