@@ -93,6 +93,8 @@ class ResearchAdapter(ToolAdapter):
         # (and across Research -> Strategy -> GSD) within the 5-min TTL.
         prior = self.prior_knowledge or ""
         sections = []
+        failed_topics = []
+        produced = 0
         for topic in topics:
             prompt = _build_topic_prompt(topic, answers)
             if prior:
@@ -108,12 +110,22 @@ class ResearchAdapter(ToolAdapter):
                 )
                 if br.success and br.output.strip():
                     sections.append(br.output.strip())
+                    produced += 1
                     break
             else:
                 sections.append(f"## {topic}\n\n*Research failed: {br.error or 'no output'}*\n")
+                failed_topics.append(topic)
 
         report = "# Research Report\n\n" + "\n\n---\n\n".join(sections) + "\n"
         report_path.write_text(report)
+
+        if produced == 0:
+            return ToolResult(
+                success=False,
+                output=f"Research failed for all topics: {', '.join(failed_topics)}",
+                error=f"All {len(topics)} topic(s) exhausted retries: {', '.join(failed_topics)}",
+                artifacts=[str(report_path)],
+            )
 
         return ToolResult(
             success=True,
