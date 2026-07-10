@@ -118,7 +118,7 @@ class ResearchAdapter(ToolAdapter):
 
         Issues ONE scoring bridge call (a measurement over OUTPUT, never a prompt
         change). The model returns a 0-10 integer; it is parsed with a strict
-        bounded regex and clamped — NEVER eval/exec/literal_eval on model text.
+        bounded regex and clamped — never dynamic evaluation of model text.
         Returns a float normalized to 0.0-1.0; bridge failure or unparseable
         output returns 0.0 (treated as weak, not a crash).
         """
