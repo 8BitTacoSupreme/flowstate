@@ -79,7 +79,7 @@ Full detail: [`milestones/v0.6.0-ROADMAP.md`](./milestones/v0.6.0-ROADMAP.md)
 **Plans**: 3 plans
 - [x] 12-01-PLAN.md — Discipline can fail (required-set) + orchestrator routing via _run_step + `flowstate discipline` CLI (HON-01, HON-02)
 - [x] 12-02-PLAN.md — research/strategy surface failure + gsd_adapter docstring reconciled (HON-03, HON-04, HON-06)
-- [ ] 12-03-PLAN.md — live run with no `claude` CLI fails loud (remove silent dry-run swap) (HON-05)
+- [x] 12-03-PLAN.md — live run with no `claude` CLI fails loud (remove silent dry-run swap) (HON-05)
 
 ### Phase 13: Adapters Earn Their Names
 **Goal**: Each adapter performs the core mechanism its namesake is built on, in pure Python + `claude --print`, with no new runtime deps and no prompt self-modification.
@@ -136,7 +136,7 @@ Scoped and roadmapped this session, then deferred so the adapter stubs get fixed
 | 9. Embedding Provider + Vector Store Foundation | v0.6.0 | 2/2 | Complete | 2026-06-18 |
 | 10. Semantic Memory Retrieval | v0.6.0 | 1/1 | Complete | 2026-06-18 |
 | 11. Semantic Wiki Retrieval | v0.6.0 | 1/1 | Complete | 2026-06-18 |
-| 12. Honesty & Failure-Capability | v0.6.1 | 2/3 | In Progress|  |
+| 12. Honesty & Failure-Capability | v0.6.1 | 3/3 | Complete   | 2026-07-10 |
 | 13. Adapters Earn Their Names | v0.6.1 | 0/? | Not started | - |
 | 14. Vendor & Surface | v0.6.1 | 0/? | Not started | - |
 | 15. Bundle GSD | v0.6.1 | 0/? | Not started | - |
