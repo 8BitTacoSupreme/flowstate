@@ -5,6 +5,8 @@
 Everything below is measured, not estimated. Scratchpad JSONs were ephemeral, so the numbers
 are transcribed here. Reproduce with the commands in "Repro" before trusting any of it.
 
+See `BENCHMARKING_SCOPE.md` for the two-track model (this doc is Track 1, retrieval-ranking) and `PAIRED_DESIGN_RUNBOOK.md` for the Track 2 harness-value protocol.
+
 ---
 
 ## 1. What exists
