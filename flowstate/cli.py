@@ -75,6 +75,7 @@ def init(
     effort: str | None,
 ):
     """Initialize a new FlowState project through the pipeline."""
+    from flowstate.installer import install_skills
     from flowstate.interview import run_interview
     from flowstate.orchestrator import run_pipeline
     from flowstate.state import load_state, save_state
@@ -101,6 +102,7 @@ def init(
         save_state(state, root)
 
     run_pipeline(state, root)
+    install_skills(root, dry_run=state.preferences.dry_run, state=state)
     save_state(state, root)
 
 
@@ -119,6 +121,7 @@ def kickoff(root: Path | None, skip_interview: bool):
     generates the repomix pack, and saves state. No bridge or LLM calls are made.
     """
     from flowstate.context import write_context_files
+    from flowstate.installer import install_skills
     from flowstate.interview import run_interview
     from flowstate.pack import run_pack
     from flowstate.state import load_state, save_state
@@ -138,6 +141,7 @@ def kickoff(root: Path | None, skip_interview: bool):
         save_state(state, root)
 
     created = write_context_files(state, root)
+    install_skills(root, dry_run=False, state=state)
 
     pack_result = run_pack(root)
     if pack_result.success:
@@ -317,6 +321,39 @@ def context(root: Path | None):
 
     console.print(f"\n[green]{len(created)} context files written:[/green]")
     for p in created:
+        console.print(f"  {p.relative_to(root)}")
+    console.print()
+
+
+@main.command("install-skills")
+@click.option(
+    "--root",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Project root directory.",
+)
+@click.option("--dry-run", is_flag=True, help="Show what would be installed without writing.")
+def install_skills_cmd(root: Path | None, dry_run: bool):
+    """Install the vendored Claude Code skills into the project's .claude/skills/.
+
+    Copies the bundled gstack and superpowers skill trees. Idempotent and path-safe;
+    never clobbers user-authored skills outside the vendored namespaces.
+    """
+    from flowstate.installer import install_skills
+    from flowstate.state import load_state, save_state
+
+    root = resolve_root(root, option_was_explicit=_root_was_explicit())
+
+    console.print(Panel(BANNER, title="v" + __version__, border_style="blue", expand=False))
+
+    state = load_state(root)
+    installed = install_skills(root, dry_run=dry_run, state=state)
+    if not dry_run:
+        save_state(state, root)
+
+    verb = "Would install" if dry_run else "Installed"
+    console.print(f"\n[green]{verb} {len(installed)} skill namespace(s):[/green]")
+    for p in installed:
         console.print(f"  {p.relative_to(root)}")
     console.print()
 
