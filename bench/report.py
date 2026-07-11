@@ -55,6 +55,11 @@ _module_console = Console()
 # quality metrics but NEVER feeds the deterministic scorer or any axis.
 _TAX_NOTE = "Track-2 tax — EXCLUDED from compounding_score"
 
+# The denominator is named after flowstate verify's acceptance gates — the pipeline
+# produces artifacts, not commits, so "per commit" would be a lie (TAX-04). Never use
+# the word "commit" anywhere in the tax block.
+_GATE_LABEL = "per verified acceptance gate"
+
 
 def _tax_totals(scorecard: Scorecard) -> dict:
     """Sum per-run consumption across the scorecard's snapshots (Track-2 tax).
@@ -71,12 +76,31 @@ def _tax_totals(scorecard: Scorecard) -> dict:
 
 
 def _tax_block(scorecard: Scorecard) -> dict:
-    """The full tax payload: per-arm totals plus the Track-2 exclusion note.
+    """The full tax payload: per-arm totals + cost-per-success + the Track-2 note.
 
+    Cost-per-success = total tax ÷ the count of PASSED flowstate verify acceptance
+    gates (summed ``verify_pass``). The denominator is named honestly — the pipeline
+    produces artifacts, not commits — and a zero denominator degrades to ``"n/a"``.
     Kept entirely inside report.py — tax numbers are presentation-only and must
     never cross back into bench/metrics.py.
     """
-    return {"note": _TAX_NOTE, **_tax_totals(scorecard)}
+    totals = _tax_totals(scorecard)
+    gates_passed = sum(int(s.verify_pass) for s in scorecard.snapshots)
+    total_tokens = totals["tokens_in"] + totals["tokens_out"]
+    if gates_passed > 0:
+        tokens_per_gate: float | str = round(total_tokens / gates_passed, 4)
+        seconds_per_gate: float | str = round(totals["wall_clock_s"] / gates_passed, 4)
+    else:
+        tokens_per_gate = "n/a"
+        seconds_per_gate = "n/a"
+    return {
+        "note": _TAX_NOTE,
+        **totals,
+        "gates_passed": gates_passed,
+        "cost_basis": f"tokens/seconds {_GATE_LABEL} (flowstate verify acceptance gates)",
+        "tokens_per_verified_acceptance_gate": tokens_per_gate,
+        "seconds_per_verified_acceptance_gate": seconds_per_gate,
+    }
 
 
 # Color per axis / verdict label, reusing the verify table palette where sensible.
@@ -258,6 +282,10 @@ def _tax_panel(scorecard: Scorecard) -> Panel:
         f"tokens_out:  {tax['tokens_out']}",
         f"cache_read:  {tax['cache_read']}",
         f"seconds:     {tax['wall_clock_s']:g}",
+        "",
+        f"passed verify acceptance gates: {tax['gates_passed']}",
+        f"tokens {_GATE_LABEL}:  {tax['tokens_per_verified_acceptance_gate']}",
+        f"seconds {_GATE_LABEL}: {tax['seconds_per_verified_acceptance_gate']}",
     ]
     return Panel("\n".join(lines), title="Tax (Track-2)", border_style="cyan")
 
@@ -269,6 +297,9 @@ def _tax_markdown_lines(scorecard: Scorecard) -> list[str]:
         f"- Tax ({tax['note']}): "
         f"tokens_in {tax['tokens_in']}, tokens_out {tax['tokens_out']}, "
         f"cache_read {tax['cache_read']}, seconds {tax['wall_clock_s']:g}",
+        f"- Cost per success ({tax['gates_passed']} passed verify acceptance gates): "
+        f"{tax['tokens_per_verified_acceptance_gate']} tokens {_GATE_LABEL}, "
+        f"{tax['seconds_per_verified_acceptance_gate']} seconds {_GATE_LABEL}",
         "",
     ]
 
