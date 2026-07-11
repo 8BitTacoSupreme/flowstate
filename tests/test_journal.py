@@ -165,6 +165,38 @@ class TestDryRun:
         assert "dry_run" in content
 
 
+class TestConsumptionMetadata:
+    def test_consumption_kwargs_written_to_metadata(
+        self, store: MemoryStore, state_with_manifest, tmp_path
+    ):
+        append_run_entry(
+            store,
+            state_with_manifest,
+            "con001",
+            root=tmp_path,
+            timestamp=FIXED_TS,
+            tokens_in=1234,
+            tokens_out=567,
+            cache_read=89,
+            wall_clock_s=4.25,
+        )
+        meta = store.get_by_kind(MemoryKind.RUN, limit=1)[0].metadata
+        assert meta["tokens_in"] == 1234
+        assert meta["tokens_out"] == 567
+        assert meta["cache_read"] == 89
+        assert meta["wall_clock_s"] == 4.25
+
+    def test_consumption_defaults_zero_and_none(
+        self, store: MemoryStore, state_with_manifest, tmp_path
+    ):
+        append_run_entry(store, state_with_manifest, "con002", root=tmp_path, timestamp=FIXED_TS)
+        meta = store.get_by_kind(MemoryKind.RUN, limit=1)[0].metadata
+        assert meta["tokens_in"] == 0
+        assert meta["tokens_out"] == 0
+        assert meta["cache_read"] == 0
+        assert meta["wall_clock_s"] is None
+
+
 class TestRunlogMirror:
     def test_runlog_created_and_contains_run_id(
         self, store: MemoryStore, state_with_manifest, tmp_path
