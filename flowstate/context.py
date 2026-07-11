@@ -31,10 +31,11 @@ def _register(
     """Add or replace an InstallEntry for the given file on state.install_manifest.
 
     Idempotent: removes any existing entry for the same relative path before appending.
-    Checksums are computed for all kinds except "memory" (memory.db mutates).
+    Checksums are computed for all kinds except "memory" (memory.db mutates) and
+    "wiki" (the corpus is a DIRECTORY, so _sha256_of must not run on it).
     """
     rel = str(path.relative_to(root))
-    checksum = _sha256_of(path) if kind != "memory" else None
+    checksum = _sha256_of(path) if kind not in {"memory", "wiki"} else None
     state.install_manifest = [e for e in state.install_manifest if e.path != rel]
     state.install_manifest.append(
         InstallEntry(

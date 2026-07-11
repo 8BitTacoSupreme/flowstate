@@ -97,6 +97,31 @@ def _densify(article_text: str, claude: str, model: str) -> str:
     return article_text
 
 
+def is_wiki_stale(root: Path, state) -> bool:
+    """Return True if the wiki corpus is absent or memory.db is newer than it.
+
+    Mirrors ``flowstate.pack.is_pack_stale`` (D-04), but keys on ``memory.db``
+    mtime as the staleness source instead of the newest ``*.py`` source file.
+
+    Args:
+        root: Project root directory.
+        state: FlowStateModel — consulted for the wiki's install_manifest entry.
+
+    Returns:
+        True  — corpus needs regeneration (no manifest entry, or memory.db newer).
+        False — corpus is current (entry present and memory.db absent or older).
+    """
+    entry = next((e for e in state.install_manifest if e.path == _WIKI_CORPUS_REL), None)
+    if entry is None:
+        return True
+
+    memory_db = root / "memory.db"
+    if not memory_db.exists():
+        return False
+
+    return memory_db.stat().st_mtime > entry.created_at.timestamp()
+
+
 def main(argv: list[str] | None = None) -> int:
     """Distill memory.db into the wiki article corpus. Never raises."""
     ap = argparse.ArgumentParser(

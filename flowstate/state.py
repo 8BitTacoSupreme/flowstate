@@ -53,7 +53,7 @@ class InstallEntry(BaseModel):
 
     path: str
     owner: str
-    kind: Literal["config", "context", "memory", "research", "artifact", "pack", "fixture"]
+    kind: Literal["config", "context", "memory", "research", "artifact", "pack", "fixture", "wiki"]
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     checksum: str | None = None
 
