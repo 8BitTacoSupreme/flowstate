@@ -40,6 +40,15 @@ def test_cheap_mode_returns_ci_delta_end_to_end(tmp_path):
     assert "EXCLUDED from compounding_score" in result["note"]
 
 
+def test_cheap_mode_result_is_flagged_synthetic(tmp_path):
+    """IN-01: cheap mode synthesizes fixed trajectories, so its result must carry
+    synthetic=True to stop a reader mistaking the seeded delta for a measurement."""
+    out = tmp_path / "result.json"
+    rc = main(["--root", _FIXTURE, "--mode", "cheap", "--trials", "3", "--out", str(out)])
+    assert rc == 0
+    assert json.loads(out.read_text())["synthetic"] is True
+
+
 def test_cheap_mode_does_not_mutate_checked_in_fixture(tmp_path):
     """The isolated worktree, not the checked-in fixture, holds the seeded memory + wiki corpus."""
     out = tmp_path / "result.json"
@@ -124,6 +133,8 @@ def test_real_mode_plumbing_uses_monkeypatched_run_trial_no_subprocess(tmp_path,
     assert {arm for arm, _ in calls} == {"wiki", "none"}
 
     result = json.loads(out.read_text())
+    # IN-01: real mode measures the named arms, so it must NOT be flagged synthetic.
+    assert result["synthetic"] is False
     ci = result["bootstrap_ci_delta_vs_baseline"]
     assert ci["n"] == 3
     assert ci["mean"] == 2.0

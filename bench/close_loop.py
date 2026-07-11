@@ -176,6 +176,12 @@ def main(argv: list[str] | None = None) -> int:
 
     result = {
         "mode": args.mode,
+        # Cheap mode synthesizes fixed arm/baseline trajectories (see
+        # _cheap_trajectories) regardless of --arm/--baseline, so the echoed
+        # labels below name arms that were never actually measured. Stamp the
+        # result synthetic so a reader cannot mistake the seeded delta for a
+        # real measurement of the named arms. Real mode measures the labels.
+        "synthetic": args.mode == "cheap",
         "arm": args.arm,
         "baseline": args.baseline,
         "trials": args.trials,
