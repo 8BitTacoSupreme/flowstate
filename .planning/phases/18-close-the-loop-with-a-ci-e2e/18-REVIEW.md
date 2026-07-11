@@ -12,193 +12,116 @@ files_reviewed_list:
   - tests/test_bench_e2e_smoke.py
   - tests/test_bench_replicate.py
 findings:
-  critical: 1
-  warning: 2
+  critical: 0
+  warning: 0
   info: 3
-  total: 6
-status: issues_found
+  total: 3
+status: clean
 ---
 
-# Phase 18: Code Review Report
+# Phase 18: Code Review Report (Re-Review)
 
 **Reviewed:** 2026-07-10
 **Depth:** standard
 **Files Reviewed:** 7
-**Status:** issues_found
+**Status:** clean (CR-01 / WR-01 / WR-02 genuinely resolved; 3 pre-existing info items intentionally deferred)
 
 ## Summary
 
-Reviewed the v0.6.2 "close the loop" harness surface: the seeded paired-bootstrap CI
-(`bench/bootstrap.py`), the one-command driver (`bench/close_loop.py`), the N-trial
-replication driver (`bench/replicate.py`), and their four test modules.
+Re-review after fixes to the prior BLOCKER (CR-01) and two WARNINGs (WR-01, WR-02). All
+three are **genuinely resolved** — verified by tracing the data flow, not just by trusting
+the tests — and no new defects were introduced. Track-2 isolation still holds. The four
+test modules (39 tests) pass under `uv run pytest`.
 
-Track-2 isolation holds: neither `close_loop.py` nor `replicate.py` imports
-`bench.metrics`/`compute_scorecard`, and the judge-derived CI is explicitly labelled
-"EXCLUDED from compounding_score". The `bootstrap.py` edge-case handling (empty / n==1 /
-all-equal / non-numeric / seed determinism) is sound and well-tested. `_worktree` +
-`scaffold` correctly confine all writes to a temp copy, so the checked-in fixture is not
-mutated (verified against `compound_eval._worktree` and `project.scaffold`). Cheap mode is
-CI-safe (no live bridge/network) and the E2E smoke asserts fail-loud via
-`_EXIT_PRODUCER_ABSENT`.
+### CR-01 — paired statistics mispair when trials drop: RESOLVED (statistically correct)
 
-The dominant defect is statistical: when any trial drops (real mode), the "paired by trial
-index" invariant that the entire CI/Cohen's d output rests on is silently violated, because
-both drivers filter out `None` trials and then pair the survivors *positionally*. This can
-corrupt the headline milestone verdict without any error surfacing. Two robustness issues
-(silent exit-0 on total real-mode failure, and an fd/temp-file leak in `_run_trial`) and
-three minor items follow.
+Both drivers now route through the shared, None-preserving, trial-index-aligned helper
+`bench.replicate._per_trial_improvements` (replicate.py:95-108):
 
-## Critical Issues
+- The helper returns exactly one slot per input trial index, `None` where a trial is absent,
+  and computes `t[k-1] - t[0]` per trajectory. `k = min(len(t) for t in present)` guards
+  ragged run counts within an arm (consistent with `_agg`). All-missing input returns
+  `[None] * len(trials)` with the correct length (replicate.py:104-108). Improvement is
+  translation-invariant, so raw and paired-normalized inputs give identical per-trial values.
+- `close_loop._paired_deltas` (close_loop.py:127-134) runs both sides through the helper and
+  keeps a pair only when `arm_improvements[t] is not None AND baseline_improvements[t] is not
+  None` — asymmetric `None` holes are handled on **both** sides. `arm_i` pairs with
+  `baseline_i` for the SAME original trial index: `_real_trajectories` (close_loop.py:110-115)
+  appends one slot per `t in range(trials)` on both sides, so both lists are length `trials`
+  and `k = min(...) = trials`; no positional compaction remains.
+- `replicate.main` (replicate.py:216-227) applies the identical index-aligned pairing against
+  `collected["none"]`, iterating `range(a.trials)` over lists initialized to `[None] *
+  a.trials` — indexing is in-bounds by construction, and the `collected` dict now keeps
+  `None` holes instead of `append`-compacting survivors.
+- The two discriminating regression tests
+  (`test_real_mode_pairs_by_trial_index_when_arm_trial_drops`,
+  `test_main_pairs_bootstrap_ci_by_trial_index_when_arm_trial_drops`) encode the exact case
+  the old bug got wrong: arm=[3,None,2] vs base=[1,0.5,1] → correct deltas [2.0,1.0] (n=2,
+  mean 1.5), where positional compaction would have produced [2.0,1.5]. Both pass.
 
-### CR-01: Paired statistics mispair survivors when any trial drops (positional, not trial-index, pairing)
+### WR-01 — real-mode total failure returned exit 0 + null CI: RESOLVED
 
-**File:** `bench/replicate.py:119-125,185-193` and `bench/close_loop.py:99-118`
-**Issue:**
-Both drivers document and depend on pairing "by trial index" (`replicate.py:182-184`
-"per-trial deltas (arm_improvement_t - none_improvement_t), paired by trial index";
-`close_loop.py:114` "paired by trial index"). But a trial that fails yields `None` from
-`_run_trial`, and the collectors append *only non-None* results:
+`close_loop.py:47` defines `_EXIT_NO_PAIRED_DATA = 4`; `close_loop.py:169-171` returns it when
+`args.mode == "real" and not deltas`. The `return` fires **before** the result dict is built
+or `--out` is written, so no result file is emitted on the fail-loud path (asserted by
+`test_real_mode_all_trials_fail_exits_nonzero`: `rc != 0` and `not out.exists()`). Cheap mode
+is correctly exempt — it always synthesizes non-empty trajectories, so the guard cannot trip
+on a legitimate cheap run.
 
-```python
-# replicate.py:120-125
-for t in range(a.trials):
-    scores = _run_trial(arm, a.runs, a.root, f"{arm}{t}")
-    if scores is not None:
-        collected[arm].append(scores)   # index no longer == trial t
-```
+### WR-02 — fd + temp-file leak in `_run_trial`: RESOLVED
 
-```python
-# close_loop.py:101-107 (_real_trajectories) — same defect
-if scores is not None:
-    arm_trials.append(scores)
-if base_scores is not None:
-    baseline_trials.append(base_scores)
-```
+`replicate.py:37-64`: the `mkstemp` fd is closed immediately (`os.close(fd)`, line 38) and the
+temp file is unlinked in a `finally: out.unlink(missing_ok=True)` (lines 63-64) that runs on
+both the success path and the `except -> return None` path. `os` is imported and used; no new
+unused imports. Covered by `test_run_trial_removes_temp_file_on_success` and `..._on_failure`.
 
-`_agg(...)["improvements"]` therefore preserves *surviving-trial order*, not trial order.
-The downstream pairing then zips positionally:
+### Track-2 isolation — HOLDS
 
-```python
-# replicate.py:191-192
-k = min(len(arm_improvements), len(none_improvements))
-paired_deltas = [arm_improvements[i] - none_improvements[i] for i in range(k)]
-# close_loop.py:117-118 — identical positional zip
-```
+`bench/metrics.py` imports none of `bootstrap`/`replicate`/`close_loop`, and none of those
+three import `bench.metrics`. The "EXCLUDED from compounding_score" note remains accurate; the
+fixes added no dependency edge into the deterministic scorecard.
 
-If arm trial 2 fails but the baseline trial 2 succeeds (or vice-versa), the arms desynchronize:
-arm survivor `i` is paired against a baseline survivor from a *different* trial. Since these
-are meant to be matched observations, the paired-bootstrap CI and (via the same
-`improvements` lists) Cohen's d become statistically invalid — and nothing is logged. This
-is precisely the primary output the milestone uses to decide "significant, production-viable
-win vs. honestly conclude it isn't." A silently mispaired CI produces a wrong conclusion.
+## Narrative Findings (AI reviewer)
 
-Cheap mode is unaffected (it never drops trials), and no test exercises the drop path
-(`test_main_emits_bootstrap_ci_delta_vs_none` supplies 3-of-3 survivors per arm), so the bug
-is currently invisible to the suite.
-
-**Fix:** Preserve trial identity and pair on it. Keep per-trial slots (with `None` holes) and
-drop a pair only when *either* side is missing:
-
-```python
-# replicate.py — keep trial index, don't compact
-collected: dict[str, list[list[float] | None]] = {arm: [None] * a.trials for arm in a.layers}
-for arm in a.layers:
-    for t in range(a.trials):
-        collected[arm][t] = _run_trial(arm, a.runs, a.root, f"{arm}{t}")
-
-# pairing: only keep trials where BOTH arm and none produced a score
-paired_deltas = [
-    arm_imp[t] - none_imp[t]
-    for t in range(a.trials)
-    if arm_trials[t] is not None and none_trials[t] is not None
-]
-```
-
-Apply the mirror fix in `close_loop._real_trajectories` / `_paired_deltas` (carry the trial
-index so a unilateral failure drops the *pair*, not just one side). Add a regression test with
-an asymmetric `None` (arm trial fails, baseline succeeds) asserting the surviving pairs stay
-trial-aligned.
-
-## Warnings
-
-### WR-01: Real-mode total failure returns exit 0 with a null CI (not fail-loud)
-
-**File:** `bench/close_loop.py:139-170`
-**Issue:**
-If every `_run_trial` returns `None` in `--mode real` (missing `claude` binary, all
-subprocesses fail), `arm_trials`/`baseline_trials` are empty, `_paired_deltas` returns `[]`,
-and `paired_bootstrap_ci([])` yields `{"n": 0, "mean": None, ...}`. `main` then falls through
-to `return 0` and prints a JSON result with a null CI. A completely failed real run is
-therefore indistinguishable from success at the exit-code level — contradicting the phase's
-fail-loud discipline (which the producer-gate path honors via `_EXIT_PRODUCER_ABSENT`).
-**Fix:** Treat an empty/`n==0` delta set in real mode as failure:
-
-```python
-deltas = _paired_deltas(arm_trials, baseline_trials)
-if args.mode == "real" and not deltas:
-    print("[close_loop] real mode produced no paired trials — failing loud")
-    return 1
-ci = paired_bootstrap_ci(deltas, seed=args.seed)
-```
-
-### WR-02: `tempfile.mkstemp` leaks a file descriptor (and the temp file) per trial
-
-**File:** `bench/replicate.py:33`
-**Issue:**
-```python
-out = Path(tempfile.mkstemp(prefix=f"repl_{label}_", suffix=".json")[1])
-```
-`mkstemp` opens and returns a file descriptor as element `[0]`; taking only `[1]` discards it
-without closing, and the temp file is never unlinked. Over a full research run
-(`trials × arms × 2` invocations via both `replicate.main` and `close_loop._real_trajectories`)
-this leaks one fd and one file per trial, which can exhaust the process fd limit (EMFILE) on
-long sweeps and litters the temp dir. Robustness bug, not mere style.
-**Fix:** Use a named temp path that closes its fd, and clean up:
-
-```python
-fd, path = tempfile.mkstemp(prefix=f"repl_{label}_", suffix=".json")
-os.close(fd)
-out = Path(path)
-try:
-    subprocess.run(cmd, check=False)
-    ...
-finally:
-    out.unlink(missing_ok=True)
-```
+No blocker or warning findings remain. The three items below are the previously-identified
+info items, confirmed still present and re-listed. All were explicitly deferred as
+out-of-scope for phase 18; none are regressions.
 
 ## Info
 
-### IN-01: Cheap mode reports `--arm`/`--baseline` labels its synthesized trajectories ignore
+### IN-01: Cheap mode echoes `--arm`/`--baseline` labels its synthesized trajectories ignore
 
-**File:** `bench/close_loop.py:78-92,154-162`
+**File:** `bench/close_loop.py:84-98,177-185`
 **Issue:** `_cheap_trajectories` synthesizes arm scores in `[4.0, 9.0]` and baseline in
 `[3.0, 7.0]` regardless of the `--arm`/`--baseline` values, yet the emitted result echoes
 `"arm": args.arm` / `"baseline": args.baseline`. A reader of the JSON could mistake the fixed
-synthetic delta for a measurement of the named arms. It is documented as an "apparatus check,"
-but the labels invite misreading.
-**Fix:** In cheap mode, stamp the labels as synthetic (e.g. `"arm": f"{args.arm} (synthetic)"`)
-or add a `"synthetic": true` flag to the cheap-mode result.
+synthetic delta for a measurement of the named arms. Documented as an "apparatus check," but
+the labels still invite misreading.
+**Fix:** In cheap mode, stamp the labels as synthetic (e.g. `f"{args.arm} (synthetic)"`) or add
+a `"synthetic": true` flag to the cheap-mode result. Deferred (out of scope).
 
 ### IN-02: `paired_bootstrap_ci` does not validate `resamples`
 
 **File:** `bench/bootstrap.py:57-70`
 **Issue:** With `resamples <= 0` the resample loop produces an empty list and
 `resample_means[lo_idx]` raises `IndexError`, which the broad `except` converts to a
-`mean: None` result even for perfectly valid `deltas`. Not reachable via any current CLI
-(`resamples` is always the 2000 default), so latent only.
-**Fix:** Guard early: `resamples = max(1, resamples)` (or return the None-bounds dict with a
-reason) before the loop.
+`mean: None` result even for valid `deltas`. Not reachable via any current CLI (`resamples`
+defaults to 2000), so latent only. Related latent edge: `close_loop --mode cheap --trials 0`
+yields an empty-delta null CI at exit 0 (cheap mode is deliberately outside the WR-01 guard).
+**Fix:** Guard early: `resamples = max(1, resamples)` (or return the None-bounds dict) before
+the loop. Deferred (out of scope).
 
 ### IN-03: Cohen's d uses population stdev and equal-weight pooling
 
-**File:** `bench/replicate.py:87-93`
+**File:** `bench/replicate.py:87-93,111-117`
 **Issue:** `_agg` computes `improvement_std` via `statistics.pstdev` (population, ddof=0) and
-`_cohens_d` pools as `((s_on² + s_off²)/2)**0.5`, which assumes equal n. With unequal surviving
-trial counts (see CR-01) the pooled SD is mis-weighted, and population SD slightly deflates the
+`_cohens_d` pools as `((s_on**2 + s_off**2)/2)**0.5`, which assumes equal n. With unequal
+surviving-trial counts the pooled SD is mis-weighted, and population SD slightly deflates the
 denominator vs. the conventional sample SD (ddof=1). Minor for a directional effect-size
 readout, but worth a note given the milestone leans on the number.
-**Fix:** If rigor matters here, switch to sample stdev and the n-weighted pooled variance
-`sqrt(((n1-1)s1² + (n2-1)s2²)/(n1+n2-2))`; otherwise document the simplification inline.
+**Fix:** Switch to sample stdev and the n-weighted pooled variance
+`sqrt(((n1-1)s1**2 + (n2-1)s2**2)/(n1+n2-2))`, or document the simplification inline. Deferred
+(out of scope).
 
 ---
 
