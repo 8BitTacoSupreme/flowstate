@@ -56,6 +56,10 @@ def _zeroed_snapshot(run_index: int, run_id: str) -> RunSnapshot:
         prefix_tokens=0,
         mem_hits=0,
         layers_present=(),
+        tokens_in=0,
+        tokens_out=0,
+        cache_read=0,
+        wall_clock_s=None,
     )
 
 

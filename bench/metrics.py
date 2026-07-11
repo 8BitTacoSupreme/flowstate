@@ -51,6 +51,14 @@ class RunSnapshot:
     prefix_tokens: int
     mem_hits: int
     layers_present: tuple[str, ...]
+    # Real per-run consumption (Plan 19-02): sourced from the pipeline bridge usage
+    # totals via the RUN journal entry. Pure carriage — no axis reads these; they are
+    # appended with defaults so all existing construction sites stay valid. Distinct
+    # from prefix_tokens, which measures input-context SIZE (a Track-1 growth signal).
+    tokens_in: int = 0
+    tokens_out: int = 0
+    cache_read: int = 0
+    wall_clock_s: float | None = None
 
 
 @dataclass(frozen=True)
