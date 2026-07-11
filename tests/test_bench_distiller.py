@@ -12,7 +12,7 @@ import subprocess
 from pathlib import Path
 from unittest.mock import Mock
 
-import bench.distiller as distiller_mod
+import flowstate.distiller as fs_distiller
 from bench.distiller import _WIKI_CORPUS_REL, main
 from flowstate.memory import MemoryEntry, MemoryKind, MemoryStore
 
@@ -141,7 +141,7 @@ def test_unwritable_corpus_dir_returns_nonzero_without_raising(tmp_path):
 def test_llm_locator_absent_writes_deterministic_and_returns_0(tmp_path, monkeypatch):
     """--llm with claude not locatable -> deterministic corpus written, rc == 0."""
     _seed(tmp_path, [MemoryKind.DECISION, MemoryKind.INSIGHT])
-    monkeypatch.setattr(distiller_mod, "_locate_claude", lambda: None)
+    monkeypatch.setattr(fs_distiller, "_locate_claude", lambda: None)
     call_count = Mock()
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: call_count())
 
@@ -155,7 +155,7 @@ def test_llm_locator_absent_writes_deterministic_and_returns_0(tmp_path, monkeyp
 def test_llm_subprocess_raising_keeps_deterministic_article(tmp_path, monkeypatch):
     """A raising subprocess is caught; deterministic article written; never raises."""
     _seed(tmp_path, [MemoryKind.DECISION])
-    monkeypatch.setattr(distiller_mod, "_locate_claude", lambda: "/bin/claude")
+    monkeypatch.setattr(fs_distiller, "_locate_claude", lambda: "/bin/claude")
 
     def _boom(*a, **k):
         raise RuntimeError("subprocess exploded")
@@ -186,7 +186,7 @@ def test_default_path_spawns_no_subprocess(tmp_path, monkeypatch):
 def test_llm_success_replaces_article_body(tmp_path, monkeypatch):
     """--llm with a successful subprocess replaces the article body with stdout."""
     _seed(tmp_path, [MemoryKind.DECISION])
-    monkeypatch.setattr(distiller_mod, "_locate_claude", lambda: "/bin/claude")
+    monkeypatch.setattr(fs_distiller, "_locate_claude", lambda: "/bin/claude")
 
     class _Good:
         returncode = 0
