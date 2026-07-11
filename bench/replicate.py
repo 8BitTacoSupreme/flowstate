@@ -95,6 +95,14 @@ def _paired_normalize(trials: list[list[float]]) -> list[list[float]]:
 
 
 def _agg(trials: list[list[float]]) -> dict:
+    # Std uses statistics.pstdev (population SD, ddof=0), NOT the conventional
+    # sample SD (ddof=1). This is deliberate: a single trial (n=1) is a
+    # legitimate input here, and statistics.stdev raises StatisticsError for
+    # n<2 — pstdev degenerates cleanly to 0.0 instead. The ddof=0 choice
+    # slightly deflates the SD vs ddof=1, which is acceptable because these
+    # numbers feed a DIRECTIONAL effect-size readout (Cohen's d sign/magnitude
+    # band), not an inferential test. Keeping the never-raises single-trial path
+    # is worth the small deflation; see _cohens_d for the matching pooling note.
     if not trials:
         return {"n": 0}
     k = min(len(s) for s in trials)
@@ -128,6 +136,13 @@ def _per_trial_improvements(trials: list[list[float] | None]) -> list[float | No
 def _cohens_d(on: dict, off: dict) -> float | None:
     if on.get("n", 0) < 2 or off.get("n", 0) < 2:
         return None
+    # Equal-weight pooling: sqrt((s_on**2 + s_off**2)/2) assumes the two arms
+    # have equal n. With unequal surviving-trial counts the n-weighted pooled
+    # SD sqrt(((n1-1)s1**2 + (n2-1)s2**2)/(n1+n2-2)) would be more precise, but
+    # the inputs are population SDs (see _agg's ddof=0 note) feeding a
+    # directional effect-size band, not an inferential test — the equal-weight
+    # simplification is acceptable here and avoids reintroducing the n<2 crash
+    # path that the sample-SD form would require.
     s_pooled = ((on["improvement_std"] ** 2 + off["improvement_std"] ** 2) / 2) ** 0.5
     if s_pooled == 0:
         return None

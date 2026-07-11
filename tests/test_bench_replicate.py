@@ -127,6 +127,15 @@ def test_agg_single_trial():
     assert result["improvement_mean"] == 4.0  # 7 - 3
 
 
+def test_agg_single_trial_uses_population_std_and_does_not_crash():
+    """IN-03: n=1 is a legitimate input. Population stdev (ddof=0) degenerates to
+    0.0 for a single trial; sample stdev (ddof=1) would raise StatisticsError.
+    The documented pstdev choice must keep _agg never-raising for n=1."""
+    result = _agg([[3.0, 5.0, 7.0]])  # single trial -> std over trials is 0.0
+    assert result["improvement_std"] == 0.0
+    assert result["per_run_std"] == [0.0, 0.0, 0.0]
+
+
 # ---------------------------------------------------------------------------
 # Parser tests — wiki arm acceptance
 # ---------------------------------------------------------------------------
