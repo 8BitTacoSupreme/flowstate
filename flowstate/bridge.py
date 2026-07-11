@@ -323,13 +323,14 @@ class ClaudeBridge:
                     parsed = json.loads(result.stdout)
                     if isinstance(parsed, dict) and "result" in parsed:
                         output = parsed["result"]
-                        raw_usage = parsed.get("usage") or {}
+                        raw_usage = parsed.get("usage")
+                        raw_usage = raw_usage if isinstance(raw_usage, dict) else {}
                         usage = BridgeUsage(
-                            tokens_in=raw_usage.get("input_tokens", 0),
-                            tokens_out=raw_usage.get("output_tokens", 0),
-                            cache_read=raw_usage.get("cache_read_input_tokens", 0),
+                            tokens_in=int(raw_usage.get("input_tokens") or 0),
+                            tokens_out=int(raw_usage.get("output_tokens") or 0),
+                            cache_read=int(raw_usage.get("cache_read_input_tokens") or 0),
                         )
-                except (json.JSONDecodeError, ValueError, TypeError):
+                except (json.JSONDecodeError, ValueError, TypeError, AttributeError):
                     output = result.stdout
                     usage = None
 
