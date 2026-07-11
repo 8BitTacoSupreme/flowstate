@@ -171,9 +171,16 @@ def main(argv: list[str] | None = None) -> int:
             article = _densify(article, claude, args.model)
         written[_article_filename(index, kind)] = article
 
-    corpus_dir.mkdir(parents=True, exist_ok=True)
-    for filename, text in written.items():
-        (corpus_dir / filename).write_text(text)
+    # Honor the "Never raises" contract on the standalone __main__ path: a
+    # read-only FS / permission error / non-dir at corpus_dir must be reported,
+    # not propagated as a traceback (WR-04).
+    try:
+        corpus_dir.mkdir(parents=True, exist_ok=True)
+        for filename, text in written.items():
+            (corpus_dir / filename).write_text(text)
+    except OSError as exc:
+        print(f"distiller: could not write corpus under {corpus_dir}: {exc}", file=sys.stderr)
+        return 1
 
     print(f"wrote {len(written)} article(s) to {corpus_dir}")
     return 0

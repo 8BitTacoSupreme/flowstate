@@ -120,6 +120,19 @@ def test_distills_more_than_default_limit_entries(tmp_path):
         assert f"decision-summary-{i}" in text
 
 
+def test_unwritable_corpus_dir_returns_nonzero_without_raising(tmp_path):
+    """WR-04: an OSError writing the corpus is reported (rc 1), not propagated."""
+    _seed(tmp_path, [MemoryKind.DECISION, MemoryKind.INSIGHT])
+    # Place a regular file where the corpus dir tree needs to be created so
+    # mkdir(parents=True) raises OSError (NotADirectoryError).
+    codebase = tmp_path / ".planning" / "codebase"
+    codebase.parent.mkdir(parents=True, exist_ok=True)
+    codebase.write_text("not a directory")
+
+    rc = main(["--root", str(tmp_path)])  # must not raise
+    assert rc == 1
+
+
 # ---------------------------------------------------------------------------
 # Task 2: --llm densification
 # ---------------------------------------------------------------------------
