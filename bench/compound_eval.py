@@ -40,6 +40,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from rich.console import Console
+from rich.panel import Panel
 
 from bench.capture import capture_run_snapshot
 from bench.judge import JudgeResult, collect_artifacts, judge_run
@@ -333,6 +334,22 @@ def main(argv: list[str] | None = None) -> int:
     console = _console
     root = Path(args.root)
     runs = max(1, args.runs)
+
+    # HAR-02 fail-loud gate: an arm whose REQUIRED producer artifact is absent
+    # must never report a bare number. Checked before the loop runs, for both
+    # --mode cheap and --mode real (the arm cannot measure its layer either way
+    # without the producer). full/memory/none have no requirement and pass through.
+    missing = _missing_producer(args.layers, root)
+    if missing is not None:
+        console.print(
+            Panel(
+                f"arm measured nothing: producer {missing} absent",
+                title="ARM ABSENT",
+                border_style="bold red",
+            )
+        )
+        return _EXIT_PRODUCER_ABSENT
+
     do_judge = _judge_allowed(args, console)
 
     judged: list[JudgeResult] = []
