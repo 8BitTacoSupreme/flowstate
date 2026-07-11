@@ -7,7 +7,7 @@
 - ✅ **v0.5.0 Compounding Loop** — Phases 6-8 (shipped 2026-06-09)
 - ✅ **v0.6.0 Semantic Retrieval** — Phases 9-11 (shipped 2026-07-10)
 - ✅ **v0.6.1 Make the Names Real** — Phases 12-15, 15 plans (shipped 2026-07-11) — [archive](./milestones/v0.6.1-ROADMAP.md)
-- 📋 **v0.6.2 Make the Harness Real** — the eval harness runs E2E and fails loud; **gates all further benchmarking** (SEED-002; phases 16-18 after v0.6.1)
+- 🚧 **v0.6.2 Make the Harness Real** — the eval harness runs E2E and fails loud; **gates all further benchmarking** (SEED-002; phases 16-18, in progress)
 - 📋 **v0.7.0 Retrieval Benchmark Rigor** — deferred behind v0.6.1 → v0.6.2; renumbers after v0.6.2 (spec: `deferred/v0.7.0-REQUIREMENTS.md`)
 - 📋 **v0.8.0 Harness Tax & Value** — SEED-001; follows v0.7.0
 
@@ -62,7 +62,38 @@ Phases 12–15 (15 plans) — adapters made honest and real (12–13), the two M
 
 ## Phase Details
 
-_(v0.6.2 phases populate here once planned.)_
+### 🚧 v0.6.2 Make the Harness Real (In Progress)
+
+**Milestone Goal:** Make the eval harness itself run end-to-end and **fail loud** before any further benchmarking. Plumbing/correctness only — no measurement science, verdicts, or production wiring (those stay v0.8.0 / SEED-001). Hard gate on v0.7.0 + v0.8.0. Full scope: [`seeds/SEED-002-harness-e2e.md`](./seeds/SEED-002-harness-e2e.md).
+
+### Phase 16: Mode-Honest Reporting
+**Goal**: `bench/compound_eval.py` `--mode real` never emits the cheap-mode caveat; the report header, `mode_note`, and caveat reflect the actual mode; every report states mode, arm, sample size (K/trials), and which producer artifacts were present. Deterministic, no LLM.
+**Depends on**: v0.6.1 complete
+**Requirements**: HAR-01
+**Success Criteria** (what must be TRUE):
+  1. A `--mode real` run's report/output contains NO cheap-mode caveat string; a regression test asserts this.
+  2. Every report states mode (cheap|real), arm, sample size (K/trials), and which producer artifacts were present.
+**Plans**: TBD
+
+### Phase 17: No Silent No-Op Arms + Producers Wired E2E
+**Goal**: Every arm whose producer artifact is absent fails loud (never a bare number), and the bench-side producers the readers actually consume are shipped — the memory→wiki distiller (promoted from the spike) and the article corpus the Phase-11 semantic retriever reads. One `prepare-fixture` path.
+**Depends on**: Phase 16
+**Requirements**: HAR-02, HAR-03
+**Success Criteria** (what must be TRUE):
+  1. The `wiki`/`pack` arms fail loud (or emit "arm measured nothing: producer X absent") when their producer artifact is missing — never a bare number.
+  2. `bench/` ships a memory→wiki distiller (promoted from `scratchpad/distill_spike.py`) and produces the article corpus the Phase-11 retriever reads (closes SEED-001 #2 bench-side).
+  3. One `prepare-fixture` path generates what each arm needs before the arm matrix runs.
+**Plans**: TBD
+
+### Phase 18: Close the Loop with a CI, E2E
+**Goal**: Multi-sample judging + paired-bootstrap CI wired into `compound_eval`'s Track-2 path (reusing `grounding.py`/`replicate.py`); one command runs prior-runs→distill→inject→judge and returns a CI'd delta; a green E2E smoke test exercises every arm's plumbing and asserts fail-loud on a missing producer.
+**Depends on**: Phase 17
+**Requirements**: HAR-04, HAR-05
+**Success Criteria** (what must be TRUE):
+  1. `compound_eval` Track-2 emits a paired-bootstrap CI'd delta from multi-sample judging (not a single-shot score), reusing existing machinery.
+  2. One command runs prior-runs→distill→inject→judge on a fixture end-to-end with a CI'd result.
+  3. A green, CI-safe E2E smoke test exercises every arm's plumbing and asserts the harness fails loud on a missing producer.
+**Plans**: TBD
 
 <details>
 <summary>📋 v0.7.0 Retrieval Benchmark Rigor (deferred behind v0.6.1 — renumbers to 16-21 on start)</summary>
@@ -90,6 +121,9 @@ Scoped and roadmapped this session, then deferred so the adapter stubs get fixed
 | 13. Adapters Earn Their Names | v0.6.1 | 3/3 | Complete    | 2026-07-10 |
 | 14. Vendor & Surface | v0.6.1 | 4/4 | Complete    | 2026-07-10 |
 | 15. Bundle GSD | v0.6.1 | 5/5 | Complete    | 2026-07-11 |
+| 16. Mode-Honest Reporting | v0.6.2 | 0/? | Not started | - |
+| 17. No Silent No-Op Arms + Producers | v0.6.2 | 0/? | Not started | - |
+| 18. Close the Loop with a CI | v0.6.2 | 0/? | Not started | - |
 | _v0.7.0 Retrieval Benchmark Rigor_ | v0.7.0 | deferred | renumbers 16-21 on start | - |
 
 ## Backlog
