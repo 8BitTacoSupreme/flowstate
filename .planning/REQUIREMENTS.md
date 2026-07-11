@@ -5,8 +5,8 @@
 ## Requirements
 
 - [x] **HAR-01**: `bench/compound_eval.py` `--mode real` never emits the cheap-mode caveat. The report header, `mode_note`, and caveat reflect the ACTUAL mode; every report states mode, arm, sample size (K/trials), and which producer artifacts were present. Deterministic, no LLM. A regression test asserts a real-mode report contains no cheap-mode string.
-- [ ] **HAR-02**: Any arm whose required producer artifact is absent (`wiki` → `wiki.md`/article-corpus, `pack` → repomix pack) **fails loud** (or emits a prominent "arm measured nothing: producer X absent") — never a bare number reported for an arm that had no input.
-- [ ] **HAR-03**: Ship the bench-side producers the readers actually consume: (a) promote the distill spike's **memory→wiki distiller** into `bench/`; (b) fix the generator/reader mismatch so the **article corpus** the Phase-11 semantic wiki retriever reads is produced (closes SEED-001 #2 on the bench side). One `prepare-fixture` path generates what each arm needs before the arm matrix runs.
+- [x] **HAR-02**: Any arm whose required producer artifact is absent (`wiki` → `wiki.md`/article-corpus, `pack` → repomix pack) **fails loud** (or emits a prominent "arm measured nothing: producer X absent") — never a bare number reported for an arm that had no input.
+- [x] **HAR-03**: Ship the bench-side producers the readers actually consume: (a) promote the distill spike's **memory→wiki distiller** into `bench/`; (b) fix the generator/reader mismatch so the **article corpus** the Phase-11 semantic wiki retriever reads is produced (closes SEED-001 #2 on the bench side). One `prepare-fixture` path generates what each arm needs before the arm matrix runs.
 - [ ] **HAR-04**: Wire multi-sample judging + paired-bootstrap CI into the `compound_eval` Track-2 path (reuse `bench/grounding.py` / `bench/replicate.py` machinery — do not rebuild). One command runs *prior-runs → distill → inject → judge* on a fixture and returns a CI'd delta, not a single-shot score.
 - [ ] **HAR-05**: A **green E2E smoke test** (cheap/deterministic, CI-safe) exercises every arm's plumbing and asserts the harness fails loud on a missing producer — the "harness of harnesses works E2E" acceptance gate.
 
@@ -15,8 +15,8 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | HAR-01 | Phase 16 | Complete |
-| HAR-02 | Phase 17 | Pending |
-| HAR-03 | Phase 17 | Pending |
+| HAR-02 | Phase 17 | Complete |
+| HAR-03 | Phase 17 | Complete |
 | HAR-04 | Phase 18 | Pending |
 | HAR-05 | Phase 18 | Pending |
 

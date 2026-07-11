@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.6.1
-milestone_name: Make the Names Real
+milestone: v0.6.2
+milestone_name: Make the Harness Real
 status: executing
-stopped_at: "Completed 15-02-PLAN.md (GSD-02): installer lays down GSD unconditionally"
-last_updated: "2026-07-11T01:10:41.285Z"
-last_activity: 2026-07-11 -- Phase 17 execution started
+stopped_at: "Completed 17-03-PLAN.md (HAR-03): prepare_fixture entry point wiring per-arm producers"
+last_updated: "2026-07-11T01:34:39.524Z"
+last_activity: 2026-07-11
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 19
-  completed_plans: 16
-  percent: 83
+  completed_plans: 19
+  percent: 100
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 ## Current Position
 
-Phase: 17 (No Silent No-Op Arms + Producers Wired E2E) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 17
-Last activity: 2026-07-11 -- Phase 17 execution started
+Phase: 17 (No Silent No-Op Arms + Producers Wired E2E) — COMPLETE
+Plan: 3 of 3
+Status: Phase complete (3/3 plans)
+Last activity: 2026-07-11
 
 ## Performance Metrics
 
@@ -70,6 +70,7 @@ Last activity: 2026-07-11 -- Phase 17 execution started
 | Phase 15 P15-02 | 1200 | 2 tasks | 3 files |
 | Phase 15 P15-03 | 480 | 1 tasks | 2 files |
 | Phase 15 P15-04 | 1080 | 2 tasks | 3 files |
+| Phase 17 P03 | 12min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -94,6 +95,7 @@ Recent decisions affecting current work:
 - [Phase ?]: launch handoffs gated on installed .claude/skills/<namespace>; absent emits install-skills prompt (T-14-12)
 - [Phase ?]: README test count reconciled to post-phase --collect-only total (1000), never hardcoded (T-14-15)
 - [Phase ?]: [Phase 15-02 / GSD-02]: install_skills installs GSD unconditionally (no detect/prompt); full node_modules copied to .claude/get-shit-done/node_modules so gsd-sdk resolves deps by walking up (byte-identical to 15-01's proven tree); commands/gsd converted to .claude/skills/gsd-<cmd>/SKILL.md; copy-as-data, path-safe, idempotent, no shim
+- [Phase 17]: [Phase 17-03 / HAR-03]: prepare_fixture wires flowstate.pack.run_pack + bench.distiller.main behind one entry point; arms without a producer (full/memory/none) are an accepted no-op, not an argparse rejection
 
 ### Pending Todos
 
@@ -126,8 +128,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-11T00:45:10.281Z
-Stopped at: Completed 15-02-PLAN.md (GSD-02): installer lays down GSD unconditionally
+Last session: 2026-07-11T01:34:39.520Z
+Stopped at: Completed 17-03-PLAN.md (HAR-03): prepare_fixture entry point wiring per-arm producers
 
 **Why v0.6.1 exists (verified this session, file:line):**
 
