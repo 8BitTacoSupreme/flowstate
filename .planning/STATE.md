@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.8.0
 milestone_name: Harness Tax & Value
-status: ready_to_plan
-stopped_at: Phase 21 complete (3/3) — ready to discuss Phase 22
-last_updated: 2026-07-11T15:49:30.414Z
+status: planning
+stopped_at: Phase 22 pre-registration captured; awaiting greenlight to plan + paid run
+last_updated: "2026-07-11T17:44:07.223Z"
 last_activity: 2026-07-11
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 8
-  completed_plans: 23
+  completed_plans: 8
   percent: 75
 ---
 
@@ -159,8 +159,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-11T15:31:14.131Z
-Stopped at: Phase 21 context gathered
+Last session: 2026-07-11T17:44:07.220Z
+Stopped at: Phase 22 pre-registration captured; awaiting greenlight to plan + paid run
 
 **Why v0.8.0 exists (SEED-001, verified prior session):**
 
