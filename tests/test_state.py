@@ -144,6 +144,24 @@ def test_preferences_enable_prompt_caching_1h_default():
     assert prefs.enable_prompt_caching_1h is True
 
 
+def test_preferences_wiki_layer_default_false():
+    """wiki_layer defaults to False (opt-in; byte-identical default path — D-05)."""
+    from flowstate.state import ProjectPreferences
+
+    assert ProjectPreferences().wiki_layer is False
+    assert FlowStateModel().preferences.wiki_layer is False
+
+
+def test_preferences_wiki_layer_roundtrip_true(tmp_path: Path):
+    """wiki_layer=True survives save/load."""
+    state = FlowStateModel()
+    state.preferences.wiki_layer = True
+    save_state(state, tmp_path)
+
+    loaded = load_state(tmp_path)
+    assert loaded.preferences.wiki_layer is True
+
+
 def test_preferences_model_roundtrip(tmp_path: Path):
     """Model preferences survive save/load."""
     state = FlowStateModel()

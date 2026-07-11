@@ -377,3 +377,60 @@ def test_discipline_blocks_on_unhealthy_repo(tmp_path: Path):
 
     blocked = sum(1 for ts in result.tools.values() if ts.status == ToolStatus.BLOCKED)
     assert blocked >= 1
+
+
+# ---------------------------------------------------------------------------
+# Opt-in wiki layer wiring (WIKI-04, D-05/D-06)
+# ---------------------------------------------------------------------------
+
+
+def _capture_include_layers(monkeypatch):
+    """Monkeypatch orchestrator.build_context_prefix to capture the include_layers kwarg.
+
+    Returns a dict whose ``value`` key holds whatever include_layers the orchestrator
+    passed (a sentinel string means the kwarg was never passed).
+    """
+    captured: dict[str, object] = {"value": "UNSET"}
+
+    def spy(root, memory, query, **kwargs):
+        captured["value"] = kwargs.get("include_layers", "UNSET")
+        return ""
+
+    monkeypatch.setattr("flowstate.orchestrator.build_context_prefix", spy)
+    return captured
+
+
+def test_wiki_layer_flag_off_passes_include_layers_none(tmp_path: Path, monkeypatch):
+    """Default (wiki_layer False) => orchestrator passes include_layers=None (byte-identical path)."""
+    captured = _capture_include_layers(monkeypatch)
+
+    state = FlowStateModel()
+    state.preferences.dry_run = True
+    state.interview.core_problem = "A"  # ensure _pk_query is non-empty so the call fires
+
+    run_pipeline(state, tmp_path)
+
+    assert captured["value"] is None, (
+        f"wiki_layer=False must pass include_layers=None, got {captured['value']!r}"
+    )
+
+
+def test_wiki_layer_flag_on_passes_full_standard_union(tmp_path: Path, monkeypatch):
+    """wiki_layer True => orchestrator passes _STANDARD_LAYERS | {'wiki'} (all six keys), NOT {'wiki'}."""
+    captured = _capture_include_layers(monkeypatch)
+
+    state = FlowStateModel()
+    state.preferences.dry_run = True
+    state.preferences.wiki_layer = True
+    state.interview.core_problem = "A"
+
+    run_pipeline(state, tmp_path)
+
+    assert captured["value"] == frozenset(
+        {"fixtures", "pack", "gotchas", "memory", "since_last_run", "wiki"}
+    ), (
+        "wiki_layer=True must pass the FULL standard set UNION {'wiki'}, "
+        f"not {captured['value']!r}"
+    )
+    # Negative control: it must NOT be {'wiki'} alone (D-06 regression guard)
+    assert captured["value"] != frozenset({"wiki"})

@@ -46,6 +46,9 @@ class ProjectPreferences(BaseModel):
     # steps (research can run minutes). Trades higher 1h cache-write cost for
     # cross-step retention on eligible API-key accounts; harmless no-op otherwise.
     enable_prompt_caching_1h: bool = True
+    # Opt-in (D-05): when True, the orchestrator adds the semantic wiki layer to the
+    # standard CAG prefix union. Default False keeps the prefix byte-identical to today.
+    wiki_layer: bool = False
 
 
 class InstallEntry(BaseModel):

@@ -66,6 +66,13 @@ _WIKI_CORPUS_DIR = (
 _DEFAULT_WIKI_K = 3  # bench rag-k that yielded 17/20 semantic hits
 _WIKI_K_ENV_VAR = "FLOWSTATE_WIKI_K"
 
+# The five standard CAG layers routed through _included(). Defined ONCE (D-06) so the
+# orchestrator's opt-in union `_STANDARD_LAYERS | {"wiki"}` cannot drift out of sync with
+# the keys _included() recognises. Passing {"wiki"} ALONE would set every standard layer
+# to False (because _included(key) = include_layers is None or key in include_layers),
+# silently dropping fixtures/pack/gotchas/memory/since_last_run — hence the union.
+_STANDARD_LAYERS = frozenset({"fixtures", "pack", "gotchas", "memory", "since_last_run"})
+
 # Module-level console — callers can inject their own via the ``console`` param
 _console = Console()
 
@@ -476,9 +483,14 @@ def build_context_prefix(
                         byte-identical to the no-kwarg call.  Pass a
                         ``frozenset`` of layer key strings to include ONLY those
                         layers; others are excluded at assembly time (their
-                        reader helpers are never invoked).  Valid keys are:
-                        ``"fixtures"``, ``"pack"``, ``"gotchas"``, ``"memory"``,
-                        ``"since_last_run"``.  An empty frozenset returns ``""``.
+                        reader helpers are never invoked).  Valid standard keys
+                        are ``"fixtures"``, ``"pack"``, ``"gotchas"``,
+                        ``"memory"``, ``"since_last_run"`` (see
+                        ``_STANDARD_LAYERS``).  ``"wiki"`` is OPT-IN and NOT part
+                        of the default set: to fire it you MUST pass the union
+                        ``_STANDARD_LAYERS | {"wiki"}``, NOT ``{"wiki"}`` alone
+                        (which would drop every standard layer).  An empty
+                        frozenset returns ``""``.
         console:        Rich Console for compress/omit logging.  Defaults to the
                         module-level Console when None.
 

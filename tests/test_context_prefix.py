@@ -1273,6 +1273,73 @@ class TestWikiLayer:
 
 
 # ---------------------------------------------------------------------------
+# Opt-in union / byte-identity guards (WIKI-04, D-05/D-06)
+# ---------------------------------------------------------------------------
+
+
+class TestStandardLayersUnion:
+    def test_standard_layers_constant_is_the_five_standard_keys(self):
+        """_STANDARD_LAYERS must be exactly the five _included()-routed keys (no drift)."""
+        from flowstate.context_prefix import _STANDARD_LAYERS
+
+        assert (
+            frozenset({"fixtures", "pack", "gotchas", "memory", "since_last_run"})
+            == _STANDARD_LAYERS
+        )
+
+    def test_include_layers_none_byte_identical_to_no_kwarg_on_seeded_corpus(self, tmp_path: Path):
+        """include_layers=None must be byte-for-byte identical to the no-kwarg call.
+
+        Seeds all five standard layers (fixtures, pack, memory, gotchas via memory,
+        since_last_run) so the regression covers a fully-populated prefix (D-05).
+        """
+        _make_fixture_file(tmp_path)
+        _make_pack_file(tmp_path, "<pack>tiny</pack>")
+        _make_wiki_file(tmp_path)  # present on disk but must NOT appear (opt-in)
+        run_entry = _make_run_entry()
+        memory = _make_memory_stub("## Prior Knowledge\n\nfact\n", run_entries=[run_entry])
+
+        with patch("flowstate.context_prefix.run_pack"):
+            result_none = build_context_prefix(
+                tmp_path, memory, "q", budget_tokens=50000, include_layers=None
+            )
+            result_default = build_context_prefix(tmp_path, memory, "q", budget_tokens=50000)
+
+        assert result_none == result_default, (
+            "include_layers=None must be byte-identical to the no-kwarg default (D-05)"
+        )
+        assert "## Codebase Wiki" not in result_none, "wiki must stay dormant on the default path"
+        # Sanity: standard layers actually present so this is a real (non-empty) comparison
+        assert "## Eval Fixtures" in result_none
+        assert "<pack>tiny</pack>" in result_none
+
+    def test_wiki_alone_drops_standard_layers_negative_control(self, tmp_path: Path):
+        """DOCUMENTS WHY THE UNION IS REQUIRED (D-06): passing {'wiki'} alone nukes every standard layer.
+
+        _included(key) = include_layers is None or key in include_layers, so a frozenset
+        that omits the standard keys sets them all to False. This is the exact bug the
+        orchestrator avoids by passing _STANDARD_LAYERS | {'wiki'} rather than {'wiki'}.
+        """
+        _make_fixture_file(tmp_path)
+        _make_pack_file(tmp_path, "<pack>tiny</pack>")
+        memory = _make_memory_stub("## Prior Knowledge\n\nfact\n")
+
+        with patch("flowstate.context_prefix.run_pack"):
+            result = build_context_prefix(
+                tmp_path,
+                memory,
+                "q",
+                budget_tokens=50000,
+                include_layers=frozenset({"wiki"}),
+            )
+
+        # Every standard layer is DROPPED — this is the failure mode the union prevents.
+        assert "## Eval Fixtures" not in result
+        assert "<pack>tiny</pack>" not in result
+        assert "## Prior Knowledge" not in result
+
+
+# ---------------------------------------------------------------------------
 # Semantic wiki retrieval
 # ---------------------------------------------------------------------------
 

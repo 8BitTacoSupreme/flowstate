@@ -12,7 +12,7 @@ from rich.table import Table
 
 from flowstate.bridge import BridgeConfig, ClaudeBridge
 from flowstate.context import write_context_files
-from flowstate.context_prefix import build_context_prefix
+from flowstate.context_prefix import _STANDARD_LAYERS, build_context_prefix
 from flowstate.discipline import check_setup
 from flowstate.events.bus import EventBus
 from flowstate.events.event import StepCompleted, StepFailed
@@ -251,7 +251,13 @@ def run_pipeline(state: FlowStateModel, root: Path) -> FlowStateModel:
             ],
         )
     ).strip()
-    prior_knowledge = build_context_prefix(root, memory, _pk_query, console=console)
+    # Opt-in wiki layer (D-05/D-06): flag OFF => include_layers=None => byte-identical
+    # to the historical no-kwarg call. Flag ON => the FULL standard set UNION {"wiki"},
+    # never {"wiki"} alone (which _included() would read as "drop every standard layer").
+    _wiki_include_layers = _STANDARD_LAYERS | {"wiki"} if state.preferences.wiki_layer else None
+    prior_knowledge = build_context_prefix(
+        root, memory, _pk_query, include_layers=_wiki_include_layers, console=console
+    )
 
     # Step 2: Research — split-topic bridge calls
     research = ResearchAdapter(
