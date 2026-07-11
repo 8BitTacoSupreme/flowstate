@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.8.0
 milestone_name: Harness Tax & Value
-status: executing
-stopped_at: ROADMAP.md written for v0.8.0 Harness Tax & Value (phases 19-22, 14/14 requirements mapped)
-last_updated: "2026-07-11T05:29:32.536Z"
+status: verifying
+stopped_at: Completed 19-02-PLAN.md — RunSnapshot real consumption fields wired end-to-end (TAX-02)
+last_updated: "2026-07-11T05:40:31.137Z"
 last_activity: 2026-07-11
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
-  percent: 0
+  completed_plans: 3
+  percent: 25
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 Phase: 19 (the-tax) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-11
 
 ## Performance Metrics
@@ -76,6 +76,7 @@ Last activity: 2026-07-11
 | Phase 18 P02 | 7min | 2 tasks | 2 files |
 | Phase 19 P01 | 18 | 2 tasks | 2 files |
 | Phase 19 P02 | 14min | 3 tasks | 8 files |
+| Phase 19 P03 | 540 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -112,6 +113,7 @@ Recent decisions affecting current work:
 - [Phase 18-02]: close_loop uses module-reference imports (import bench.X as X) instead of from-imports so tests can monkeypatch bench.replicate._run_trial / bench.prepare_fixture.main effectively
 - [Phase ?]: Phase 19-01 TAX-01: BridgeResult.usage/duration_s appended after existing fields (positional-ctor safe); json path parses only when output_format=json AND top-level result key present, else raw-stdout fallback with usage=None (never raises); cumulative totals accumulate only on successful returns
 - [Phase 19-02 / TAX-02]: RunSnapshot gains real tokens_in/out/cache_read/wall_clock_s appended after layers_present with defaults (pure carriage — compute_scorecard byte-identical, no axis reads them); threaded end-to-end orchestrator bridge totals -> append_run_entry RUN metadata -> capture_run_snapshot (type-guarded metadata.get, 0/None fallback); adapters switched to output_format=json to capture usage (Plan 01 byte-identical .output, no extra LLM call); prefix_tokens kept as the DISTINCT Track-1 growth signal (input-context size), NOT repurposed for consumption
+- [Phase ?]: [Phase 19-03 / TAX-03/04]: tax rendering lives entirely in bench/report.py (presentation-only) — per-arm tokens/seconds as a Track-2 block EXCLUDED from compounding_score; cost-per-success = (tokens_in+tokens_out)/summed verify_pass (passed flowstate verify acceptance gates, NOT run/commit count), gates_passed==0 -> n/a
 
 ### Pending Todos
 
@@ -145,7 +147,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-11
+Last session: 2026-07-11T05:40:07.312Z
 Stopped at: Completed 19-02-PLAN.md — RunSnapshot real consumption fields wired end-to-end (TAX-02)
 
 **Why v0.8.0 exists (SEED-001, verified prior session):**

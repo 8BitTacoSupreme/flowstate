@@ -10,8 +10,8 @@
 
 - [x] **TAX-01**: `ClaudeBridge.run()` captures real usage — `BridgeResult` gains a `usage` field populated via the existing `output_format="json"` path, while `.output` stays byte-identical (no caller regression). Deterministic, no new LLM calls.
 - [x] **TAX-02**: `RunSnapshot` records real `tokens_in` / `tokens_out` / `cache_read` + `wall_clock_s` per run (replacing the `len(prefix)//4` `prefix_tokens` estimate as the source of truth for consumption).
-- [ ] **TAX-03**: `bench/report.py` reports per-arm tokens and seconds alongside the existing quality metrics (Track-2, excluded from `compounding_score`).
-- [ ] **TAX-04**: cost-per-success uses `flowstate verify`'s deterministic acceptance gates as the denominator (not "commits"); the denominator is named honestly in the report.
+- [x] **TAX-03**: `bench/report.py` reports per-arm tokens and seconds alongside the existing quality metrics (Track-2, excluded from `compounding_score`).
+- [x] **TAX-04**: cost-per-success uses `flowstate verify`'s deterministic acceptance gates as the denominator (not "commits"); the denominator is named honestly in the report.
 
 ### Evaluator Independence
 
@@ -51,8 +51,8 @@
 |-------------|-------|--------|
 | TAX-01 | Phase 19 | Complete |
 | TAX-02 | Phase 19 | Complete |
-| TAX-03 | Phase 19 | Pending |
-| TAX-04 | Phase 19 | Pending |
+| TAX-03 | Phase 19 | Complete |
+| TAX-04 | Phase 19 | Complete |
 | IND-01 | Phase 20 | Pending |
 | IND-02 | Phase 20 | Pending |
 | IND-03 | Phase 20 | Pending |

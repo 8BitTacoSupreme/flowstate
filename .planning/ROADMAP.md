@@ -92,7 +92,7 @@ Full detail: [`milestones/v0.6.2-ROADMAP.md`](./milestones/v0.6.2-ROADMAP.md).
 **Plans**: 3 plans
 - [x] 19-01-PLAN.md — TAX-01: BridgeResult.usage + duration_s via the json path (text-mode byte-identical) + cumulative bridge totals
 - [x] 19-02-PLAN.md — TAX-02: real tokens/wall_clock_s on RunSnapshot threaded bridge→journal→capture; compute_scorecard unchanged
-- [ ] 19-03-PLAN.md — TAX-03/04: per-arm tokens+seconds in report.py (Track-2, excluded) + cost per verified acceptance gate
+- [x] 19-03-PLAN.md — TAX-03/04: per-arm tokens+seconds in report.py (Track-2, excluded) + cost per verified acceptance gate
 
 ### Phase 20: Evaluator Independence
 **Goal**: The judge can no longer silently grade its own producer's output, and a single judge call becomes a defensible multi-judge verdict — without disturbing `metrics.py`'s authority.
@@ -155,7 +155,7 @@ Scoped and roadmapped this session, then deferred so the adapter stubs get fixed
 | 16. Mode-Honest Reporting | v0.6.2 | 1/1 | Complete    | 2026-07-11 |
 | 17. No Silent No-Op Arms + Producers | v0.6.2 | 3/3 | Complete   | 2026-07-11 |
 | 18. Close the Loop with a CI | v0.6.2 | 3/3 | Complete   | 2026-07-11 |
-| 19. The Tax | v0.8.0 | 2/3 | In Progress|  |
+| 19. The Tax | v0.8.0 | 3/3 | Complete   | 2026-07-11 |
 | 20. Evaluator Independence | v0.8.0 | 0/0 | Not started | - |
 | 21. Activate the Wiki | v0.8.0 | 0/0 | Not started | - |
 | 22. The Verdict | v0.8.0 | 0/0 | Not started | - |
