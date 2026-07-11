@@ -91,3 +91,8 @@ None - no external service configuration required.
 ---
 *Phase: 18-close-the-loop-with-a-ci-e2e*
 *Completed: 2026-07-11*
+
+## Self-Check: PASSED
+- FOUND: tests/test_bench_e2e_smoke.py
+- FOUND: 759bd40 (task commit)
+- FOUND: 647201d (summary commit)

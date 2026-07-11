@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.6.2
 milestone_name: Make the Harness Real
 status: executing
-stopped_at: "Completed 18-01-PLAN.md (HAR-04): paired-bootstrap CI helper wired into replicate.py Track-2 output"
-last_updated: "2026-07-11T02:31:15.525Z"
+stopped_at: "Completed 18-03-PLAN.md (HAR-05): CI-safe E2E smoke covers all 5 bench arms + fail-loud producer gate"
+last_updated: "2026-07-11T02:36:51.095Z"
 last_activity: 2026-07-11
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
   percent: 67
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 ## Current Position
 
 Phase: 18 (Close the Loop with a CI, E2E) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-07-11
 
@@ -72,6 +72,7 @@ Last activity: 2026-07-11
 | Phase 15 P15-04 | 1080 | 2 tasks | 3 files |
 | Phase 17 P03 | 12min | 2 tasks | 3 files |
 | Phase 18 P01 | 6min | 2 tasks | 4 files |
+| Phase 18 P03 | 25min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,7 @@ Recent decisions affecting current work:
 - [Phase 18-01]: n==1 bootstrap edge case handled by the general resampling path (not a special branch); every size-1 resample naturally degenerates to ci_low==ci_high==mean
 - [Phase 18-01]: Percentile CI indices use round(p*(resamples-1)) with a defensive ci_low<=mean<=ci_high clamp against 2-decimal rounding drift
 - [Phase 18-01]: bench/report.py intentionally left untouched per plan scope note; no caller in this phase routes the CI through report.write_json
+- [Phase 18-03]: E2E smoke writes producer artifacts (repomix-pack.xml, wiki/*.md) directly to disk instead of shelling out to repomix/npx, keeping the harness-of-harnesses gate CI-safe with zero external tool dependency
 
 ### Pending Todos
 
@@ -132,8 +134,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-11T02:31:15.521Z
-Stopped at: Completed 18-01-PLAN.md (HAR-04): paired-bootstrap CI helper wired into replicate.py Track-2 output
+Last session: 2026-07-11T02:36:51.092Z
+Stopped at: Completed 18-03-PLAN.md (HAR-05): CI-safe E2E smoke covers all 5 bench arms + fail-loud producer gate
 
 **Why v0.6.1 exists (verified this session, file:line):**
 
