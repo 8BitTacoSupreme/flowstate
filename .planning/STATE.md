@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v0.6.2
 milestone_name: Make the Harness Real
-status: verifying
+status: completed
 stopped_at: "Completed 18-02-PLAN.md (HAR-04): bench/close_loop.py — one-command prior-runs→distill→inject→judge→CI driver"
-last_updated: "2026-07-11T02:46:42.520Z"
-last_activity: 2026-07-11
+last_updated: "2026-07-11T03:11:35.168Z"
+last_activity: 2026-07-11 -- Phase 18 marked complete
 progress:
   total_phases: 3
   completed_phases: 3
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 ## Current Position
 
-Phase: 18 (Close the Loop with a CI, E2E) — EXECUTING
+Phase: 18 — COMPLETE
 Plan: 3 of 3
-Status: Phase complete — ready for verification
-Last activity: 2026-07-11
+Status: Phase 18 complete
+Last activity: 2026-07-11 -- Phase 18 marked complete
 
 ## Performance Metrics
 
