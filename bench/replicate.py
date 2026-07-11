@@ -92,6 +92,22 @@ def _agg(trials: list[list[float]]) -> dict:
     }
 
 
+def _per_trial_improvements(trials: list[list[float] | None]) -> list[float | None]:
+    """Per-trial improvement (last - first), aligned to trial index, None-preserving.
+
+    Unlike ``_agg`` (which aggregates over the surviving trials and loses trial
+    identity), this keeps a slot per trial index: a missing trial (``None``) stays
+    ``None`` so callers can pair two arms by trial index and drop a pair only when
+    either side is absent. Improvement is translation-invariant, so raw and
+    paired-normalized trajectories yield identical per-trial improvements.
+    """
+    present = [t for t in trials if t is not None]
+    if not present:
+        return [None] * len(trials)
+    k = min(len(t) for t in present)
+    return [t[k - 1] - t[0] if t is not None else None for t in trials]
+
+
 def _cohens_d(on: dict, off: dict) -> float | None:
     if on.get("n", 0) < 2 or off.get("n", 0) < 2:
         return None
@@ -124,18 +140,22 @@ def main(argv: list[str] | None = None) -> int:
     )
     a = ap.parse_args(argv)
 
-    collected: dict[str, list[list[float]]] = {arm: [] for arm in a.layers}
+    # Keep a per-trial slot (with None holes for failed trials) so trial identity
+    # survives — the paired-bootstrap CI below pairs arm vs none BY TRIAL INDEX,
+    # not by compacted survivor position.
+    collected: dict[str, list[list[float] | None]] = {arm: [None] * a.trials for arm in a.layers}
     for arm in a.layers:
         for t in range(a.trials):
             scores = _run_trial(arm, a.runs, a.root, f"{arm}{t}")
             print(f"[replicate] {arm} trial {t}: {scores}", flush=True)
-            if scores is not None:
-                collected[arm].append(scores)
+            collected[arm][t] = scores
 
-    # Build per-arm raw + paired aggregates
+    # Build per-arm raw + paired aggregates over the SURVIVING trials (None holes
+    # dropped for the summary stats; trial-index identity is preserved in
+    # `collected` for the paired-bootstrap CI below).
     arms_summary: dict[str, dict] = {}
     for arm in a.layers:
-        trials = collected[arm]
+        trials = [t for t in collected[arm] if t is not None]
         raw_agg = _agg(trials)
         norm_agg = _agg(_paired_normalize(trials)) if trials else {"n": 0}
         arms_summary[arm] = {"raw": raw_agg, "paired": norm_agg}
@@ -188,16 +208,22 @@ def main(argv: list[str] | None = None) -> int:
         summary["improvement_delta_vs_none"] = deltas
 
         # Track-2 only: seeded paired-bootstrap CI on per-trial deltas
-        # (arm_improvement_t - none_improvement_t), paired by trial index.
-        # Stays isolated from the deterministic scorecard module.
-        none_improvements = arms_summary["none"][metric].get("improvements", [])
+        # (arm_improvement_t - none_improvement_t), paired by TRIAL INDEX. A pair
+        # is kept only when BOTH arm and none produced a score for that trial; a
+        # unilateral failure drops the whole pair so the two sides stay
+        # index-aligned. Improvement is translation-invariant, so this matches the
+        # selected `metric` (raw/paired) exactly. Isolated from the scorecard module.
+        none_improvements = _per_trial_improvements(collected["none"])
         ci_deltas: dict[str, dict] = {}
         for arm in a.layers:
             if arm == "none":
                 continue
-            arm_improvements = arms_summary[arm][metric].get("improvements", [])
-            k = min(len(arm_improvements), len(none_improvements))
-            paired_deltas = [arm_improvements[i] - none_improvements[i] for i in range(k)]
+            arm_improvements = _per_trial_improvements(collected[arm])
+            paired_deltas = [
+                arm_improvements[t] - none_improvements[t]
+                for t in range(a.trials)
+                if arm_improvements[t] is not None and none_improvements[t] is not None
+            ]
             ci_deltas[arm] = paired_bootstrap_ci(paired_deltas)
         summary["bootstrap_ci_delta_vs_none"] = ci_deltas
 

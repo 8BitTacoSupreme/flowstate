@@ -129,3 +129,48 @@ def test_real_mode_plumbing_uses_monkeypatched_run_trial_no_subprocess(tmp_path,
     assert ci["mean"] == 2.0
     assert ci["ci_low"] == 2.0
     assert ci["ci_high"] == 2.0
+
+
+def test_real_mode_pairs_by_trial_index_when_arm_trial_drops(tmp_path, monkeypatch):
+    """CR-01: an arm trial that fails (None) while the baseline trial succeeds must
+    drop the WHOLE pair for that trial index, keeping the survivors trial-aligned.
+
+    arm improvements: [3, -, 2]; baseline improvements: [1, 0.5, 1]. Correct
+    trial-index pairing keeps trials 0 and 2 -> deltas [3-1, 2-1] = [2.0, 1.0]
+    -> n 2, mean 1.5. Positional survivor-compaction (the bug) would instead
+    pair arm[2] with baseline[1] and give a different result.
+    """
+    arm_seq = {0: [5.0, 6.0, 8.0], 1: None, 2: [5.0, 6.0, 7.0]}
+    base_seq = {0: [5.0, 5.5, 6.0], 1: [5.0, 5.0, 5.5], 2: [5.0, 6.0, 6.0]}
+
+    def fake_run_trial(arm, runs, root, label):
+        t = int(label[-1])  # label is f"{arm}{t}"
+        return arm_seq[t] if arm == "wiki" else base_seq[t]
+
+    monkeypatch.setattr(replicate, "_run_trial", fake_run_trial)
+    monkeypatch.setattr(prepare_fixture, "main", lambda argv: 0)
+
+    out = tmp_path / "r.json"
+    rc = main(
+        [
+            "--root",
+            _FIXTURE,
+            "--mode",
+            "real",
+            "--arm",
+            "wiki",
+            "--baseline",
+            "none",
+            "--trials",
+            "3",
+            "--runs",
+            "3",
+            "--out",
+            str(out),
+        ]
+    )
+    assert rc == 0
+    ci = json.loads(out.read_text())["bootstrap_ci_delta_vs_baseline"]
+    assert ci["n"] == 2
+    assert ci["mean"] == 1.5
+    assert ci["ci_low"] <= ci["mean"] <= ci["ci_high"]

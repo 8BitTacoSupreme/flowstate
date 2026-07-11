@@ -94,28 +94,38 @@ def _cheap_trajectories(
 
 def _real_trajectories(
     target: Path, arm: str, baseline: str, trials: int, runs: int
-) -> tuple[list[list[float]], list[list[float]]]:
-    """Live per-trial judge trajectories via ``bench.replicate._run_trial``. Real mode only."""
-    arm_trials: list[list[float]] = []
-    baseline_trials: list[list[float]] = []
+) -> tuple[list[list[float] | None], list[list[float] | None]]:
+    """Live per-trial judge trajectories via ``bench.replicate._run_trial``. Real mode only.
+
+    Preserves trial identity: a failed trial is recorded as ``None`` at its trial
+    index (not compacted away), so ``_paired_deltas`` can drop the whole pair when
+    either side is missing and keep arm and baseline matched by trial index.
+    """
+    arm_trials: list[list[float] | None] = []
+    baseline_trials: list[list[float] | None] = []
     for t in range(trials):
-        scores = replicate._run_trial(arm, runs, target, f"{arm}{t}")
-        if scores is not None:
-            arm_trials.append(scores)
-        base_scores = replicate._run_trial(baseline, runs, target, f"{baseline}{t}")
-        if base_scores is not None:
-            baseline_trials.append(base_scores)
+        arm_trials.append(replicate._run_trial(arm, runs, target, f"{arm}{t}"))
+        baseline_trials.append(replicate._run_trial(baseline, runs, target, f"{baseline}{t}"))
     return arm_trials, baseline_trials
 
 
 def _paired_deltas(
-    arm_trials: list[list[float]], baseline_trials: list[list[float]]
+    arm_trials: list[list[float] | None], baseline_trials: list[list[float] | None]
 ) -> list[float]:
-    """Per-trial (arm improvement - baseline improvement), paired by trial index."""
-    arm_improvements = replicate._agg(arm_trials).get("improvements", [])
-    baseline_improvements = replicate._agg(baseline_trials).get("improvements", [])
+    """Per-trial (arm improvement - baseline improvement), paired by TRIAL INDEX.
+
+    A pair is kept only when BOTH sides produced a score for that trial index; a
+    unilateral failure (``None`` on either side) drops the whole pair so arm and
+    baseline improvements remain matched observations.
+    """
+    arm_improvements = replicate._per_trial_improvements(arm_trials)
+    baseline_improvements = replicate._per_trial_improvements(baseline_trials)
     k = min(len(arm_improvements), len(baseline_improvements))
-    return [arm_improvements[i] - baseline_improvements[i] for i in range(k)]
+    return [
+        arm_improvements[t] - baseline_improvements[t]
+        for t in range(k)
+        if arm_improvements[t] is not None and baseline_improvements[t] is not None
+    ]
 
 
 def main(argv: list[str] | None = None) -> int:

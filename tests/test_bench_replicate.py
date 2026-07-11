@@ -313,3 +313,66 @@ def test_run_trial_removes_temp_file_on_failure(monkeypatch):
     scores = rep._run_trial("none", 2, Path("."), "none0")
     assert scores is None
     assert not Path(captured["out"]).exists(), "temp file must be unlinked on failure"
+
+
+# ---------------------------------------------------------------------------
+# CR-01: paired-bootstrap CI must pair by TRIAL INDEX, not survivor position
+# ---------------------------------------------------------------------------
+
+
+def test_per_trial_improvements_preserves_none_holes():
+    """_per_trial_improvements keeps a slot per trial index, None where absent."""
+    from bench.replicate import _per_trial_improvements
+
+    trials = [[5.0, 6.0, 8.0], None, [5.0, 6.0, 7.0]]
+    assert _per_trial_improvements(trials) == [3.0, None, 2.0]
+    # all-missing -> all-None, same length
+    assert _per_trial_improvements([None, None]) == [None, None]
+
+
+def test_main_pairs_bootstrap_ci_by_trial_index_when_arm_trial_drops(monkeypatch, tmp_path):
+    """When arm trial 1 fails (None) but the none baseline trial 1 succeeds, the
+    pair for trial 1 must be dropped whole and trials 0/2 stay index-aligned.
+
+    Positional survivor-compaction (the old bug) would pair arm[2] against
+    none[1] and yield a different CI. Correct trial-index pairing keeps deltas
+    [imp_wiki0 - imp_none0, imp_wiki2 - imp_none2] = [3-1, 2-1] = [2.0, 1.0]
+    -> mean 1.5, n 2. The buggy positional version would give [2.0, 1.5].
+    """
+    trials_by_arm = {
+        "wiki": [[5.0, 6.0, 8.0], None, [5.0, 6.0, 7.0]],  # improvements: 3, -, 2
+        "none": [[5.0, 5.5, 6.0], [5.0, 5.0, 5.5], [5.0, 6.0, 6.0]],  # improvements: 1, 0.5, 1
+    }
+    idx = {"wiki": 0, "none": 0}
+
+    def fake_run_trial(arm, runs, root, label):
+        i = idx[arm]
+        idx[arm] += 1
+        return trials_by_arm[arm][i]
+
+    monkeypatch.setattr("bench.replicate._run_trial", fake_run_trial)
+
+    out_path = tmp_path / "out.json"
+    rc = main(
+        [
+            "--root",
+            str(tmp_path),
+            "--layers",
+            "wiki",
+            "none",
+            "--trials",
+            "3",
+            "--runs",
+            "3",
+            "--out",
+            str(out_path),
+        ]
+    )
+    assert rc == 0
+
+    summary = json.loads(out_path.read_text())
+    wiki_ci = summary["bootstrap_ci_delta_vs_none"]["wiki"]
+    # trial-index pairing keeps trials 0 and 2 only (trial 1 arm-side dropped)
+    assert wiki_ci["n"] == 2
+    assert wiki_ci["mean"] == 1.5
+    assert wiki_ci["ci_low"] <= wiki_ci["mean"] <= wiki_ci["ci_high"]
