@@ -4,8 +4,8 @@ milestone: v0.6.1
 milestone_name: Make the Names Real
 status: executing
 stopped_at: "Completed 15-02-PLAN.md (GSD-02): installer lays down GSD unconditionally"
-last_updated: "2026-07-11T00:40:21.258Z"
-last_activity: 2026-07-11 -- Phase 16 planning complete
+last_updated: "2026-07-11T00:40:22.069Z"
+last_activity: 2026-07-11 -- Phase 16 execution started
 progress:
   total_phases: 5
   completed_phases: 4
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Milestone complete
+**Current focus:** Phase 16 — Mode-Honest Reporting
 
 ## Current Position
 
-Phase: 15
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-07-11 -- Phase 16 planning complete
+Phase: 16 (Mode-Honest Reporting) — EXECUTING
+Plan: 1 of 1
+Status: Executing Phase 16
+Last activity: 2026-07-11 -- Phase 16 execution started
 
 ## Performance Metrics
 
