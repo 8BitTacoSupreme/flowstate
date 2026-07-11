@@ -417,6 +417,145 @@ def build_result(
     }
 
 
+# ── Pristine-worktree control (D-01a) ──────────────────────────────────────────
+# FlowState/GSD state whose presence would mean the subject repo is contaminated
+# (self-reading confound) OR that run-1-empty-memory does not hold. The project's own
+# .claude/ config is legitimate project content and is deliberately NOT a marker.
+_STRAY_MARKERS = (
+    "memory.db",
+    "flowstate.json",
+    ".planning",
+    "PROJECT.md",
+    "ROADMAP.md",
+    "research",
+)
+
+
+def assert_pristine_worktree(root: Path) -> dict:
+    """D-01a contamination control: report whether ``root`` carries stray FlowState state.
+
+    Returns ``{"pristine", "subject", "stray_markers"}``. ``pristine`` is True iff NONE
+    of ``memory.db`` / ``flowstate.json`` / ``.planning/`` / root ``PROJECT.md`` /
+    ``ROADMAP.md`` / ``research/`` exist under ``root`` — their absence proves
+    run-1-empty-memory and no self-reading confound. A bare ``.claude/`` config is
+    legitimate project content and is NOT flagged. The result is RETURNED (not just
+    raised) so the writer can embed the D-01a evidence into 22-VERDICT.md. Never raises.
+    """
+    root = Path(root)
+    found: list[str] = []
+    for marker in _STRAY_MARKERS:
+        try:
+            if (root / marker).exists():
+                found.append(marker)
+        except OSError:
+            continue
+    return {"pristine": not found, "subject": str(root), "stray_markers": found}
+
+
+# ── 22-VERDICT.md writer (D-01a / D-02 / D-03 / D-06 / D-07) ────────────────────
+def _fmt(value: object) -> str:
+    """Render a scalar for a markdown cell; ``None`` -> ``n/a``."""
+    return "n/a" if value is None else str(value)
+
+
+def _pristine_lines(pristine: dict) -> list[str]:
+    lines = ["## Pristine control (D-01a)", ""]
+    if pristine["pristine"]:
+        lines += [
+            f"- PASS — subject `{pristine['subject']}` carries no stray FlowState state "
+            "(no memory.db / flowstate.json / .planning / root PROJECT.md / ROADMAP.md / research).",
+            "- Run-1-empty-memory holds by construction; no self-reading confound "
+            "(the project's own `.claude/` config is legitimate, not contamination).",
+        ]
+    else:
+        markers = ", ".join(f"`{m}`" for m in pristine["stray_markers"])
+        lines += [
+            f"- FAIL — subject `{pristine['subject']}` carries stray FlowState markers: {markers}.",
+            "- The subject is NOT pristine; run-1-empty-memory / no-self-reading cannot be assumed.",
+        ]
+    return [*lines, ""]
+
+
+def _arm_table_lines(result: dict) -> list[str]:
+    lines = [
+        "## Per-arm quality + tax + compounding curve (D-03, D-07)",
+        "",
+        "Quality = Phase-20 independent multi-judge mean (0-10, judge != producer). "
+        "Tax is Track-2 and is EXCLUDED from any compounding score. The compounding "
+        "curve is run 1->N paired-normalized to run-0 (wiki/memory value, if any, is "
+        "expected only at run 2+ because run 1 has empty memory).",
+        "",
+        "| Arm | Quality (0-10) | tokens_in | tokens_out | cache_read | wall_clock_s | Compounding curve (norm to run-0) |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for arm in _ARMS:
+        a = result["arms"][arm]
+        tax = a["tax"]
+        curve = a["compounding_curve"].get("per_run_mean")
+        curve_str = "n/a" if not curve else " -> ".join(str(x) for x in curve)
+        lines.append(
+            f"| {arm} | {_fmt(a['quality']['mean'])} | {tax['tokens_in']} | "
+            f"{tax['tokens_out']} | {tax['cache_read']} | {tax['wall_clock_s']:g} | {curve_str} |"
+        )
+    return [*lines, ""]
+
+
+def _contrast_table_lines(result: dict) -> list[str]:
+    lines = [
+        "## The 4 co-primary contrasts — D-02 three-part GATING rule (D-06)",
+        "",
+        "A contrast PASSES iff its paired-bootstrap 95% CI excludes 0 AND Cohen's d >= 0.8 "
+        "AND it survives Holm-Bonferroni across the 4 contrasts. Both raw and Holm-corrected "
+        "significance are reported, but the WIN/null decision uses the Holm-corrected result "
+        "(Holm is GATING, not decorative).",
+        "",
+        "| Contrast | n | CI low | CI high | excludes 0 | Cohen's d | raw p | Holm p | VERDICT |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for c in result["contrasts"]:
+        ci = c["ci"]
+        lines.append(
+            f"| {c['contrast']} | {c['n_pairs']} | {_fmt(ci['ci_low'])} | {_fmt(ci['ci_high'])} | "
+            f"{'yes' if c['ci_excludes_zero'] else 'no'} | {_fmt(c['cohens_d'])} | "
+            f"{_fmt(c['raw_p'])} | {_fmt(c['holm_p'])} | **{c['verdict'].upper()}** |"
+        )
+    lines.append("")
+    for c in result["contrasts"]:
+        if c["verdict"] == "null":
+            lines.append(
+                f"- `{c['contrast']}` = **NULL** — an accepted, documented outcome that "
+                "licenses stripping this layer (no re-running to chase significance)."
+            )
+    return [*lines, ""]
+
+
+def render_verdict_md(result: dict, pristine: dict) -> str:
+    """Render the full 22-VERDICT.md markdown from a ``build_result`` payload + pristine control."""
+    mode_label = "cheap (synthetic)" if result["synthetic"] else "real"
+    header = [
+        "# Phase 22 — The Verdict",
+        "",
+        f"- Mode: **{mode_label}** · seed: {result['seed']} · trials: {result['trials']} "
+        f"· runs: {result['runs']}",
+        f"- Pre-registration (frozen before any real trial): `{result['preregistration']}`",
+        f"- Win rule (D-02, VERBATIM): {result['win_rule']}",
+        "",
+    ]
+    if result["synthetic"]:
+        header += [
+            "> SYNTHETIC cheap-mode run: the numbers below are a seeded apparatus check "
+            "(plumbing proof), NOT a causal measurement. Only `--mode real` decides the verdict.",
+            "",
+        ]
+    body = (
+        header
+        + _pristine_lines(pristine)
+        + _arm_table_lines(result)
+        + _contrast_table_lines(result)
+    )
+    return "\n".join(body) + "\n"
+
+
 def _build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="bench.verdict",
@@ -444,6 +583,11 @@ def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     root = Path(args.root)
 
+    # D-01a contamination control: check the subject BEFORE trials so its result is
+    # embedded in the emitted 22-VERDICT.md (evidence must survive in the artifact).
+    # A cheap filesystem check — safe to run in both modes, no spend.
+    pristine = assert_pristine_worktree(root)
+
     trajectories, tax, synthetic = _collect(root, args.mode, args.trials, args.runs, args.seed)
     contrasts = _compute_contrasts(trajectories, args.seed)
     if args.mode == "real" and any(c["n_pairs"] == 0 for c in contrasts):
@@ -459,10 +603,27 @@ def main(argv: list[str] | None = None) -> int:
         trials=args.trials,
         runs=args.runs,
     )
-    print(json.dumps(result, indent=2))
+    result["pristine_control"] = pristine
+
+    # A compact verdict summary always goes to stdout; --out with a .md suffix writes the
+    # full 22-VERDICT.md report, anything else writes the complete JSON payload.
+    print(
+        json.dumps(
+            {
+                "mode": result["mode"],
+                "synthetic": result["synthetic"],
+                "pristine_control": pristine,
+                "contrasts": {c["contrast"]: c["verdict"] for c in result["contrasts"]},
+            },
+            indent=2,
+        )
+    )
     if args.out is not None:
         try:
-            Path(args.out).write_text(json.dumps(result, indent=2) + "\n")
+            if str(args.out).endswith(".md"):
+                Path(args.out).write_text(render_verdict_md(result, pristine))
+            else:
+                Path(args.out).write_text(json.dumps(result, indent=2) + "\n")
         except OSError as exc:
             print(f"[verdict] could not write --out: {exc}")
     return 0
