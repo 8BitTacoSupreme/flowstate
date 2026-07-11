@@ -84,7 +84,10 @@ Phases 12–15 (15 plans) — adapters made honest and real (12–13), the two M
   1. The `wiki`/`pack` arms fail loud (or emit "arm measured nothing: producer X absent") when their producer artifact is missing — never a bare number.
   2. `bench/` ships a memory→wiki distiller (promoted from `scratchpad/distill_spike.py`) and produces the article corpus the Phase-11 retriever reads (closes SEED-001 #2 bench-side).
   3. One `prepare-fixture` path generates what each arm needs before the arm matrix runs.
-**Plans**: TBD
+**Plans**: 3 plans (2 waves)
+- [ ] 17-01-PLAN.md — bench/distiller.py: memory→wiki distiller writing the article corpus the Phase-11 reader globs (HAR-03a/b)
+- [ ] 17-02-PLAN.md — fail-loud gate in compound_eval.py: absent producer → "arm measured nothing" marker + non-zero exit (HAR-02)
+- [ ] 17-03-PLAN.md — bench/prepare_fixture.py: one path wiring run_pack + distiller per arm (HAR-03 criterion 3)
 
 ### Phase 18: Close the Loop with a CI, E2E
 **Goal**: Multi-sample judging + paired-bootstrap CI wired into `compound_eval`'s Track-2 path (reusing `grounding.py`/`replicate.py`); one command runs prior-runs→distill→inject→judge and returns a CI'd delta; a green E2E smoke test exercises every arm's plumbing and asserts fail-loud on a missing producer.
@@ -123,7 +126,7 @@ Scoped and roadmapped this session, then deferred so the adapter stubs get fixed
 | 14. Vendor & Surface | v0.6.1 | 4/4 | Complete    | 2026-07-10 |
 | 15. Bundle GSD | v0.6.1 | 5/5 | Complete    | 2026-07-11 |
 | 16. Mode-Honest Reporting | v0.6.2 | 1/1 | Complete    | 2026-07-11 |
-| 17. No Silent No-Op Arms + Producers | v0.6.2 | 0/? | Not started | - |
+| 17. No Silent No-Op Arms + Producers | v0.6.2 | 0/3 | Not started | - |
 | 18. Close the Loop with a CI | v0.6.2 | 0/? | Not started | - |
 | _v0.7.0 Retrieval Benchmark Rigor_ | v0.7.0 | deferred | renumbers 16-21 on start | - |
 
