@@ -301,14 +301,32 @@ def main(argv: list[str] | None = None) -> int:
     else:
         scorecard = _cheap_loop(root, runs, console=console)
 
-    render_report(scorecard, console=console, markdown=args.markdown)
+    # Producers-present: the sorted union of layers seen across all snapshots.
+    producers = tuple(sorted({layer for s in scorecard.snapshots for layer in s.layers_present}))
+    render_report(
+        scorecard,
+        console=console,
+        markdown=args.markdown,
+        mode=args.mode,
+        arm=args.layers,
+        sample_size=runs,
+        producers=producers,
+    )
     if judged:
         render_judge_panel(judged, console=console)
 
     if args.out is not None:
         # never-raises: an unwritable --out degrades to a warning, not a crash.
         try:
-            write_json(scorecard, Path(args.out), judge_results=judged or None)
+            write_json(
+                scorecard,
+                Path(args.out),
+                judge_results=judged or None,
+                mode=args.mode,
+                arm=args.layers,
+                sample_size=runs,
+                producers=producers,
+            )
             console.print(f"[dim]wrote results: {args.out}[/dim]")
         except OSError as exc:
             console.print(f"[red]could not write results to {args.out}: {exc}[/red]")

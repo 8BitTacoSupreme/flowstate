@@ -37,6 +37,17 @@ CAVEAT = (
     "contributes nothing toward a positive verdict."
 )
 
+# The real-mode counterpart — printed VERBATIM for --mode real. It deliberately
+# contains NO occurrence of the word "cheap" (a regression test asserts this): a
+# real run exercises the live substrate, so it DOES test causation.
+REAL_CAVEAT = (
+    "REAL mode: this run exercised the live substrate, so it tests whether "
+    "FlowState's prefix actually causes the LLM to compound — this is a causal "
+    "result, not a measurement-apparatus regression guard. An axis with no "
+    "underlying signal reads as 'insufficient-data' (NOT 'compounding') and "
+    "contributes nothing toward a positive verdict."
+)
+
 _module_console = Console()
 
 # Color per axis / verdict label, reusing the verify table palette where sensible.
@@ -48,11 +59,42 @@ _VERDICT_STYLE = {
 }
 
 
+def _caveat_for(mode: str) -> str:
+    """Mode-selected caveat: the cheap regression-guard wording, or the real note."""
+    return REAL_CAVEAT if mode == "real" else CAVEAT
+
+
+def _mode_note_for(mode: str) -> str:
+    """Short, one-line mode note for the JSON payload (no 'cheap' in real mode)."""
+    if mode == "real":
+        return "real mode tests whether the prefix actually causes the LLM to compound"
+    return "cheap mode validates the apparatus, not causation"
+
+
+def _context_line(
+    mode: str,
+    arm: str | None,
+    sample_size: int | None,
+    producers: tuple[str, ...],
+) -> str:
+    """One-line provenance: mode, arm, sample size (K/trials), producers-present."""
+    prods = ", ".join(sorted(producers)) if producers else "none"
+    return (
+        f"mode={mode} · arm={arm if arm is not None else 'none'} · "
+        f"K/trials={sample_size if sample_size is not None else 'n/a'} · "
+        f"producers-present={prods}"
+    )
+
+
 def write_json(
     scorecard: Scorecard,
     out_path: Path,
     *,
     judge_results: list[JudgeResult] | None = None,
+    mode: str = "cheap",
+    arm: str | None = None,
+    sample_size: int | None = None,
+    producers: tuple[str, ...] = (),
 ) -> None:
     """Write the scorecard to ``out_path`` as deterministic JSON (sort_keys, indent=2).
 
@@ -63,8 +105,12 @@ def write_json(
     artifact too.
     """
     payload = {
-        "caveat": CAVEAT,
-        "mode_note": "cheap mode validates the apparatus, not causation",
+        "caveat": _caveat_for(mode),
+        "mode_note": _mode_note_for(mode),
+        "mode": mode,
+        "arm": arm,
+        "sample_size": sample_size,
+        "producers": sorted(producers),
         "axes": {
             "convergence": scorecard.axis_convergence,
             "gotcha_learning": scorecard.axis_gotcha_learning,
@@ -112,8 +158,19 @@ def _snapshot_dict(snapshot: object) -> dict:
     return d
 
 
-def _trend_table(scorecard: Scorecard) -> Table:
-    table = Table(title="bench compounding trend", border_style="blue")
+def _trend_table(
+    scorecard: Scorecard,
+    *,
+    mode: str = "cheap",
+    arm: str | None = None,
+    sample_size: int | None = None,
+) -> Table:
+    title = (
+        f"bench compounding trend — mode={mode} "
+        f"arm={arm if arm is not None else 'none'} "
+        f"K/trials={sample_size if sample_size is not None else 'n/a'}"
+    )
+    table = Table(title=title, border_style="blue")
     table.add_column("Run", style="bold")
     table.add_column("Δartifacts")
     table.add_column("new/re-enc gotchas")
@@ -157,12 +214,21 @@ def _scorecard_panel(scorecard: Scorecard) -> Panel:
     return Panel("\n".join(lines), title="Scorecard", border_style="blue")
 
 
-def _markdown_record(scorecard: Scorecard) -> str:
+def _markdown_record(
+    scorecard: Scorecard,
+    *,
+    mode: str = "cheap",
+    arm: str | None = None,
+    sample_size: int | None = None,
+    producers: tuple[str, ...] = (),
+) -> str:
     """A RUNLOG-style markdown record of the run."""
     lines = [
         "## Compounding Eval Run",
         "",
-        f"> {CAVEAT}",
+        f"> {_caveat_for(mode)}",
+        "",
+        f"- {_context_line(mode, arm, sample_size, producers)}",
         "",
         "| Run | Δartifacts | new/re-enc | P/F/S | prefix tok | mem hits | layers |",
         "| --- | --- | --- | --- | --- | --- | --- |",
@@ -188,18 +254,28 @@ def render_report(
     *,
     console: Console | None = None,
     markdown: bool = False,
+    mode: str = "cheap",
+    arm: str | None = None,
+    sample_size: int | None = None,
+    producers: tuple[str, ...] = (),
 ) -> None:
     """Print the caveat header, the trend table, and the scorecard panel.
 
-    The caveat is ALWAYS printed first. When ``markdown`` is True, a RUNLOG-style
-    markdown record is also emitted after the Rich output.
+    The mode-selected caveat is ALWAYS printed first, followed by a one-line
+    provenance header (mode / arm / K / producers-present). When ``markdown`` is
+    True, a RUNLOG-style markdown record is also emitted after the Rich output.
     """
     con = console or _module_console
-    con.print(Panel(CAVEAT, title="Honest Caveat", border_style="yellow"))
-    con.print(_trend_table(scorecard))
+    con.print(Panel(_caveat_for(mode), title="Honest Caveat", border_style="yellow"))
+    con.print(_context_line(mode, arm, sample_size, producers))
+    con.print(_trend_table(scorecard, mode=mode, arm=arm, sample_size=sample_size))
     con.print(_scorecard_panel(scorecard))
     if markdown:
-        con.print(_markdown_record(scorecard))
+        con.print(
+            _markdown_record(
+                scorecard, mode=mode, arm=arm, sample_size=sample_size, producers=producers
+            )
+        )
 
 
 def render_judge_panel(results: list[JudgeResult], *, console: Console | None = None) -> None:
