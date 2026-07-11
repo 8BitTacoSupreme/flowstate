@@ -105,6 +105,11 @@ None - plan executed exactly as written. (Statistics reuse, byte-identical CI, H
 - VERD-02 / VERD-03 machinery is complete and cheap-mode-proven. Ready for **Plan 03**: produce the cost estimate, obtain the user greenlight (D-08), then run the full pre-registered 5×3 `--mode real` verdict against `/Users/jhogan/floxybot2` and interpret PASS/NULL per the frozen rule.
 - `git diff` confirms `bench/bootstrap.py` is additions-only (the Phase-18 CI is load-bearing and untouched).
 
+## Self-Check: PASSED
+
+- Files: `bench/verdict.py`, `bench/bootstrap.py`, `tests/test_verdict.py`, `22-02-SUMMARY.md` all present.
+- Commits: `0baf8c3`, `08192af`, `10f4846`, `4e53878`, `af2cdd6` all in history.
+
 ---
 *Phase: 22-the-verdict*
 *Completed: 2026-07-11*
