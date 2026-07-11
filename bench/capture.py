@@ -135,18 +135,33 @@ def capture_run_snapshot(
         return _zeroed_snapshot(run_index, run_id)
 
     try:
-        # ── artifacts_changed from the latest RUN journal entry ──────────────
+        # ── artifacts_changed + real consumption from the latest RUN entry ────
         artifacts_changed = 0
+        tokens_in = tokens_out = cache_read = 0
+        wall_clock_s: float | None = None
         try:
             run_entries = store.get_by_kind(MemoryKind.RUN, limit=1)
             if run_entries:
-                changed = run_entries[0].metadata.get("artifacts_changed")
+                meta = run_entries[0].metadata
+                changed = meta.get("artifacts_changed")
                 if isinstance(changed, list):
                     artifacts_changed = len(changed)
                 elif isinstance(changed, int):
                     artifacts_changed = changed
+                # Consumption keys (Plan 19-02) — guard types the same defensive way
+                # as artifacts_changed, defaulting to 0/None on any oddity.
+                raw_in = meta.get("tokens_in", 0)
+                raw_out = meta.get("tokens_out", 0)
+                raw_cache = meta.get("cache_read", 0)
+                raw_wall = meta.get("wall_clock_s", None)
+                tokens_in = raw_in if isinstance(raw_in, int) else 0
+                tokens_out = raw_out if isinstance(raw_out, int) else 0
+                cache_read = raw_cache if isinstance(raw_cache, int) else 0
+                wall_clock_s = raw_wall if isinstance(raw_wall, int | float) else None
         except Exception:
             artifacts_changed = 0
+            tokens_in = tokens_out = cache_read = 0
+            wall_clock_s = None
 
         # ── gotcha new-vs-reencounter split ──────────────────────────────────
         new_gotchas = 0
@@ -209,6 +224,10 @@ def capture_run_snapshot(
             prefix_tokens=prefix_tokens,
             mem_hits=mem_hits,
             layers_present=tuple(layers),
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            cache_read=cache_read,
+            wall_clock_s=wall_clock_s,
         )
         return snap
     except Exception:
