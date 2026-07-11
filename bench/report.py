@@ -50,6 +50,35 @@ REAL_CAVEAT = (
 
 _module_console = Console()
 
+# The Track-2 tax note — mirrors the judge exclusion at write_json (~127-137). Per-run
+# token/second consumption is a Track-2 harness-cost signal; it is rendered alongside the
+# quality metrics but NEVER feeds the deterministic scorer or any axis.
+_TAX_NOTE = "Track-2 tax — EXCLUDED from compounding_score"
+
+
+def _tax_totals(scorecard: Scorecard) -> dict:
+    """Sum per-run consumption across the scorecard's snapshots (Track-2 tax).
+
+    Presentation-only: these totals never feed the deterministic scorer or any axis.
+    ``wall_clock_s`` of ``None`` is treated as ``0.0`` (a dry run measures no time).
+    """
+    return {
+        "tokens_in": sum(int(s.tokens_in) for s in scorecard.snapshots),
+        "tokens_out": sum(int(s.tokens_out) for s in scorecard.snapshots),
+        "cache_read": sum(int(s.cache_read) for s in scorecard.snapshots),
+        "wall_clock_s": sum(float(s.wall_clock_s or 0.0) for s in scorecard.snapshots),
+    }
+
+
+def _tax_block(scorecard: Scorecard) -> dict:
+    """The full tax payload: per-arm totals plus the Track-2 exclusion note.
+
+    Kept entirely inside report.py — tax numbers are presentation-only and must
+    never cross back into bench/metrics.py.
+    """
+    return {"note": _TAX_NOTE, **_tax_totals(scorecard)}
+
+
 # Color per axis / verdict label, reusing the verify table palette where sensible.
 _VERDICT_STYLE = {
     "compounding": "green",
@@ -120,6 +149,7 @@ def write_json(
         "insufficient_data_axes": _insufficient_axes(scorecard),
         "compounding_score": scorecard.compounding_score,
         "verdict": scorecard.verdict,
+        "tax": _tax_block(scorecard),
         "snapshots": [_snapshot_dict(s) for s in scorecard.snapshots],
     }
     if judge_results:
@@ -214,6 +244,35 @@ def _scorecard_panel(scorecard: Scorecard) -> Panel:
     return Panel("\n".join(lines), title="Scorecard", border_style="blue")
 
 
+def _tax_panel(scorecard: Scorecard) -> Panel:
+    """Render per-arm tokens + seconds, styled distinctly from the mechanical scorecard.
+
+    The Track-2 exclusion note leads the panel so a reader cannot mistake the tax
+    for a quality metric.
+    """
+    tax = _tax_block(scorecard)
+    lines = [
+        f"[dim]{tax['note']}[/dim]",
+        "",
+        f"tokens_in:   {tax['tokens_in']}",
+        f"tokens_out:  {tax['tokens_out']}",
+        f"cache_read:  {tax['cache_read']}",
+        f"seconds:     {tax['wall_clock_s']:g}",
+    ]
+    return Panel("\n".join(lines), title="Tax (Track-2)", border_style="cyan")
+
+
+def _tax_markdown_lines(scorecard: Scorecard) -> list[str]:
+    """RUNLOG-style markdown lines for the per-arm tax totals."""
+    tax = _tax_block(scorecard)
+    return [
+        f"- Tax ({tax['note']}): "
+        f"tokens_in {tax['tokens_in']}, tokens_out {tax['tokens_out']}, "
+        f"cache_read {tax['cache_read']}, seconds {tax['wall_clock_s']:g}",
+        "",
+    ]
+
+
 def _markdown_record(
     scorecard: Scorecard,
     *,
@@ -246,6 +305,7 @@ def _markdown_record(
         f"- Verdict: **{scorecard.verdict}**",
         "",
     ]
+    lines += _tax_markdown_lines(scorecard)
     return "\n".join(lines)
 
 
@@ -270,6 +330,7 @@ def render_report(
     con.print(_context_line(mode, arm, sample_size, producers))
     con.print(_trend_table(scorecard, mode=mode, arm=arm, sample_size=sample_size))
     con.print(_scorecard_panel(scorecard))
+    con.print(_tax_panel(scorecard))
     if markdown:
         con.print(
             _markdown_record(
