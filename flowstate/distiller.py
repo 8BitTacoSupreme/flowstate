@@ -115,6 +115,15 @@ def is_wiki_stale(root: Path, state) -> bool:
     if entry is None:
         return True
 
+    # A manifest entry can outlive the corpus it describes: .planning/codebase/
+    # is a frequently-cleaned tree, so the wiki directory (or its articles) can
+    # be deleted while memory.db is untouched. Treat "corpus gone" as stale so a
+    # --force distill run actually regenerates it — unlike is_pack_stale, this is
+    # a DIRECTORY corpus where any subset of *.md articles can go missing (WR-01).
+    corpus_dir = root / _WIKI_CORPUS_REL
+    if not corpus_dir.is_dir() or not any(corpus_dir.glob("**/*.md")):
+        return True
+
     memory_db = root / "memory.db"
     if not memory_db.exists():
         return False

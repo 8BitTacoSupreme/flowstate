@@ -75,6 +75,14 @@ def _state_with_wiki_entry(created_at: datetime) -> FlowStateModel:
     return state
 
 
+def _populate_corpus(root: Path) -> None:
+    """Write a minimal on-disk wiki corpus so is_wiki_stale exercises the mtime
+    comparison rather than short-circuiting on the WR-01 corpus-present guard."""
+    corpus_dir = root / _WIKI_CORPUS_REL
+    corpus_dir.mkdir(parents=True, exist_ok=True)
+    (corpus_dir / "01-decisions.md").write_text("# Decision\n")
+
+
 def test_wiki_manifest_entry_on_directory_path_is_valid():
     """A kind='wiki' entry on the corpus DIRECTORY constructs (checksum skipped)."""
     entry = InstallEntry(path=_WIKI_CORPUS_REL, owner="distill", kind="wiki")
@@ -89,6 +97,7 @@ def test_is_wiki_stale_absent_entry_is_stale(tmp_path):
 def test_is_wiki_stale_entry_newer_than_memory_not_stale(tmp_path):
     """Entry created_at newer than memory.db mtime -> not stale."""
     _seed(tmp_path, [MemoryKind.DECISION])
+    _populate_corpus(tmp_path)
     state = _state_with_wiki_entry(datetime.now(UTC) + timedelta(hours=1))
     assert is_wiki_stale(tmp_path, state) is False
 
@@ -102,8 +111,32 @@ def test_is_wiki_stale_memory_touched_after_entry_is_stale(tmp_path):
 
 def test_is_wiki_stale_absent_memory_db_not_stale(tmp_path):
     """Entry present but no memory.db on disk -> not stale (nothing to regenerate from)."""
+    _populate_corpus(tmp_path)
     state = _state_with_wiki_entry(datetime.now(UTC))
     assert is_wiki_stale(tmp_path, state) is False
+
+
+def test_is_wiki_stale_missing_corpus_is_stale_despite_fresh_entry(tmp_path):
+    """Entry newer than memory.db but corpus dir absent -> stale (WR-01).
+
+    A manifest entry can outlive the corpus it describes when
+    .planning/codebase/wiki/ is deleted while memory.db is untouched. The gate
+    must report stale so --force regeneration is not refused.
+    """
+    _seed(tmp_path, [MemoryKind.DECISION])
+    state = _state_with_wiki_entry(datetime.now(UTC) + timedelta(hours=1))
+    # No corpus directory on disk at all.
+    assert not (tmp_path / _WIKI_CORPUS_REL).exists()
+    assert is_wiki_stale(tmp_path, state) is True
+
+
+def test_is_wiki_stale_empty_corpus_dir_is_stale_despite_fresh_entry(tmp_path):
+    """Entry newer than memory.db but corpus dir has no *.md -> stale (WR-01)."""
+    _seed(tmp_path, [MemoryKind.DECISION])
+    state = _state_with_wiki_entry(datetime.now(UTC) + timedelta(hours=1))
+    corpus_dir = tmp_path / _WIKI_CORPUS_REL
+    corpus_dir.mkdir(parents=True)  # present but empty (no article files)
+    assert is_wiki_stale(tmp_path, state) is True
 
 
 def test_register_wiki_directory_path_does_not_raise(tmp_path):
