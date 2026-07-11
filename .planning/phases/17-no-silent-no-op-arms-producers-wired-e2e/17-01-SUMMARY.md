@@ -125,3 +125,13 @@ None - no external service configuration required. `--llm` is opt-in and degrade
 ---
 *Phase: 17-no-silent-no-op-arms-producers-wired-e2e*
 *Completed: 2026-07-11*
+
+## Self-Check: PASSED
+
+- FOUND: bench/distiller.py
+- FOUND: tests/test_bench_distiller.py
+- FOUND: .planning/phases/17-no-silent-no-op-arms-producers-wired-e2e/17-01-SUMMARY.md
+- FOUND commit: 0409ff0 (feat, Task 1 core)
+- FOUND commit: 91c23ef (test, Task 2 red)
+- FOUND commit: be011be (feat, Task 2 densification)
+- FOUND commit: f531583 (docs, plan complete)
