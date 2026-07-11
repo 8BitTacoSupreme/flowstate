@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.6.2
 milestone_name: Make the Harness Real
 status: executing
-stopped_at: "Completed 17-03-PLAN.md (HAR-03): prepare_fixture entry point wiring per-arm producers"
-last_updated: "2026-07-11T02:19:35.269Z"
-last_activity: 2026-07-11 -- Phase 18 planning complete
+stopped_at: "Completed 18-01-PLAN.md (HAR-04): paired-bootstrap CI helper wired into replicate.py Track-2 output"
+last_updated: "2026-07-11T02:31:15.525Z"
+last_activity: 2026-07-11
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 7
-  completed_plans: 4
-  percent: 57
+  completed_plans: 5
+  percent: 67
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Phase 17 — No Silent No-Op Arms + Producers Wired E2E
+**Current focus:** Phase 18 — Close the Loop with a CI, E2E
 
 ## Current Position
 
-Phase: 17 — COMPLETE
-Plan: 3 of 3
+Phase: 18 (Close the Loop with a CI, E2E) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-07-11 -- Phase 18 planning complete
+Last activity: 2026-07-11
 
 ## Performance Metrics
 
@@ -71,6 +71,7 @@ Last activity: 2026-07-11 -- Phase 18 planning complete
 | Phase 15 P15-03 | 480 | 1 tasks | 2 files |
 | Phase 15 P15-04 | 1080 | 2 tasks | 3 files |
 | Phase 17 P03 | 12min | 2 tasks | 3 files |
+| Phase 18 P01 | 6min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -96,6 +97,9 @@ Recent decisions affecting current work:
 - [Phase ?]: README test count reconciled to post-phase --collect-only total (1000), never hardcoded (T-14-15)
 - [Phase ?]: [Phase 15-02 / GSD-02]: install_skills installs GSD unconditionally (no detect/prompt); full node_modules copied to .claude/get-shit-done/node_modules so gsd-sdk resolves deps by walking up (byte-identical to 15-01's proven tree); commands/gsd converted to .claude/skills/gsd-<cmd>/SKILL.md; copy-as-data, path-safe, idempotent, no shim
 - [Phase 17]: [Phase 17-03 / HAR-03]: prepare_fixture wires flowstate.pack.run_pack + bench.distiller.main behind one entry point; arms without a producer (full/memory/none) are an accepted no-op, not an argparse rejection
+- [Phase 18-01]: n==1 bootstrap edge case handled by the general resampling path (not a special branch); every size-1 resample naturally degenerates to ci_low==ci_high==mean
+- [Phase 18-01]: Percentile CI indices use round(p*(resamples-1)) with a defensive ci_low<=mean<=ci_high clamp against 2-decimal rounding drift
+- [Phase 18-01]: bench/report.py intentionally left untouched per plan scope note; no caller in this phase routes the CI through report.write_json
 
 ### Pending Todos
 
@@ -128,8 +132,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-11T01:34:39.520Z
-Stopped at: Completed 17-03-PLAN.md (HAR-03): prepare_fixture entry point wiring per-arm producers
+Last session: 2026-07-11T02:31:15.521Z
+Stopped at: Completed 18-01-PLAN.md (HAR-04): paired-bootstrap CI helper wired into replicate.py Track-2 output
 
 **Why v0.6.1 exists (verified this session, file:line):**
 

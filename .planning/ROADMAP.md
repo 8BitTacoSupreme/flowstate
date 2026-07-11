@@ -98,7 +98,7 @@ Phases 12–15 (15 plans) — adapters made honest and real (12–13), the two M
   2. One command runs prior-runs→distill→inject→judge on a fixture end-to-end with a CI'd result.
   3. A green, CI-safe E2E smoke test exercises every arm's plumbing and asserts the harness fails loud on a missing producer.
 **Plans**: 3 plans (2 waves)
-- [ ] 18-01-PLAN.md — bench/bootstrap.py seeded paired-bootstrap CI helper + wire the CI'd delta into replicate.py/report.py Track-2 output (HAR-04)
+- [x] 18-01-PLAN.md — bench/bootstrap.py seeded paired-bootstrap CI helper + wire the CI'd delta into replicate.py/report.py Track-2 output (HAR-04)
 - [ ] 18-02-PLAN.md — bench/close_loop.py: the one command running prior-runs→distill→inject→judge→CI, with a CI-safe cheap mode (HAR-04)
 - [ ] 18-03-PLAN.md — tests/test_bench_e2e_smoke.py: CI-safe E2E smoke exercising every arm's plumbing + asserting fail-loud exit 3 (HAR-05)
 
@@ -130,7 +130,7 @@ Scoped and roadmapped this session, then deferred so the adapter stubs get fixed
 | 15. Bundle GSD | v0.6.1 | 5/5 | Complete    | 2026-07-11 |
 | 16. Mode-Honest Reporting | v0.6.2 | 1/1 | Complete    | 2026-07-11 |
 | 17. No Silent No-Op Arms + Producers | v0.6.2 | 3/3 | Complete   | 2026-07-11 |
-| 18. Close the Loop with a CI | v0.6.2 | 0/? | Not started | - |
+| 18. Close the Loop with a CI | v0.6.2 | 1/3 | In Progress|  |
 | _v0.7.0 Retrieval Benchmark Rigor_ | v0.7.0 | deferred | renumbers 16-21 on start | - |
 
 ## Backlog
