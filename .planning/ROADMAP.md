@@ -13,6 +13,11 @@
 
 ## Phases
 
+- [ ] **Phase 19: The Tax** - Real token/cost/latency accounting through `BridgeResult`, `RunSnapshot`, and `bench/report.py`
+- [ ] **Phase 20: Evaluator Independence** - Judge-model ≠ producer-model enforced in code, with multi-judge averaging
+- [ ] **Phase 21: Activate the Wiki** - Promote the memory→wiki distiller to production and fire the dormant semantic wiki layer
+- [ ] **Phase 22: The Verdict** - Pre-registered, paired-design run on a real repo measuring quality and tax per context-layer arm
+
 <details>
 <summary>✅ v0.3.0 v2 Pivot + Operate-Safely (Phases 1-2) — SHIPPED 2026-06-06</summary>
 
@@ -75,7 +80,48 @@ Full detail: [`milestones/v0.6.2-ROADMAP.md`](./milestones/v0.6.2-ROADMAP.md).
 
 ## Phase Details
 
-_No active milestone phases yet — v0.8.0 "Harness Tax & Value" (phases 19-22) is next; see [`seeds/SEED-001-harness-tax-and-value.md`](./seeds/SEED-001-harness-tax-and-value.md). Run `/gsd-new-milestone` to generate its roadmap._
+### Phase 19: The Tax
+**Goal**: Every pipeline run can be measured for what it actually costs (tokens, cost, latency) instead of estimated — the accounting layer the harness has been missing since `bench/` began.
+**Depends on**: v0.6.2 complete (nothing new this phase touches is unbuilt: `RunSnapshot`, `bench/report.py`, `output_format="json"` all already exist)
+**Requirements**: TAX-01, TAX-02, TAX-03, TAX-04
+**Success Criteria** (what must be TRUE):
+  1. `BridgeResult` carries a real `usage` field (tokens_in/out/cache_read) populated via the existing `output_format="json"` path, and every existing caller's `.output` is unchanged (no regression).
+  2. `RunSnapshot` records real `tokens_in` / `tokens_out` / `cache_read` / `wall_clock_s` per run, replacing the `len(prefix)//4` `prefix_tokens` estimate as the source of truth.
+  3. `bench/report.py` shows per-arm tokens and seconds alongside the existing quality metrics, visibly excluded from `compounding_score` (Track-2, not Track-1).
+  4. The report's cost-per-success line names `flowstate verify`'s deterministic acceptance gates — not "commits" — as its denominator.
+**Plans**: TBD
+
+### Phase 20: Evaluator Independence
+**Goal**: The judge can no longer silently grade its own producer's output, and a single judge call becomes a defensible multi-judge verdict — without disturbing `metrics.py`'s authority.
+**Depends on**: Phase 19 (shares the report surface the tax lands on)
+**Requirements**: IND-01, IND-02, IND-03
+**Success Criteria** (what must be TRUE):
+  1. Running `bench/judge.py` with `--judge-model` absent, or equal to the producer model, fails loud (explicit error / nonzero exit) instead of silently grading.
+  2. `judge.py` supports multi-judge averaging (majority vote + Wilson CI), mirroring the `--judge-models` pattern already shipped in `bench/grounding.py`.
+  3. A test asserts `bench/metrics.py`'s `compounding_score` stays the authoritative deterministic scorer and the LLM judge remains excluded under the new multi-judge path.
+**Plans**: TBD
+
+### Phase 21: Activate the Wiki
+**Goal**: The proven-best context layer (distilled wiki + semantic retrieval, measured 0.825 ≈ oracle 0.800) stops sitting dormant and actually fires on production runs, with the default path staying byte-identical when the flag is off.
+**Depends on**: v0.6.2's shipped `bench/distiller.py` (the producer already exists; this phase is production wiring only)
+**Requirements**: WIKI-03, WIKI-04, WIKI-05, WIKI-06
+**Success Criteria** (what must be TRUE):
+  1. A production entry point runs the memory→wiki distiller end-of-run, writing a manifest-tracked, staleness-gated `.planning/codebase/wiki/` article corpus (mirrors the `flowstate pack` pattern) that regenerates only when memory changed, so the *next* run reads this run's distilled knowledge.
+  2. An opt-in config flag makes the orchestrator pass `include_layers={"wiki"}` to `build_context_prefix()`; with the flag off, the output is byte-identical to today's default.
+  3. With the flag on but the `[semantic]` extra absent, the wiki layer degrades to a no-op-with-warning — never a hard crash — and `pip install flowstate[semantic]` is surfaced as the requirement for the KNN path.
+  4. A dogfood smoke-test runs FlowState's own pipeline on a FlowState task with the wiki flag on, against this project's real `memory.db`, and asserts the corpus is globbed and top-k articles are injected with the run green (acceptance = "the layer fires," not "quality improved").
+**Plans**: TBD
+
+### Phase 22: The Verdict
+**Goal**: A pre-registered, paired-design measurement honestly answers whether FlowState's context stack — and specifically the now-active wiki layer — earns its token/latency tax on a real repo, accepting a null result as a legitimate outcome.
+**Depends on**: Phase 19 (tax accounting), Phase 20 (independent judge), Phase 21 (wiki actually fires) — this is the capstone phase; it needs all three measurement primitives in place before it can produce a trustworthy verdict.
+**Requirements**: VERD-01, VERD-02, VERD-03
+**Success Criteria** (what must be TRUE):
+  1. Verdict rules — effect-size threshold, CI width, minimum n, what counts as a win — are written down and committed *before* the paired-design run starts.
+  2. A paired-design run via `bench/close_loop.py` executes on a real repo (not `bench/fixtures/sample_project`) across arms `none`/`pack`/`memory`/`wiki`/`full`, and the report shows the compounding curve across run 1→N (run 1 empty memory → no wiki; wiki value, if any, appears run 2+).
+  3. The final report states quality **and** tax per arm, applies the pre-registered rules, and a null `wiki − none` (or any arm) is accepted and documented as a valid outcome that licenses stripping the layer — not retried until significant.
+**Plans**: TBD
+**Note**: expensive — live LLM runs across 5 arms × multiple trials × multiple runs (compounding curve); smoke at reduced trials/runs before scaling per the SEED's cost-reality note.
 
 <details>
 <summary>📋 v0.7.0 Retrieval Benchmark Rigor (deferred behind v0.6.1 — renumbers to 16-21 on start)</summary>
@@ -106,6 +152,10 @@ Scoped and roadmapped this session, then deferred so the adapter stubs get fixed
 | 16. Mode-Honest Reporting | v0.6.2 | 1/1 | Complete    | 2026-07-11 |
 | 17. No Silent No-Op Arms + Producers | v0.6.2 | 3/3 | Complete   | 2026-07-11 |
 | 18. Close the Loop with a CI | v0.6.2 | 3/3 | Complete   | 2026-07-11 |
+| 19. The Tax | v0.8.0 | 0/0 | Not started | - |
+| 20. Evaluator Independence | v0.8.0 | 0/0 | Not started | - |
+| 21. Activate the Wiki | v0.8.0 | 0/0 | Not started | - |
+| 22. The Verdict | v0.8.0 | 0/0 | Not started | - |
 | _v0.7.0 Retrieval Benchmark Rigor_ | v0.7.0 | deferred | renumbers 16-21 on start | - |
 
 ## Backlog
@@ -113,11 +163,12 @@ Scoped and roadmapped this session, then deferred so the adapter stubs get fixed
 Items deferred from completed milestones. Promote via `/gsd-review-backlog`.
 
 - **v0.7.0 Retrieval Benchmark Rigor** (deferred behind v0.6.1, 2026-07-10) — Fully scoped: 6 phases, 18 requirements, spec at `.planning/deferred/v0.7.0-REQUIREMENTS.md`. Pushed back so the adapter stubs (v0.6.1) are fixed first — no further harness benchmarking until the enforcement layer can fail. Resumes via `/gsd-new-milestone` after v0.6.1 ships; renumbers to phases 16-21 (v0.6.1 grew to 4 phases with GSD bundling).
-- **WIKI-F1** (deferred at v0.6.0 close) — No production caller passes `include_layers={"wiki"}`, so the semantic wiki retrieval mechanism built in Phase 11 never fires in practice. Needs a curated `.planning/codebase/wiki/` corpus plus orchestrator wiring. The mechanism is implemented, tested, and dormant. **Promoted into [`SEED-001`](./seeds/SEED-001-harness-tax-and-value.md) Phase 20** — this is FlowState's only context layer with a proven lift (0.825 ≈ oracle 0.800) and it is switched off, while the layer that does fire (pack) measured ≈ none.
-- **SEED-001 — v0.8.0 "Harness Tax & Value"** ([seed](./seeds/SEED-001-harness-tax-and-value.md)) — Proposed 4-phase milestone (18–21): measure token/latency cost (none exists today; `prefix_tokens` is a `len()//4` estimate), enforce evaluator independence, **activate the wiki**, then run the paired-design verdict on a real repo using the already-built `--layers`/`--paired` rig. Surfaces automatically at the next `/gsd-new-milestone`. Answers the harness-value question that v0.7.0 (retrieval-only) deliberately does not. See `bench/BENCHMARKING_SCOPE.md`.
+- **WIKI-F1** (deferred at v0.6.0 close) — No production caller passes `include_layers={"wiki"}`, so the semantic wiki retrieval mechanism built in Phase 11 never fires in practice. Needs a curated `.planning/codebase/wiki/` corpus plus orchestrator wiring. The mechanism is implemented, tested, and dormant. **Promoted into [`SEED-001`](./seeds/SEED-001-harness-tax-and-value.md) → v0.8.0 Phase 21** — this is FlowState's only context layer with a proven lift (0.825 ≈ oracle 0.800) and it is switched off, while the layer that does fire (pack) measured ≈ none.
+- **SEED-001 — v0.8.0 "Harness Tax & Value"** ([seed](./seeds/SEED-001-harness-tax-and-value.md)) — ROADMAPPED this session as phases 19-22 (see Phase Details above): measure token/latency cost (none exists today; `prefix_tokens` is a `len()//4` estimate), enforce evaluator independence, **activate the wiki**, then run the paired-design verdict on a real repo using the already-built `--layers`/`--paired` rig. Answers the harness-value question that v0.7.0 (retrieval-only) deliberately does not. See `bench/BENCHMARKING_SCOPE.md`.
 - **RERANK-F1** (v0.7.0 Future Requirement) — Wiring a reranker into FlowState's production `MemoryStore.get_context()` path. v0.7.0 measures it on the bench first; production wiring only if RERANK-03 shows the embeddings (not merely the reranker) carry the win.
 - **RERANK-F2** (v0.7.0 Future Requirement) — `BAAI/bge-reranker-base`/`bge-reranker-large`. ~1.5-2.5 hr/run on CPU, beyond the production-viability bar; at most a single confirmatory run, and only with a GPU.
 - **RET-F1** (v0.7.0 Future Requirement) — Long-context unchunked embedders (`jina-embeddings-v2-base-en`, `nomic-embed-text-v1.5-Q`, 8192 tok) as a capacity-vs-chunking ablation. Informative, not expected to move the headline.
 - **RET-F2** (v0.7.0 Future Requirement) — Turn-level retrieval with a `turn2session` rollup (LongMemEval ships `evaluate_retrieval_turn2session`) as an alternative to chunking.
 - **RET-F3** (v0.7.0 Future Requirement) — Query-side work: feeding `question_date` into temporal-reasoning queries; HyDE / query expansion.
 - **QA-F1..F4** (v0.7.0 Future Requirements) — The entire QA track (revert/gate `_READER_INSTRUCTION`, official per-question-type judge prompts, `char_budget` truncation check, running `locomo_qa.py` on real data). v0.7.0 is retrieval-only; QA fixes address a separate, already-known regression.
+- **Auto-distill at end of every run** (v0.8.0 Future Requirement, from `REQUIREMENTS.md`) — WIKI-03 ships explicit-first (production caller invoked deliberately); auto-once-proven is a follow-up once Phase 22's verdict justifies the invisible loop.

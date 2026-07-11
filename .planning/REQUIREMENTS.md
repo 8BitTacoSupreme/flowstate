@@ -49,4 +49,17 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| _(filled by roadmapper)_ | | |
+| TAX-01 | Phase 19 | Pending |
+| TAX-02 | Phase 19 | Pending |
+| TAX-03 | Phase 19 | Pending |
+| TAX-04 | Phase 19 | Pending |
+| IND-01 | Phase 20 | Pending |
+| IND-02 | Phase 20 | Pending |
+| IND-03 | Phase 20 | Pending |
+| WIKI-03 | Phase 21 | Pending |
+| WIKI-04 | Phase 21 | Pending |
+| WIKI-05 | Phase 21 | Pending |
+| WIKI-06 | Phase 21 | Pending |
+| VERD-01 | Phase 22 | Pending |
+| VERD-02 | Phase 22 | Pending |
+| VERD-03 | Phase 22 | Pending |

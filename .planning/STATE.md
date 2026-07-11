@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v0.8.0
 milestone_name: Harness Tax & Value
 status: planning
-last_updated: "2026-07-11T04:44:02.446Z"
+last_updated: "2026-07-11T04:47:53.000Z"
 last_activity: 2026-07-11
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Planning v0.8.0 Harness Tax & Value (SEED-001, phases 19–22) — run /gsd-new-milestone
+**Current focus:** v0.8.0 Harness Tax & Value roadmapped (SEED-001, phases 19-22) — run `/gsd-plan-phase 19`
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 19. The Tax (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-07-11 — Milestone v0.8.0 started
+Status: Roadmapped, awaiting plan-phase
+Last activity: 2026-07-11 — ROADMAP.md written for v0.8.0 (phases 19-22, 14 requirements mapped, 100% coverage)
 
 ## Performance Metrics
 
@@ -81,6 +81,10 @@ Last activity: 2026-07-11 — Milestone v0.8.0 started
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [v0.8.0 roadmap]: Phase order follows the SEED-001 dependency chain — 19 (tax accounting) → 20 (evaluator independence) → 21 (wiki production wiring) → 22 (verdict, capstone needing all three measurement primitives in place)
+- [v0.8.0 roadmap]: Coarse granularity (4 phases, 19-22) — matches SEED-001's pre-scoped structure; single maintainer, phases map 1:1 onto the seed's four numbered sections
+- [v0.8.0 roadmap]: Phase 21 is production wiring ONLY — the bench-side memory→wiki distiller (`bench/distiller.py`) already shipped in v0.6.2 Phase 17; this milestone does not rebuild it, only promotes/calls it and adds the opt-in reader flag
+- [v0.8.0 roadmap]: Phase 22 flagged as expensive (live LLM runs, 4-5 arms x multiple trials x multiple runs for the compounding curve) — smoke at reduced trials/runs before scaling, per SEED-001's cost-reality note
 - [Phase 13-01 / MECH-01]: research adapter gets Autoresearch's measure->keep/discard over OUTPUT — score each section vs the fixture's `retrieval_questions` (threshold 0.6, one bounded retry, discard-if-still-weak); the prompt is reused byte-identical on regeneration (no prompt self-modification in the runtime). All-discarded -> produced==0 -> success=False (preserves Phase 12 HON-03 fail-loud).
 - [v0.7.0 roadmap]: Phase order is measurement-first — Phase 12 (dumps + significance tests + stratified split) lands before any config change, so every later phase's claims are falsifiable from the start rather than retrofitted
 - [v0.7.0 roadmap]: Coarse granularity (6 phases, 12-17) — dependency chain is strictly linear (12→13→14→15→16→17) except Phase 16, which depends on 13 (prefix/cache) and reuses Phase 15's `rerank()`, but not Phase 14's chunk/rollup sweep (LoCoMo docs are short, never chunked)
@@ -136,19 +140,17 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-11T02:46:42.516Z
-Stopped at: Completed 18-02-PLAN.md (HAR-04): bench/close_loop.py — one-command prior-runs→distill→inject→judge→CI driver
+Last session: 2026-07-11T04:47:53.000Z
+Stopped at: ROADMAP.md written for v0.8.0 Harness Tax & Value (phases 19-22, 14/14 requirements mapped)
 
-**Why v0.6.1 exists (verified this session, file:line):**
+**Why v0.8.0 exists (SEED-001, verified prior session):**
 
-- `discipline.py:56` hardcodes `AuditResult(success=True)`; `orchestrator.py:315-319` marks the Discipline step COMPLETED without reading `.checks`. **The enforcement stage cannot fail** — a repo passing 0/7 checks reports "All steps succeeded."
-- `research.py:113-122` writes "*Research failed*" into `report.md` then returns `ToolResult(success=True)`; no `success=False` path exists.
-- `orchestrator.py:171-173`: a live run with no `claude` CLI writes `[dry-run] claude prompt...` stub text as real artifacts, reports success.
-- The `research`/`strategy`/`discipline` adapters are named after real MIT upstreams (Karpathy Autoresearch, Garry Tan Gstack, Jesse Vincent Superpowers) but implement almost none of them: research = fan-out+concat (no measure/keep-discard); strategy = one call (no rubric/gate); discipline = 7 `Path.exists()` checks (no test run, no git state, no hook contents).
-- All three upstreams are **MIT** (verified) → vendorable with NOTICE attribution. gstack/superpowers are Claude Code skill-markdown; GSD-2 is a TS CLI (stays detect-and-delegate); autoresearch is a training script (pattern reimplemented, not vendored).
-- **Correction:** an earlier `bench/BENCHMARKING_SCOPE.md` claim that these were "dead aliases / no such layers exist" was WRONG; fixed by erratum eab8ae8.
+- No token/cost/latency accounting exists in `bench/`; `prefix_tokens` is `len(prefix)//4`, an input-context estimate, not consumption. `ClaudeBridge.run()` already accepts `output_format="json"` but no caller passes it and `BridgeResult` has no `usage` field.
+- The proven-best context layer (distilled wiki + semantic retrieval, 0.825 ≈ oracle 0.800) is switched off in production — no `flowstate/` module passes `include_layers={"wiki"}`. The bench-side producer (`bench/distiller.py`) shipped in v0.6.2; only the production wiring is missing.
+- `bench/judge.py` has no enforcement against judge-model == producer-model; `bench/metrics.py`'s `CompoundingScore` is the authoritative deterministic scorer and already excludes the judge from `compounding_score` — this milestone hardens the guard-rail, not the architecture.
+- The harness-value experiment already ran once and came back null (Cohen's d 0.29); a null `wiki − none` on a real repo is an accepted, pre-registered-for outcome, not a failure to avoid.
 
-Next step: `/gsd-plan-phase 12` — Phase 12 "Honesty & Failure-Capability" (make broken runs fail instead of reporting clean). Then Phase 13 (in-process mechanisms), Phase 14 (vendor gstack+superpowers, auto-install, surface via `flowstate launch`), Phase 15 (bundle GSD full-runtime — **reverses "no cross-harness packaging"** per user direction 2026-07-10; GSD is MIT © Lex Christopherson, vendored into `flowstate/vendor/gsd/` and installed unconditionally, no detect/prompt).
+Next step: `/gsd-plan-phase 19` — Phase 19 "The Tax" (real token/cost/latency accounting: `BridgeResult.usage`, `RunSnapshot` fields, `bench/report.py` per-arm tokens/seconds, cost-per-success denominator). Then Phase 20 (evaluator independence), Phase 21 (activate the wiki — production wiring only, bench-side producer already shipped), Phase 22 (the verdict — pre-registered paired-design run on a real repo; flagged expensive, live LLM runs).
 
 ---
 
@@ -167,4 +169,5 @@ Data: `data/longmemeval_s_cleaned.json` (265MB) + `data/locomo10.json` present; 
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Run `/gsd-plan-phase 19` to begin Phase 19: The Tax
+</content>
