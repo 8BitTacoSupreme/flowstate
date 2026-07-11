@@ -103,7 +103,7 @@ Full detail: [`milestones/v0.6.2-ROADMAP.md`](./milestones/v0.6.2-ROADMAP.md).
   2. `judge.py` supports multi-judge averaging (majority vote + Wilson CI), mirroring the `--judge-models` pattern already shipped in `bench/grounding.py`.
   3. A test asserts `bench/metrics.py`'s `compounding_score` stays the authoritative deterministic scorer and the LLM judge remains excluded under the new multi-judge path.
 **Plans**: 2 plans
-- [ ] 20-01-PLAN.md — IND-01/IND-02: independence guard helper + `python -m bench.judge` CLI + multi-judge aggregation (0-10 mean/median + Wilson-CI pass-rate) in judge.py
+- [x] 20-01-PLAN.md — IND-01/IND-02: independence guard helper + `python -m bench.judge` CLI + multi-judge aggregation (0-10 mean/median + Wilson-CI pass-rate) in judge.py
 - [ ] 20-02-PLAN.md — IND-01/IND-03: wire the shared guard into compound_eval.py/close_loop.py + exclusion test proving compounding_score stays deterministic and judge-excluded
 
 ### Phase 21: Activate the Wiki
@@ -158,7 +158,7 @@ Scoped and roadmapped this session, then deferred so the adapter stubs get fixed
 | 17. No Silent No-Op Arms + Producers | v0.6.2 | 3/3 | Complete   | 2026-07-11 |
 | 18. Close the Loop with a CI | v0.6.2 | 3/3 | Complete   | 2026-07-11 |
 | 19. The Tax | v0.8.0 | 3/3 | Complete    | 2026-07-11 |
-| 20. Evaluator Independence | v0.8.0 | 0/2 | Planned | - |
+| 20. Evaluator Independence | v0.8.0 | 1/2 | In Progress|  |
 | 21. Activate the Wiki | v0.8.0 | 0/0 | Not started | - |
 | 22. The Verdict | v0.8.0 | 0/0 | Not started | - |
 | _v0.7.0 Retrieval Benchmark Rigor_ | v0.7.0 | deferred | renumbers 16-21 on start | - |

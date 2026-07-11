@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.8.0
 milestone_name: Harness Tax & Value
-status: executing
+status: verifying
 stopped_at: Phase 20 context gathered
-last_updated: "2026-07-11T06:48:49.313Z"
-last_activity: 2026-07-11 -- Phase 20 planning complete
+last_updated: "2026-07-11T06:54:41.276Z"
+last_activity: 2026-07-11
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 5
-  completed_plans: 3
+  completed_plans: 4
   percent: 25
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Phase 20 — evaluator independence
+**Current focus:** Phase 20 — evaluator-independence
 
 ## Current Position
 
-Phase: 20
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-07-11 -- Phase 20 planning complete
+Phase: 20 (evaluator-independence) — EXECUTING
+Plan: 2 of 2
+Status: Phase complete — ready for verification
+Last activity: 2026-07-11
 
 ## Performance Metrics
 
@@ -78,6 +78,7 @@ Last activity: 2026-07-11 -- Phase 20 planning complete
 | Phase 19 P01 | 18 | 2 tasks | 2 files |
 | Phase 19 P02 | 14min | 3 tasks | 8 files |
 | Phase 19 P03 | 540 | 2 tasks | 2 files |
+| Phase 20 P01 | 360 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,7 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 19-01 TAX-01: BridgeResult.usage/duration_s appended after existing fields (positional-ctor safe); json path parses only when output_format=json AND top-level result key present, else raw-stdout fallback with usage=None (never raises); cumulative totals accumulate only on successful returns
 - [Phase 19-02 / TAX-02]: RunSnapshot gains real tokens_in/out/cache_read/wall_clock_s appended after layers_present with defaults (pure carriage — compute_scorecard byte-identical, no axis reads them); threaded end-to-end orchestrator bridge totals -> append_run_entry RUN metadata -> capture_run_snapshot (type-guarded metadata.get, 0/None fallback); adapters switched to output_format=json to capture usage (Plan 01 byte-identical .output, no extra LLM call); prefix_tokens kept as the DISTINCT Track-1 growth signal (input-context size), NOT repurposed for consumption
 - [Phase ?]: [Phase 19-03 / TAX-03/04]: tax rendering lives entirely in bench/report.py (presentation-only) — per-arm tokens/seconds as a Track-2 block EXCLUDED from compounding_score; cost-per-success = (tokens_in+tokens_out)/summed verify_pass (passed flowstate verify acceptance gates, NOT run/commit count), gates_passed==0 -> n/a
+- [Phase ?]: [Phase 20-01]: judge independence guard is a pure config-time helper (_validate_judges) reused by CLI + Wave-2; judge_run never-raise untouched; aggregate_judges reuses grounding._wilson via function-scope import; _PASS_THRESHOLD=7.0, even-N tie=fail (D-08), None excluded from denominator
 
 ### Pending Todos
 
@@ -148,7 +150,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-11T06:11:13.936Z
+Last session: 2026-07-11T06:54:30.152Z
 Stopped at: Phase 20 context gathered
 
 **Why v0.8.0 exists (SEED-001, verified prior session):**
