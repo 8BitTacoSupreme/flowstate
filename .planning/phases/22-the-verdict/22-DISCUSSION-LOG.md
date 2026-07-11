@@ -17,7 +17,7 @@
 | A different real repo | ✓ |
 | Neutral OSS checkout | |
 
-**User's choice:** a different real repo → **`/Users/jhogan/bride_of_flinkenstein`** (in-domain JS/Node Flink app, ~103 files, Avro schemas). **Note flagged:** repo already contains FlowState state (`flowstate.json`, `memory.db`, `research/`) → must start from clean memory for the compounding curve (D-01a).
+**User's choice (revised):** first picked `bride_of_flinkenstein`, then recalled it was **created by FlowState** (its docs/research are FlowState output → circular self-reading). Scanned the repo fleet: nearly all have `.claude/` and many have `.planning/`/FlowState state. Final pick → **`/Users/jhogan/floxybot2`** — a Python AI support system (~232 files/160 py), **pristine of FlowState/GSD planning artifacts** (only `.claude/` config). `hekate_v2` was rejected (has `.planning/`+`PROJECT.md`, and 2301 files = too costly); `certCardsV2` rejected (23 MB, committed `.class`, off-domain).
 
 ## Pre-registered win rule (VERD-01)
 
