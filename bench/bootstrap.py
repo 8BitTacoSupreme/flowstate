@@ -101,3 +101,45 @@ def paired_bootstrap_ci(
         "seed": seed,
         "confidence": confidence,
     }
+
+
+def paired_bootstrap_p(
+    deltas: list[float],
+    *,
+    resamples: int = _DEFAULT_RESAMPLES,
+    seed: int = _BOOTSTRAP_SEED,
+) -> float | None:
+    """Two-sided bootstrap achieved-significance p-value on the mean of paired deltas.
+
+    ADD-ONLY companion to ``paired_bootstrap_ci``: it reuses the IDENTICAL seeded
+    ``random.Random(seed)`` resampling loop (same n-of-n draws, same
+    ``statistics.mean`` per resample) so the p-value and the CI are computed on the
+    same bootstrap distribution. ``paired_bootstrap_ci`` is left byte-identical — the
+    Phase-18 CI is load-bearing.
+
+    The two-sided p is ``2 * min(frac(resample_mean <= 0), frac(resample_mean >= 0))``,
+    clamped to ``[0, 1]``: strongly-separated all-positive (or all-negative) deltas ->
+    small p; deltas centered on 0 -> p near 1.0. Empty input -> ``None``. Never raises.
+    """
+    try:
+        n = len(deltas)
+    except TypeError:
+        n = 0
+
+    if n == 0:
+        return None
+
+    try:
+        resamples = max(1, resamples)
+        rng = random.Random(seed)
+        resample_means = []
+        for _ in range(resamples):
+            sample = [deltas[rng.randrange(n)] for _ in range(n)]
+            resample_means.append(statistics.mean(sample))
+
+        frac_le = sum(1 for m in resample_means if m <= 0) / resamples
+        frac_ge = sum(1 for m in resample_means if m >= 0) / resamples
+        p = 2 * min(frac_le, frac_ge)
+        return max(0.0, min(1.0, p))
+    except Exception:
+        return None
