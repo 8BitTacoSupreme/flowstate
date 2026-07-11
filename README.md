@@ -54,7 +54,8 @@ Generator  Adapter    Adapter   Adapter     Audit
 - **[Flox](https://flox.dev)** (recommended) — handles everything below automatically
 - **Python 3.12+**
 - **Claude Code CLI** (v2.0+) — [install guide](https://docs.anthropic.com/en/docs/claude-code/overview)
-- **GSD** (optional, for Management phase) — [github.com/gsd-build/gsd-2](https://github.com/gsd-build/gsd-2)
+
+**GSD is bundled** — FlowState vendors GSD ([gsd-build/get-shit-done](https://github.com/gsd-build/get-shit-done), MIT © Lex Christopherson) and installs it unconditionally into your project's `.claude/`; there is no separate GSD install. `gsd-sdk` works zero-install because its production `node_modules` is bundled, so the query path runs fully offline. Agent-session spawning (`/gsd:*` inside a Claude session) uses your own `claude` CLI, already a prerequisite above.
 
 Claude Code requires an active Anthropic account. Use of the `claude` CLI is subject to [Anthropic's Commercial Terms of Service](https://www.anthropic.com/legal/commercial-terms).
 
@@ -251,7 +252,7 @@ flowstate/
 │       ├── research.py     # Research adapter (split-topic)
 │       ├── strategy.py     # Strategy adapter (pressure-test)
 │       └── gsd_adapter.py  # Management adapter (context files)
-├── tests/                  # 1000 tests, 92% coverage
+├── tests/                  # 1045 tests, 92% coverage
 ├── bench/                  # research harness: grounding eval, RGB axes, arms, promptab/sysab A/B, tune_loop
 ├── research/               # Generated research artifacts
 ├── flowstate.json          # Pipeline state (gitignored)
@@ -373,7 +374,7 @@ FlowState was inspired by and designed to integrate with these projects:
 
 - **[Autoresearch](https://github.com/karpathy/autoresearch)** by Andrej Karpathy — An ML experiment loop (modify, measure, keep/discard). FlowState's research adapter applies that measure→keep/discard loop to its **output**: each generated topic section is scored for groundedness against the active fixture's `retrieval_questions`, weak sections are regenerated within a bounded retry budget and discarded if still below threshold, and the report records kept vs discarded counts. If every section is discarded, the run fails loudly rather than shipping ungrounded research.
 - **[Gstack](https://github.com/garrytan/gstack)** by Garry Tan — 23 slash commands for Claude Code including `/office-hours` for strategic pressure-testing. FlowState's strategy adapter emits a **scored rubric**: five 0–10 dimensions (problem clarity, 10x potential, feasibility, risk, recommendation) plus a `ship`/`pivot`/`kill` verdict, which the adapter parses and validates — an unparseable or missing rubric is treated as a failure, not silently written as a weak artifact.
-- **[GSD (Get Shit Done)](https://github.com/gsd-build/gsd-2)** — 29 slash commands + 12 specialized agents for project management. FlowState generates the context files GSD consumes (PROJECT.md, ROADMAP.md) and provides `flowstate launch` to hand off to native GSD execution.
+- **[GSD (Get Shit Done)](https://github.com/gsd-build/get-shit-done)** by Lex Christopherson (MIT) — 29 slash commands + 12 specialized agents for project management. FlowState vendors the MIT GSD distribution and installs it unconditionally into `.claude/`; no separate GSD install is required. It ships with full parity — `gsd-sdk` works zero-install because its production `node_modules` is bundled (the query path runs fully offline), and agent-session spawning falls back to your own `claude` on PATH. `flowstate launch gsd <N>` hands off to the bundled GSD with nothing separately installed.
 - **[Superpowers](https://github.com/obra/superpowers)** by Jesse Vincent — A Claude Code plugin enforcing TDD workflow and git worktrees. FlowState's discipline module runs the project's own test suite as a gating check, reads real git state (dirty tree / branch / ahead-behind), and inspects pre-commit hook contents — all in pure Python — and a failing suite or missing gate now fails the pipeline instead of always reporting success.
 - **[ECC](https://github.com/affaan-m/ECC)** (`affaan-m`) — An agent-harness performance system. FlowState borrowed several patterns from it: the install-manifest plus `doctor`/`repair` model and env-var hook profiles (v0.3), and the eval-fixture contract format — retrieval questions, acceptance gates, forbidden actions — that `flowstate init` / `flowstate kickoff` scaffold (v0.4). FlowState deliberately did *not* adopt ECC's multi-harness packaging or Rust control-plane.
 - **[Andrej Karpathy Skills](https://github.com/multica-ai/andrej-karpathy-skills)** — Behavioral coding guidelines (Think Before Coding, Simplicity First, Surgical Changes, Goal-Driven Execution) distilled from Andrej Karpathy's notes on LLM coding pitfalls. FlowState ships these as the `CANON` constant prepended to every `claude --print` system prompt (v0.4).
