@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.8.0
 milestone_name: Harness Tax & Value
-status: verifying
-stopped_at: Completed 20-02-PLAN.md
-last_updated: "2026-07-11T07:02:41.745Z"
+status: ready_to_plan
+stopped_at: Phase 20 complete (2/2) — ready to discuss Phase 21
+last_updated: 2026-07-11T07:18:54.362Z
 last_activity: 2026-07-11
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 5
-  completed_plans: 5
+  completed_plans: 20
   percent: 50
 ---
 
@@ -21,20 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Phase 20 — evaluator-independence
+**Current focus:** Phase 21 — activate the wiki
 
 ## Current Position
 
-Phase: 20 (evaluator-independence) — EXECUTING
-Plan: 2 of 2
-Status: Phase complete — ready for verification
+Phase: 21
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-07-11
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 31
+- Total plans completed: 33
 - Average duration: ~15 min/plan
 - Total execution time: ~2.5 hours
 
@@ -53,6 +53,7 @@ Last activity: 2026-07-11
 | 15 | 5 | - | - |
 | 16 | 1 | - | - |
 | 19 | 3 | - | - |
+| 20 | 2 | - | - |
 
 **Recent Trend:**
 

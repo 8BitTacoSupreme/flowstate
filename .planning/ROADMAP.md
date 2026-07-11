@@ -14,7 +14,7 @@
 ## Phases
 
 - [x] **Phase 19: The Tax** - Real token/cost/latency accounting through `BridgeResult`, `RunSnapshot`, and `bench/report.py` — completed 2026-07-11
-- [ ] **Phase 20: Evaluator Independence** - Judge-model ≠ producer-model enforced in code, with multi-judge averaging
+- [x] **Phase 20: Evaluator Independence** - Judge-model ≠ producer-model enforced in code, with multi-judge averaging — completed 2026-07-11
 - [ ] **Phase 21: Activate the Wiki** - Promote the memory→wiki distiller to production and fire the dormant semantic wiki layer
 - [ ] **Phase 22: The Verdict** - Pre-registered, paired-design run on a real repo measuring quality and tax per context-layer arm
 
@@ -158,7 +158,7 @@ Scoped and roadmapped this session, then deferred so the adapter stubs get fixed
 | 17. No Silent No-Op Arms + Producers | v0.6.2 | 3/3 | Complete   | 2026-07-11 |
 | 18. Close the Loop with a CI | v0.6.2 | 3/3 | Complete   | 2026-07-11 |
 | 19. The Tax | v0.8.0 | 3/3 | Complete    | 2026-07-11 |
-| 20. Evaluator Independence | v0.8.0 | 2/2 | Complete   | 2026-07-11 |
+| 20. Evaluator Independence | v0.8.0 | 2/2 | Complete    | 2026-07-11 |
 | 21. Activate the Wiki | v0.8.0 | 0/0 | Not started | - |
 | 22. The Verdict | v0.8.0 | 0/0 | Not started | - |
 | _v0.7.0 Retrieval Benchmark Rigor_ | v0.7.0 | deferred | renumbers 16-21 on start | - |
