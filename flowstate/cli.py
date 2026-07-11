@@ -793,6 +793,76 @@ def pack(root: Path | None, compress: bool, force: bool):
         sys.exit(1)
 
 
+@main.command("gsd-version")
+@click.option(
+    "--refresh",
+    "refresh_version",
+    type=str,
+    default=None,
+    metavar="VERSION",
+    help="Deliberately re-vendor the pinned GSD snapshot to an EXACT semver (e.g. 1.42.3).",
+)
+def gsd_version(refresh_version: str | None):
+    """Inspect (or deliberately refresh) the pinned, vendored GSD snapshot.
+
+    By DEFAULT this only prints the pinned GSD npm version + lockfile provenance from
+    flowstate/vendor/gsd/VERSION — it never touches the vendored tree (no silent drift).
+
+    Pass --refresh VERSION to deliberately update the pin. Refresh re-runs the ONE
+    canonical lean-install procedure documented in flowstate/vendor/VENDORING.md
+    (`npm install get-shit-done-cc@<version> --omit=optional --omit=dev` -> re-exclude the
+    optional platform binary -> assert no file exceeds 10M -> verify gsd-sdk parity ->
+    rewrite node_modules + lockfile + VERSION). A moving/floating tag (latest, ^1.2.3) is
+    refused; an exact pinned semver is required. This mirrors `flowstate pack` staleness:
+    inspection is read-only, mutation is explicit.
+    """
+    import sys
+
+    from flowstate import gsd_vendor
+
+    console.print(Panel(BANNER, title="v" + __version__, border_style="blue", expand=False))
+
+    if refresh_version is not None:
+        if not gsd_vendor._is_pinned_version(refresh_version):
+            console.print(
+                f"[red]Refusing to refresh to '{refresh_version}':[/red] an exact pinned semver "
+                "is required (moving tags like 'latest' and ranges like '^1.2.3' are refused)."
+            )
+            sys.exit(2)
+
+        console.print(f"[cyan]Refreshing vendored GSD to {refresh_version}…[/cyan]")
+        result = gsd_vendor.refresh(refresh_version)
+        if result.success:
+            console.print(f"[green]Vendored GSD refreshed to[/green] {result.version}")
+            console.print(f"[dim]Tree: {result.vendored_path}[/dim]")
+        else:
+            console.print(f"[red]{result.error}[/red]")
+            sys.exit(1)
+        return
+
+    try:
+        version = gsd_vendor.read_vendored_version()
+    except FileNotFoundError as exc:
+        console.print(f"[red]{exc}[/red]")
+        sys.exit(1)
+
+    prov = gsd_vendor.gsd_provenance()
+    console.print(f"[bold]Vendored GSD:[/bold] {version.package}@{version.npm_version}")
+    console.print(f"[dim]lockfile:[/dim] {version.lockfile}")
+    if version.integrity:
+        console.print(f"[dim]integrity:[/dim] {version.integrity}")
+    console.print(
+        "[dim]platform binary excluded:[/dim] "
+        f"{'yes' if prov['platform_binary_excluded'] else '[red]NO[/red]'}"
+    )
+    if prov["oversize_files"]:
+        console.print(f"[yellow]files exceeding 10M:[/yellow] {', '.join(prov['oversize_files'])}")
+    console.print(
+        "[dim]To update the pin deliberately: flowstate gsd-version --refresh <exact-version> "
+        "(see flowstate/vendor/VENDORING.md).[/dim]"
+    )
+
+
 @main.command("check")
 @click.option(
     "--root",

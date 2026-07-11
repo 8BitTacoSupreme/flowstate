@@ -11,6 +11,9 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+from click.testing import CliRunner
+
+from flowstate.cli import main
 from flowstate.gsd_vendor import (
     NPM_PACKAGE,
     PINNED_VERSION,
@@ -378,6 +381,49 @@ class TestRefreshProcedure:
             parity_cwd=tmp_path,
         )
         assert result.success is False
+
+
+# ---------------------------------------------------------------------------
+# TestCli — inspectable provenance; refresh is deliberate + gated (offline)
+# ---------------------------------------------------------------------------
+
+
+class TestCli:
+    def test_gsd_version_prints_pinned_version(self):
+        runner = CliRunner()
+        result = runner.invoke(main, ["gsd-version"])
+        assert result.exit_code == 0, result.output
+        assert PINNED_VERSION in result.output
+        assert NPM_PACKAGE in result.output
+
+    def test_default_invocation_never_refreshes(self, monkeypatch):
+        """Bare `gsd-version` must not call refresh (no silent snapshot drift)."""
+        import flowstate.gsd_vendor as gv
+
+        called = {"refresh": False}
+
+        def _boom(*a, **k):
+            called["refresh"] = True
+            raise AssertionError("refresh must not run on default invocation")
+
+        monkeypatch.setattr(gv, "refresh", _boom)
+        runner = CliRunner()
+        result = runner.invoke(main, ["gsd-version"])
+        assert result.exit_code == 0, result.output
+        assert called["refresh"] is False
+
+    def test_refresh_flag_rejects_moving_tag(self):
+        runner = CliRunner()
+        result = runner.invoke(main, ["gsd-version", "--refresh", "latest"])
+        assert result.exit_code != 0
+        assert "pin" in result.output.lower() or "moving" in result.output.lower()
+
+    def test_help_documents_refresh_and_vendoring(self):
+        runner = CliRunner()
+        result = runner.invoke(main, ["gsd-version", "--help"])
+        assert result.exit_code == 0
+        assert "refresh" in result.output.lower()
+        assert "VENDORING.md" in result.output
 
 
 def test_real_vendor_dir_exists():
