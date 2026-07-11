@@ -14,12 +14,15 @@ RunSnapshot/JudgeResult objects are constructed directly.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
 import bench.compound_eval as ce
-from bench.judge import _validate_judges
+from bench.judge import JudgeResult, _validate_judges, aggregate_judges
+from bench.metrics import RunSnapshot, compute_scorecard
+from bench.report import write_json
 
 # ── Task 1: the shared guard, called directly (unit) ─────────────────────────
 
@@ -143,3 +146,92 @@ def test_replicate_run_trial_threads_distinct_models(monkeypatch, tmp_path):
     j = cmd[cmd.index("--judge-model") + 1]
     p = cmd[cmd.index("--producer-model") + 1]
     assert j and p and j != p
+
+
+# ── Task 2: IND-03 — compounding_score is deterministic; the judge is EXCLUDED ─
+
+
+def _snap(i: int, *, artifacts_changed: int, new_gotchas: int, prefix_tokens: int) -> RunSnapshot:
+    """A RunSnapshot with the axis-driving fields set; the rest defaulted."""
+    return RunSnapshot(
+        run_index=i,
+        run_id=f"run{i}",
+        artifacts_changed=artifacts_changed,
+        new_gotchas=new_gotchas,
+        reencountered_gotchas=0,
+        verify_pass=0,
+        verify_fail=0,
+        verify_skip=0,
+        prefix_tokens=prefix_tokens,
+        mem_hits=i,
+        layers_present=("memory",) if i else (),
+    )
+
+
+def _fixed_snapshots() -> list[RunSnapshot]:
+    """A hand-built converging sequence (deterministic, judge-independent)."""
+    return [
+        _snap(0, artifacts_changed=10, new_gotchas=5, prefix_tokens=100),
+        _snap(1, artifacts_changed=6, new_gotchas=3, prefix_tokens=300),
+        _snap(2, artifacts_changed=2, new_gotchas=1, prefix_tokens=800),
+    ]
+
+
+def test_compute_scorecard_is_deterministic_from_snapshots():
+    """compute_scorecard's result (compounding_score + axis verdicts) is identical
+    across calls for a fixed RunSnapshot list — no judge input, no hidden state."""
+    snaps = _fixed_snapshots()
+    a = compute_scorecard(snaps)
+    b = compute_scorecard(snaps)
+    assert a == b
+    assert a.compounding_score == b.compounding_score
+    assert (
+        a.axis_convergence,
+        a.axis_gotcha_learning,
+        a.axis_verify_non_regression,
+        a.axis_enrichment,
+    ) == (
+        b.axis_convergence,
+        b.axis_gotcha_learning,
+        b.axis_verify_non_regression,
+        b.axis_enrichment,
+    )
+
+
+def test_compounding_score_unaffected_by_multi_judge_scores():
+    """Under the multi-judge aggregation path, the judge output does NOT feed
+    compute_scorecard: compounding_score for the SAME snapshots is unchanged whether the
+    judges all score 0 or all score 10 (the LLM judge is excluded from the mechanical
+    scorer — IND-03)."""
+    snaps = _fixed_snapshots()
+    baseline = compute_scorecard(snaps).compounding_score
+
+    all_low = aggregate_judges(
+        [JudgeResult(0, 0, ""), JudgeResult(1, 0, ""), JudgeResult(2, 0, "")]
+    )
+    all_high = aggregate_judges(
+        [JudgeResult(0, 10, ""), JudgeResult(1, 10, ""), JudgeResult(2, 10, "")]
+    )
+    # The two multi-judge aggregations genuinely differ...
+    assert all_low["mean"] != all_high["mean"]
+    assert all_low["majority_pass"] is False and all_high["majority_pass"] is True
+    # ...yet the mechanical score is invariant to them.
+    assert compute_scorecard(snaps).compounding_score == baseline
+
+
+def test_write_json_marks_judge_excluded_under_multi_judge(tmp_path: Path):
+    """write_json emits the judge block with its 'EXCLUDED from compounding_score' note
+    when multi-judge results are present, and the payload's compounding_score equals the
+    scorecard-only value (judge never contaminates the metric)."""
+    snaps = _fixed_snapshots()
+    scorecard = compute_scorecard(snaps)
+    out = tmp_path / "r.json"
+    # A multi-judge set (>=2 scored judges) drives the aggregation path.
+    write_json(
+        scorecard,
+        out,
+        judge_results=[JudgeResult(0, 6, "a"), JudgeResult(1, 8, "b"), JudgeResult(2, 9, "c")],
+    )
+    payload = json.loads(out.read_text())
+    assert "EXCLUDED from compounding_score" in payload["judge"]["note"]
+    assert payload["compounding_score"] == scorecard.compounding_score
