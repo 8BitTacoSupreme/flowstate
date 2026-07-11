@@ -56,6 +56,11 @@ _console = Console()
 # Exit code when an arm's REQUIRED producer artifact is absent (HAR-02 fail-loud gate).
 _EXIT_PRODUCER_ABSENT = 3
 
+# Exit code when --mode real measured nothing (no usable claude bridge -> empty
+# scorecard). Distinct from the producer gate but equally "the arm measured
+# nothing", so it must also exit non-zero rather than reporting success.
+_EXIT_NO_BRIDGE = 4
+
 # Producer-artifact paths, mirroring the reader-side constants in
 # flowstate/context_prefix.py (kept as local literals — bench deliberately does
 # not import flowstate.context_prefix, to stay decoupled from the LLM substrate).
@@ -373,6 +378,11 @@ def main(argv: list[str] | None = None) -> int:
             judge_model=args.judge_model,
             layers=args.layers,
         )
+        # real mode refused (no bridge) -> empty scorecard. Mirror the producer
+        # gate: measuring nothing must exit non-zero, not silently report
+        # success to a caller scripting the arm matrix on $? (WR-03).
+        if not scorecard.snapshots:
+            return _EXIT_NO_BRIDGE
     else:
         scorecard = _cheap_loop(root, runs, console=console)
 

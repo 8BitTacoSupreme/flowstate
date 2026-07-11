@@ -894,6 +894,23 @@ def test_real_loop_refuses_without_bridge(tmp_path: Path, monkeypatch):
     assert "requires a usable claude bridge" in buf.getvalue()
 
 
+def test_main_real_mode_without_bridge_returns_nonzero(tmp_path: Path, monkeypatch):
+    """WR-03: --mode real that measured nothing (no bridge) must exit non-zero."""
+    import shutil
+
+    import bench.compound_eval as ce
+
+    dest = tmp_path / "sample_project"
+    shutil.copytree(_FIXTURE_ROOT, dest)
+    monkeypatch.setattr(ce, "_bridge_available", lambda: False)
+
+    # full arm has no producer gate, so the only reason for an empty scorecard
+    # is the refused real-mode run — which must surface as a non-zero exit.
+    rc = ce.main(["--mode", "real", "--runs", "2", "--layers", "full", "--root", str(dest)])
+    assert rc == ce._EXIT_NO_BRIDGE
+    assert rc != 0
+
+
 def test_real_loop_runs_with_monkeypatched_pipeline(tmp_path: Path, monkeypatch):
     """MEDIUM-04: with the bridge faked-available and pipeline stubbed, _real_loop runs.
 
