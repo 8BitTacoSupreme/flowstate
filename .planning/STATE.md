@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.8.0
 milestone_name: Harness Tax & Value
 status: verifying
-stopped_at: Phase 20 context gathered
-last_updated: "2026-07-11T06:54:41.276Z"
+stopped_at: Completed 20-02-PLAN.md
+last_updated: "2026-07-11T07:02:41.745Z"
 last_activity: 2026-07-11
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 5
-  completed_plans: 4
-  percent: 25
+  completed_plans: 5
+  percent: 50
 ---
 
 # Project State
@@ -79,6 +79,7 @@ Last activity: 2026-07-11
 | Phase 19 P02 | 14min | 3 tasks | 8 files |
 | Phase 19 P03 | 540 | 2 tasks | 2 files |
 | Phase 20 P01 | 360 | 2 tasks | 2 files |
+| Phase 20 P02 | ~10 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -117,6 +118,7 @@ Recent decisions affecting current work:
 - [Phase 19-02 / TAX-02]: RunSnapshot gains real tokens_in/out/cache_read/wall_clock_s appended after layers_present with defaults (pure carriage — compute_scorecard byte-identical, no axis reads them); threaded end-to-end orchestrator bridge totals -> append_run_entry RUN metadata -> capture_run_snapshot (type-guarded metadata.get, 0/None fallback); adapters switched to output_format=json to capture usage (Plan 01 byte-identical .output, no extra LLM call); prefix_tokens kept as the DISTINCT Track-1 growth signal (input-context size), NOT repurposed for consumption
 - [Phase ?]: [Phase 19-03 / TAX-03/04]: tax rendering lives entirely in bench/report.py (presentation-only) — per-arm tokens/seconds as a Track-2 block EXCLUDED from compounding_score; cost-per-success = (tokens_in+tokens_out)/summed verify_pass (passed flowstate verify acceptance gates, NOT run/commit count), gates_passed==0 -> n/a
 - [Phase ?]: [Phase 20-01]: judge independence guard is a pure config-time helper (_validate_judges) reused by CLI + Wave-2; judge_run never-raise untouched; aggregate_judges reuses grounding._wilson via function-scope import; _PASS_THRESHOLD=7.0, even-N tie=fail (D-08), None excluded from denominator
+- [Phase 20]: 20-02: independence guard enforced at compound_eval chokepoint before _real_loop; absent judge-model = empty set = hard stop (D-04); replicate threads a distinct judge/producer pair (D-06); IND-03 test locks compounding_score as judge-independent
 
 ### Pending Todos
 
@@ -150,8 +152,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-11T06:54:30.152Z
-Stopped at: Phase 20 context gathered
+Last session: 2026-07-11T07:02:17.151Z
+Stopped at: Completed 20-02-PLAN.md
 
 **Why v0.8.0 exists (SEED-001, verified prior session):**
 

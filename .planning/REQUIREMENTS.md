@@ -17,7 +17,7 @@
 
 - [x] **IND-01**: `bench/judge.py` fails loud when `--judge-model` is absent or equals the producer model — no silent same-model grading.
 - [x] **IND-02**: multi-judge averaging in `judge.py` (majority vote + Wilson CI), mirroring the pattern already in `bench/grounding.py` (`--judge-models`).
-- [ ] **IND-03**: a test asserts `bench/metrics.py` stays the authoritative deterministic scorer and the LLM judge remains excluded from `compounding_score` under the new multi-judge path.
+- [x] **IND-03**: a test asserts `bench/metrics.py` stays the authoritative deterministic scorer and the LLM judge remains excluded from `compounding_score` under the new multi-judge path.
 
 ### Activate the Wiki (production wiring of the dormant WIKI-F1 layer)
 
@@ -55,7 +55,7 @@
 | TAX-04 | Phase 19 | Complete |
 | IND-01 | Phase 20 | Complete |
 | IND-02 | Phase 20 | Complete |
-| IND-03 | Phase 20 | Pending |
+| IND-03 | Phase 20 | Complete |
 | WIKI-03 | Phase 21 | Pending |
 | WIKI-04 | Phase 21 | Pending |
 | WIKI-05 | Phase 21 | Pending |
