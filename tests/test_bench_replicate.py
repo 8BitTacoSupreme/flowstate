@@ -8,6 +8,7 @@ No subprocess / compound_eval / live LLM calls are made.
 from __future__ import annotations
 
 import json
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -290,6 +291,7 @@ def test_run_trial_removes_temp_file_on_success(monkeypatch):
         Path(out_path).write_text(
             json.dumps({"judge": {"per_run": [{"score": 5.0}, {"score": 7.0}]}})
         )
+        return subprocess.CompletedProcess(cmd, returncode=0)
 
     monkeypatch.setattr("bench.replicate.subprocess.run", fake_run)
 
@@ -299,14 +301,17 @@ def test_run_trial_removes_temp_file_on_success(monkeypatch):
 
 
 def test_run_trial_removes_temp_file_on_failure(monkeypatch):
-    """The temp file is cleaned up even when the trial yields no usable scores."""
+    """The temp file is cleaned up even when the output file goes missing (OSError gap)."""
     import bench.replicate as rep
 
     captured: dict[str, str] = {}
 
     def fake_run(cmd, check=False):
-        # write nothing -> read_text raises -> _run_trial returns None
-        captured["out"] = cmd[cmd.index("--out") + 1]
+        # delete the mkstemp-created file -> read_text raises OSError -> _run_trial returns None
+        out_path = cmd[cmd.index("--out") + 1]
+        captured["out"] = out_path
+        Path(out_path).unlink()
+        return subprocess.CompletedProcess(cmd, returncode=0)
 
     monkeypatch.setattr("bench.replicate.subprocess.run", fake_run)
 

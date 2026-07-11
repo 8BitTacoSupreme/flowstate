@@ -30,7 +30,18 @@ from bench.bootstrap import paired_bootstrap_ci
 
 
 def _run_trial(arm: str, runs: int, root: Path, label: str) -> list[float] | None:
-    """One harness invocation; returns the per-run judge scores, or None on any gap."""
+    """One harness invocation; returns the per-run judge scores.
+
+    Three failure classes, handled distinctly:
+      1. Harness gap — nonzero compound_eval subprocess returncode: prints a
+         diagnostic and returns None.
+      2. Output gap — the output file is missing or unreadable (OSError): prints
+         a diagnostic and returns None.
+      3. Judge-output contract violation — malformed JSON or a per_run row
+         missing its 'score' key: propagates (json.JSONDecodeError / KeyError /
+         TypeError) instead of being swallowed, so a contract violation is never
+         silently averaged into the CI as a mere trial gap.
+    """
     # mkstemp returns (open_fd, path); close the fd immediately so it does not
     # leak, and unlink the file in the finally below so a full sweep
     # (trials x arms x 2 invocations) cannot exhaust the fd limit or litter TMPDIR.
@@ -55,13 +66,19 @@ def _run_trial(arm: str, runs: int, root: Path, label: str) -> list[float] | Non
         str(out),
     ]
     try:
-        subprocess.run(cmd, check=False)
-        d = json.loads(out.read_text())
-        scores = [r["score"] for r in d.get("judge", {}).get("per_run", [])]
-    except Exception:
+        proc = subprocess.run(cmd, check=False)
+        if proc.returncode != 0:
+            print(f"[replicate] {label}: compound_eval exited {proc.returncode}", flush=True)
+            return None
+        raw = out.read_text()
+    except OSError as exc:
+        print(f"[replicate] {label}: no/unreadable output ({exc})", flush=True)
         return None
     finally:
         out.unlink(missing_ok=True)
+
+    d = json.loads(raw)
+    scores = [r["score"] for r in d.get("judge", {}).get("per_run", [])]
     if not scores or any(s is None for s in scores):
         return None
     return [float(s) for s in scores]
