@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.6.2
-milestone_name: Make the Harness Real
-status: Awaiting next milestone
-stopped_at: "Completed 18-02-PLAN.md (HAR-04): bench/close_loop.py — one-command prior-runs→distill→inject→judge→CI driver"
-last_updated: "2026-07-11T04:38:39.324Z"
-last_activity: 2026-07-11 — Milestone v0.6.2 completed and archived
+milestone: v0.8.0
+milestone_name: Harness Tax & Value
+status: planning
+last_updated: "2026-07-11T04:44:02.446Z"
+last_activity: 2026-07-11
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 7
-  completed_plans: 7
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 ## Current Position
 
-Phase: Milestone v0.6.2 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-07-11 — Milestone v0.6.2 completed and archived
+Status: Defining requirements
+Last activity: 2026-07-11 — Milestone v0.8.0 started
 
 ## Performance Metrics
 
