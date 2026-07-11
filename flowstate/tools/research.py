@@ -114,14 +114,20 @@ class ResearchAdapter(ToolAdapter):
                 return br.output.strip(), None
         return None, (br.error if br else None) or "no output"
 
-    def _score_groundedness(self, section: str, questions: list[str]) -> float:
+    def _score_groundedness(self, section: str, questions: list[str]) -> float | None:
         """Score how well a research SECTION is grounded in ``retrieval_questions``.
 
         Issues ONE scoring bridge call (a measurement over OUTPUT, never a prompt
         change). The model returns a 0-10 integer; it is parsed with a strict
         bounded regex and clamped — never dynamic evaluation of model text.
-        Returns a float normalized to 0.0-1.0; bridge failure or unparseable
-        output returns 0.0 (treated as weak, not a crash).
+
+        Returns a float normalized to 0.0-1.0 for a clean result, or ``None`` (the
+        *scorer-unavailable* sentinel) when the bridge call fails OR the json-mode
+        output carries no clean integer. The sentinel is deliberately NOT 0.0: a
+        down/unparseable scorer must fail OPEN (keep the section) rather than
+        silently discard a good section as "weak". On the sentinel path the scorer
+        ``br.error`` is captured on ``self._last_scorer_error`` so ``execute`` can
+        surface an attributable reason.
         """
         q_block = "\n".join(f"- {q}" for q in questions)
         prompt = (
@@ -139,10 +145,14 @@ class ResearchAdapter(ToolAdapter):
             output_format="json",
         )
         if not br.success:
-            return 0.0
+            self._last_scorer_error = br.error or "scorer bridge failed"
+            return None
+        # In json mode the bridge already exposes the parsed `result` string on
+        # .output (bridge.py:324). No clean integer -> unavailable (do NOT fall to 0.0).
         match = re.search(r"-?\d{1,3}", br.output)
         if match is None:
-            return 0.0
+            self._last_scorer_error = "scorer output unparseable"
+            return None
         score = max(0, min(10, int(match.group())))
         return score / 10.0
 
@@ -175,6 +185,8 @@ class ResearchAdapter(ToolAdapter):
         sections = []
         failed_topics = []
         discarded_topics = []
+        scorer_unavailable_topics: list[str] = []
+        self._last_scorer_error = None
         produced = 0
         for topic in topics:
             prompt = _build_topic_prompt(topic, answers)
@@ -196,6 +208,15 @@ class ResearchAdapter(ToolAdapter):
             # Measure -> keep/discard over OUTPUT within a bounded budget.
             # The SAME prompt is reused on regeneration — never mutated (MECH-01).
             score = self._score_groundedness(section, questions)
+            if score is None:
+                # Scorer unavailable (down/unparseable) -> fail OPEN: keep the
+                # section, record it distinctly, and skip the retry loop. Mirrors
+                # the "no questions -> keep all" fail-open philosophy above.
+                sections.append(section)
+                produced += 1
+                scorer_unavailable_topics.append(topic)
+                continue
+
             retries = 0
             while score < _GROUNDEDNESS_THRESHOLD and retries < _GROUNDEDNESS_MAX_RETRIES:
                 regenerated, _ = self._generate_section(prompt)
@@ -204,8 +225,15 @@ class ResearchAdapter(ToolAdapter):
                     break
                 section = regenerated
                 score = self._score_groundedness(section, questions)
+                if score is None:
+                    # Scorer went down on retry -> keep the regenerated section.
+                    break
 
-            if score >= _GROUNDEDNESS_THRESHOLD:
+            if score is None:
+                sections.append(section)
+                produced += 1
+                scorer_unavailable_topics.append(topic)
+            elif score >= _GROUNDEDNESS_THRESHOLD:
                 sections.append(section)
                 produced += 1
             else:
@@ -219,8 +247,13 @@ class ResearchAdapter(ToolAdapter):
             )
         else:
             discarded_str = ", ".join(discarded_topics) if discarded_topics else "none"
+            unavailable_str = (
+                ", ".join(scorer_unavailable_topics) if scorer_unavailable_topics else "none"
+            )
             grounding_block = (
-                f"\n## Groundedness\n\n- Kept: {produced} sections\n- Discarded: {discarded_str}\n"
+                f"\n## Groundedness\n\n- Kept: {produced} sections\n"
+                f"- Discarded: {discarded_str}\n"
+                f"- Scorer-unavailable (kept): {unavailable_str}\n"
             )
         report_path.write_text(report_body + grounding_block)
 
@@ -230,6 +263,11 @@ class ResearchAdapter(ToolAdapter):
                 reasons.append(f"bridge-failed: {', '.join(failed_topics)}")
             if discarded_topics:
                 reasons.append(f"ungrounded/discarded: {', '.join(discarded_topics)}")
+            if scorer_unavailable_topics:
+                err_suffix = f" ({self._last_scorer_error})" if self._last_scorer_error else ""
+                reasons.append(
+                    f"scorer-unavailable: {', '.join(scorer_unavailable_topics)}{err_suffix}"
+                )
             detail = "; ".join(reasons) or "no topics"
             return ToolResult(
                 success=False,
