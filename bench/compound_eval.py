@@ -77,9 +77,10 @@ _ARM_PRODUCERS: dict[str, str | None] = {
 def _missing_producer(arm: str, root: Path) -> str | None:
     """Return the missing producer's name for ``arm`` under ``root``, else None.
 
-    ``pack`` requires ``.planning/codebase/repomix-pack.xml``. ``wiki`` requires
-    EITHER a non-empty ``.planning/codebase/wiki/`` corpus (>=1 ``*.md``) OR the
-    single-file ``.planning/codebase/wiki.md`` fallback. ``full``/``memory``/``none``
+    ``pack`` requires a non-empty ``.planning/codebase/repomix-pack.xml``.
+    ``wiki`` requires EITHER a ``.planning/codebase/wiki/`` corpus with >=1
+    non-empty ``*.md`` OR a non-empty single-file ``.planning/codebase/wiki.md``
+    fallback (empty/zero-byte artifacts count as absent). ``full``/``memory``/``none``
     have no requirement and always return None. Never raises — a missing or
     oddly-shaped ``.planning`` tree (e.g. a file where a directory is expected)
     counts as "producer absent".
@@ -89,11 +90,21 @@ def _missing_producer(arm: str, root: Path) -> str | None:
         return None
     try:
         if required == "pack":
-            return None if (root / _PACK_PATH).is_file() else "pack"
+            p = root / _PACK_PATH
+            # A zero-byte pack passes existence but produces no tokens — treat
+            # it as absent so the arm never reports on an empty layer (WR-02).
+            return None if (p.is_file() and p.stat().st_size > 0) else "pack"
         if required == "wiki":
             corpus = root / _WIKI_CORPUS_DIR
-            has_corpus = corpus.is_dir() and any(corpus.glob("**/*.md"))
-            has_wiki_md = (root / _WIKI_PATH).is_file()
+            # Require at least one NON-EMPTY *.md in the corpus; empty files
+            # contribute nothing to the semantic wiki layer.
+            has_corpus = corpus.is_dir() and any(
+                f.stat().st_size > 0 for f in corpus.glob("**/*.md")
+            )
+            wiki_md = root / _WIKI_PATH
+            # _read_wiki_layer returns "" for empty content, so a zero-byte
+            # wiki.md is not a real producer either.
+            has_wiki_md = wiki_md.is_file() and wiki_md.stat().st_size > 0
             return None if (has_corpus or has_wiki_md) else "wiki"
     except OSError:
         return required

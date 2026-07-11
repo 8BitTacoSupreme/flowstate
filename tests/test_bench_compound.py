@@ -987,6 +987,37 @@ def test_missing_producer_pack_absent_then_present(tmp_path: Path):
     assert _missing_producer("pack", tmp_path) is None
 
 
+def test_missing_producer_wiki_zero_byte_artifacts_count_absent(tmp_path: Path):
+    """WR-02: a zero-byte wiki.md and empty corpus *.md must read as producer absent."""
+    from bench.compound_eval import _missing_producer
+
+    codebase = tmp_path / ".planning" / "codebase"
+    corpus = codebase / "wiki"
+    corpus.mkdir(parents=True)
+
+    # Empty corpus article + empty wiki.md: neither yields any tokens.
+    (corpus / "empty.md").write_text("")
+    (codebase / "wiki.md").write_text("")
+    assert _missing_producer("wiki", tmp_path) == "wiki"
+
+    # A single non-empty corpus article satisfies the requirement.
+    (corpus / "real.md").write_text("# real")
+    assert _missing_producer("wiki", tmp_path) is None
+
+
+def test_missing_producer_pack_zero_byte_counts_absent(tmp_path: Path):
+    """WR-02: a zero-byte repomix-pack.xml must read as producer absent."""
+    from bench.compound_eval import _missing_producer
+
+    pack = tmp_path / ".planning" / "codebase" / "repomix-pack.xml"
+    pack.parent.mkdir(parents=True)
+    pack.write_text("")
+    assert _missing_producer("pack", tmp_path) == "pack"
+
+    pack.write_text("<repomix/>")
+    assert _missing_producer("pack", tmp_path) is None
+
+
 def test_missing_producer_no_requirement_arms_always_none(tmp_path: Path):
     from bench.compound_eval import _missing_producer
 
