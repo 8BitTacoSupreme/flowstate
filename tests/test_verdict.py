@@ -7,9 +7,10 @@ synthesized trajectories, proving the whole verdict pipeline is free to exercise
 
 from __future__ import annotations
 
-import bench.verdict as verdict
+import json
 
 import bench.bootstrap as bootstrap
+import bench.verdict as verdict
 
 
 # ── Holm-Bonferroni (D-06 — GATING correction) ────────────────────────────────
@@ -103,3 +104,107 @@ def test_contrast_gate_ci_straddles_zero_is_null():
 def test_contrast_gate_small_effect_is_null():
     ci = {"ci_low": 0.5, "ci_high": 1.5}
     assert verdict._gate(ci, cohens_d=0.5, holm_reject=True) == "null"
+
+
+# ── assert_pristine_worktree (D-01a contamination control) ─────────────────────
+def test_pristine_passes_clean_dir(tmp_path):
+    result = verdict.assert_pristine_worktree(tmp_path)
+    assert result["pristine"] is True
+    assert result["stray_markers"] == []
+    assert result["subject"] == str(tmp_path)
+
+
+def test_pristine_ignores_bare_claude_config(tmp_path):
+    """The project's own .claude/ config is legitimate content, NOT contamination."""
+    (tmp_path / ".claude").mkdir()
+    assert verdict.assert_pristine_worktree(tmp_path)["pristine"] is True
+
+
+def test_pristine_flags_flowstate_state(tmp_path):
+    (tmp_path / "memory.db").write_text("")
+    (tmp_path / "flowstate.json").write_text("{}")
+    (tmp_path / ".planning").mkdir()
+    result = verdict.assert_pristine_worktree(tmp_path)
+    assert result["pristine"] is False
+    for marker in ("memory.db", "flowstate.json", ".planning"):
+        assert marker in result["stray_markers"]
+
+
+# ── Full cheap-mode driver run (deterministic, free, no claude) ────────────────
+def test_cheap_mode_emits_report_and_is_synthetic(tmp_path):
+    out = tmp_path / "22-VERDICT.md"
+    rc = verdict.main(
+        [
+            "--root",
+            str(tmp_path),
+            "--mode",
+            "cheap",
+            "--trials",
+            "4",
+            "--runs",
+            "3",
+            "--out",
+            str(out),
+        ]
+    )
+    assert rc == 0
+    text = out.read_text()
+    # Embedded pristine control section (tmp_path is clean -> PASS).
+    assert "Pristine control (D-01a)" in text
+    assert "PASS" in text
+    # Report shape: Holm, per-arm tax, compounding curve, per-contrast verdict.
+    assert "Holm" in text
+    assert "tokens_in" in text
+    assert "Compounding curve" in text
+    assert "SYNTHETIC" in text  # cheap run is stamped synthetic
+    assert "VERDICT" in text
+
+
+def test_cheap_mode_is_byte_deterministic(tmp_path):
+    out1 = tmp_path / "a.md"
+    out2 = tmp_path / "b.md"
+    argv = ["--root", str(tmp_path), "--mode", "cheap", "--seed", "20260711", "--out"]
+    verdict.main([*argv, str(out1)])
+    verdict.main([*argv, str(out2)])
+    assert out1.read_bytes() == out2.read_bytes()
+
+
+def test_cheap_mode_never_invokes_subprocess(tmp_path, monkeypatch):
+    """Cheap mode must synthesize — a subprocess call would mean real spend leaked in."""
+
+    def _boom(*args, **kwargs):
+        raise AssertionError("cheap mode must not shell out")
+
+    monkeypatch.setattr(verdict.subprocess, "run", _boom)
+    rc = verdict.main(["--root", str(tmp_path), "--mode", "cheap", "--out", str(tmp_path / "v.md")])
+    assert rc == 0
+
+
+def test_cheap_mode_json_out_carries_contrasts_and_pristine(tmp_path):
+    out = tmp_path / "verdict.json"
+    rc = verdict.main(["--root", str(tmp_path), "--mode", "cheap", "--out", str(out)])
+    assert rc == 0
+    payload = json.loads(out.read_text())
+    assert payload["synthetic"] is True
+    assert payload["pristine_control"]["pristine"] is True
+    assert len(payload["contrasts"]) == 4
+    assert set(payload["arms"]) == {"none", "pack", "memory", "wiki", "full"}
+
+
+# ── Fail-loud: a real-mode contrast that measured nothing exits non-zero ────────
+def test_real_mode_no_paired_data_fails_loud(tmp_path, monkeypatch):
+    """A real run where every contrast produced zero paired trials must exit
+    _EXIT_NO_PAIRED_DATA, never report a null CI as a clean result. Monkeypatches the
+    trajectory source so NO subprocess/claude is invoked."""
+    empty = {arm: [None, None] for arm in verdict._ARMS}
+
+    monkeypatch.setattr(verdict, "_collect", lambda *a, **k: (empty, {}, False))
+    rc = verdict.main(["--root", str(tmp_path), "--mode", "real", "--trials", "2"])
+    assert rc == verdict._EXIT_NO_PAIRED_DATA
+
+
+def test_cheap_mode_synthetic_result_never_fails_loud(tmp_path, monkeypatch):
+    """Cheap mode always synthesizes trials, so the fail-loud guard never trips."""
+    monkeypatch.setattr(verdict.subprocess, "run", lambda *a, **k: None)
+    rc = verdict.main(["--root", str(tmp_path), "--mode", "cheap", "--trials", "2"])
+    assert rc == 0
