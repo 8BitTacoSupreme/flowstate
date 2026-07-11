@@ -309,6 +309,43 @@ class TestUsageAndDuration:
         assert result.usage is None
         assert result.output == payload + "\n"
 
+    def test_json_mode_non_dict_usage_does_not_raise(self, tmp_path: Path):
+        """WR-01: a truthy non-dict `usage` (list/str) must not raise AttributeError."""
+        payload = '{"result": "ok", "usage": ["not", "a", "dict"]}'
+        bridge = _make_payload_bridge(tmp_path, payload)
+        # Must return cleanly rather than propagating AttributeError out of run().
+        result = bridge.run("Hello", output_format="json")
+        assert result.success
+        assert result.output == "ok"
+        # Non-dict usage collapses to no usable counts.
+        assert result.usage == BridgeUsage(tokens_in=0, tokens_out=0, cache_read=0)
+
+    def test_json_mode_null_token_values_coerce_to_zero(self, tmp_path: Path):
+        """WR-01: present-but-null token values must coerce to 0, not crash _accumulate."""
+        payload = (
+            '{"result": "ok", '
+            '"usage": {"input_tokens": null, "output_tokens": 5, '
+            '"cache_read_input_tokens": null}}'
+        )
+        bridge = _make_payload_bridge(tmp_path, payload)
+        # int + None inside _accumulate would raise TypeError before the fix.
+        result = bridge.run("Hello", output_format="json")
+        assert result.success
+        assert result.usage == BridgeUsage(tokens_in=0, tokens_out=5, cache_read=0)
+        assert bridge.total_tokens_in == 0
+        assert bridge.total_tokens_out == 5
+
+    def test_json_mode_null_result_falls_back_to_stdout(self, tmp_path: Path):
+        """WR-02: a null (non-str) `result` must degrade to raw stdout, keeping .output a str."""
+        payload = '{"result": null, "usage": {"input_tokens": 5}}'
+        bridge = _make_payload_bridge(tmp_path, payload)
+        result = bridge.run("Hello", output_format="json")
+        assert result.success
+        # .output stays a str (raw stdout) so downstream br.output.strip() is safe.
+        assert result.output == payload + "\n"
+        assert isinstance(result.output, str)
+        assert result.usage is None
+
     def test_duration_s_set_on_success(self, tmp_path: Path):
         """duration_s is set on every non-dry, non-error return regardless of format."""
         bridge = _make_payload_bridge(tmp_path, "hi")
