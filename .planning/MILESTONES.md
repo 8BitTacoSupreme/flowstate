@@ -1,5 +1,18 @@
 # Milestones
 
+## v0.6.1 Make the Names Real (Shipped: 2026-07-11)
+
+**Phases completed:** 4 phases (12–15), 15 plans
+
+**Key accomplishments:**
+
+- **Honesty & failure-capability (Phase 12, HON-01..06)** — a broken run can no longer report "completed." `discipline.check_setup()` derives `success` from a required-set instead of a hardcoded `True`; the orchestrator reads the audit and marks the step `BLOCKED`; research/strategy return `success=False` on failure instead of writing stub text as artifacts; a live run with no locatable `claude` CLI fails loud rather than persisting `[dry-run]` text.
+- **Adapters earn their names (Phase 13, MECH-01..03)** — each adapter now performs its namesake mechanism in pure Python + `claude --print`: research scores each section for groundedness against the fixture's `retrieval_questions` and retries-or-discards (Autoresearch measure→keep/discard over *output*); strategy emits a parseable scored rubric (five 0–10 dims + ship/pivot/kill verdict, unparseable → fail via HON-04); discipline runs the project's tests + reads real git state + checks hook contents, with `tests_pass` a **gating** required-set member and `--dry-run` zero-spawn.
+- **Vendor & surface (Phase 14, VEND-01..05)** — vendored the two MIT skill sets (gstack 59 + superpowers 14 SKILL.md trees, pinned SHAs, dual attribution); `flowstate install-skills` (auto-invoked by init/kickoff) installs them zero-manual; `flowstate launch strategy` → gstack `/office-hours`, `launch discipline` → superpowers TDD, gated on install. README reconciled to shipped reality.
+- **Bundle GSD (Phase 15, GSD-01..05)** — reversed "no cross-harness packaging": vendored a **51 MB lean full-parity** GSD (`get-shit-done-cc@1.42.3`, `--omit=optional` drops the redundant 197 MB platform `claude` binary; `gsd-sdk` needs its `node_modules`, a raw git clone ships a broken CLI). `install-skills` lays GSD down unconditionally (no detect, no prompt); `launch gsd` is unconditional; `flowstate gsd-version` gives a pinned-only refresh path. E2E-verified: `gsd-sdk query` runs "Bundle GSD" from a fresh project, zero separate install.
+
+**Quality:** 1045 tests passing at ~91% coverage. No new Python runtime deps; core install stays dependency-free; vendored assets are data (excluded from coverage/collection, force-included in the wheel). Every phase passed independent goal-backward verification + a live E2E smoke.
+
 ## v0.6.0 Semantic Retrieval (Shipped: 2026-07-10)
 
 **Phases completed:** 3 phases, 4 plans, 4 tasks

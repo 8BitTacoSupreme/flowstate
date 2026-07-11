@@ -6,7 +6,7 @@
 - ✅ **v0.4.0 Context Compaction & Compounding** — Phases 3-5 (shipped 2026-06-06)
 - ✅ **v0.5.0 Compounding Loop** — Phases 6-8 (shipped 2026-06-09)
 - ✅ **v0.6.0 Semantic Retrieval** — Phases 9-11 (shipped 2026-07-10)
-- 🚧 **v0.6.1 Make the Names Real** — Phases 12-15 (in progress)
+- ✅ **v0.6.1 Make the Names Real** — Phases 12-15, 15 plans (shipped 2026-07-11) — [archive](./milestones/v0.6.1-ROADMAP.md)
 - 📋 **v0.6.2 Make the Harness Real** — the eval harness runs E2E and fails loud; **gates all further benchmarking** (SEED-002; phases 16-18 after v0.6.1)
 - 📋 **v0.7.0 Retrieval Benchmark Rigor** — deferred behind v0.6.1 → v0.6.2; renumbers after v0.6.2 (spec: `deferred/v0.7.0-REQUIREMENTS.md`)
 - 📋 **v0.8.0 Harness Tax & Value** — SEED-001; follows v0.7.0
@@ -56,76 +56,13 @@ Full detail: [`milestones/v0.6.0-ROADMAP.md`](./milestones/v0.6.0-ROADMAP.md)
 
 </details>
 
-### 🚧 v0.6.1 Make the Names Real (In Progress)
+### ✅ v0.6.1 Make the Names Real (Shipped 2026-07-11)
 
-**Milestone Goal:** Undead the adapter stubs before benchmarking. FlowState's `research`/`strategy`/`discipline` adapters are named after real MIT upstreams (Karpathy Autoresearch, Garry Tan Gstack, Jesse Vincent Superpowers) but implement almost none of them — and the enforcement stage is structurally incapable of failing. Make the pipeline honest, make each adapter do its namesake's mechanism in-process, and vendor the two MIT skill sets so `flowstate launch` surfaces them with zero user install.
-
-- [ ] **Phase 12: Honesty & Failure-Capability** — Stop the pipeline reporting broken runs as clean. Discipline can fail; research/strategy surface failure; a live run with no `claude` CLI fails loud instead of writing stub text as artifacts.
-- [ ] **Phase 13: Adapters Earn Their Names** — In-process mechanisms: research measure→keep/discard over output; strategy scored rubric + verdict; discipline runs tests + reads real git state + checks hook contents.
-- [ ] **Phase 14: Vendor & Surface** — Vendor gstack + superpowers MIT SKILL.md into `flowstate/skills/`, auto-install to `.claude/skills/`, surface via `flowstate launch strategy|discipline`; NOTICE + README fixes.
-- [ ] **Phase 15: Bundle GSD** — Vendor the pinned MIT GSD full runtime (skills + `get-shit-done/` + `gsd-sdk`) into `flowstate/vendor/gsd/`; install unconditionally (no detect, no prompt); documented refresh path. **Reverses "no cross-harness packaging."**
+Phases 12–15 (15 plans) — adapters made honest and real (12–13), the two MIT skill sets + GSD bundled and self-installing (14–15). Full detail: [`milestones/v0.6.1-ROADMAP.md`](./milestones/v0.6.1-ROADMAP.md).
 
 ## Phase Details
 
-### Phase 12: Honesty & Failure-Capability
-**Goal**: A broken run must fail, not report "completed." Today `discipline.py:56` hardcodes `success=True`, `orchestrator.py:315-319` never reads the audit result, `research.py:113-122` returns `success=True` with "*Research failed*" in the artifact, and a live run with no `claude` CLI writes `[dry-run]` stub text as real output. This phase makes failure representable and surfaced — foundation for Phase 13 (an adapter can't report a mechanism running until it can report it failing).
-**Depends on**: Phase 11 (v0.6.0 complete)
-**Requirements**: HON-01, HON-02, HON-03, HON-04, HON-05, HON-06
-**Success Criteria** (what must be TRUE):
-  1. A repo missing the required-set (no git, no test config) makes `discipline.check_setup().success` return `False` (previously impossible — it was hardcoded `True`)
-  2. The orchestrator marks the Discipline step `BLOCKED` on a failed audit and `_print_summary` reflects it; `flowstate discipline` exits non-zero on failure and zero on a clean repo
-  3. `research.py::execute()` returns `ToolResult(success=False)` when all topics fail; no artifact contains "*Research failed*" text alongside a success result
-  4. A live run with `FLOWSTATE_CLAUDE_BIN` pointing at a missing binary marks steps `BLOCKED` and writes no `[dry-run] claude prompt` text into `report.md`/`strategy.md`
-  5. `gsd_adapter.py`'s "optional LLM enrichment" docstring matches the code (claim removed or implemented)
-**Plans**: 3 plans
-- [x] 12-01-PLAN.md — Discipline can fail (required-set) + orchestrator routing via _run_step + `flowstate discipline` CLI (HON-01, HON-02)
-- [x] 12-02-PLAN.md — research/strategy surface failure + gsd_adapter docstring reconciled (HON-03, HON-04, HON-06)
-- [x] 12-03-PLAN.md — live run with no `claude` CLI fails loud (remove silent dry-run swap) (HON-05)
-
-### Phase 13: Adapters Earn Their Names
-**Goal**: Each adapter performs the core mechanism its namesake is built on, in pure Python + `claude --print`, with no new runtime deps and no prompt self-modification.
-**Depends on**: Phase 12 (failure must be representable first)
-**Requirements**: MECH-01, MECH-02, MECH-03
-**Success Criteria** (what must be TRUE):
-  1. The research adapter scores each topic section for groundedness against the fixture's `retrieval_questions` and retries-or-discards a weak section within a bounded budget, recording kept vs discarded — Autoresearch's measure→keep/discard over output, never over prompts
-  2. The strategy adapter emits parseable per-dimension scores (0–10) and a verdict (ship/pivot/kill); an unparseable rubric is a failure (via HON-04) — Gstack's scored-review pattern
-  3. The discipline adapter runs the project's tests (captures pass/fail), reads real git state (dirty/branch/ahead-behind), and checks hook contents (non-empty/executable) — Superpowers' RED-GREEN gate; the result feeds HON-01's required-set
-  4. All three mechanisms are covered by offline tests (injected bridge / temp git repo / subprocess stub) and the `--dry-run` MOCK paths are unchanged
-**Plans**: 3 plans
-- [x] 13-01-PLAN.md — MECH-01: research groundedness measure→keep/discard over output
-- [x] 13-02-PLAN.md — MECH-02: strategy scored rubric + ship/pivot/kill verdict
-- [x] 13-03-PLAN.md — MECH-03: discipline runs tests + real git state + hook contents
-
-### Phase 14: Vendor & Surface
-**Goal**: The two MIT skill sets ship inside FlowState and install themselves, so `flowstate launch` surfaces the real upstream tools with zero manual user install — self-contained from this repo.
-**Depends on**: Phase 12 (honest launch/detect surface)
-**Requirements**: VEND-01, VEND-02, VEND-03, VEND-04, VEND-05
-**Success Criteria** (what must be TRUE):
-  1. `flowstate/skills/gstack/` and `flowstate/skills/superpowers/` contain the vendored MIT `SKILL.md` assets, and `NOTICE` carries both MIT attributions (© Garry Tan, © Jesse Vincent)
-  2. `flowstate install-skills` (and `init`/`kickoff`) copies the vendored skills into the project's `.claude/skills/`; a fresh project needs no manual skill install
-  3. `flowstate launch strategy` prints the `claude` + `/office-hours` handoff and `flowstate launch discipline` prints the superpowers TDD-skill handoff when the vendored skills are installed
-  4. README shows the real current test count (985, not 803/947) and the Superpowers URL is `obra/superpowers` (not the 404 `obra/claude-code-superpowers`)
-**Plans**: 4 plans
-- [x] 14-01-PLAN.md — Vendor gstack + superpowers MIT SKILL.md trees + LICENSE + NOTICE (VEND-01, VEND-02)
-- [x] 14-02-PLAN.md — README reconciliation: URL, doctor count, sqlite-vec wording, adapter acknowledgments (VEND-05)
-- [x] 14-03-PLAN.md — `flowstate install-skills` installer + init/kickoff auto-invoke (VEND-03)
-- [x] 14-04-PLAN.md — `flowstate launch strategy|discipline` skill handoffs (VEND-04)
-
-### Phase 15: Bundle GSD
-**Goal**: GSD ships inside FlowState and installs itself — the user never installs GSD separately, and FlowState never detects or prompts for it. Reverses the "no cross-harness packaging" decision per user direction (2026-07-10): *"It should be there, by whatever legal means."* GSD (`gsd-build/get-shit-done`) is MIT (© Lex Christopherson), so the path is legal with attribution.
-**Depends on**: Phase 14 (extends the `flowstate install-skills` installer)
-**Requirements**: GSD-01, GSD-02, GSD-03, GSD-04, GSD-05
-**Success Criteria** (what must be TRUE):
-  1. `flowstate/vendor/gsd/` contains a pinned GSD distribution (skills + `get-shit-done/` Node runtime + `gsd-sdk`) with the upstream MIT `LICENSE` captured verbatim and a recorded `VERSION`/commit; `NOTICE` carries the GSD attribution
-  2. `flowstate install-skills` (and `init`/`kickoff`) installs GSD unconditionally into `.claude/skills/` + `.claude/get-shit-done/` and makes `gsd-sdk` invokable — no detect gate, no prompt
-  3. In a fresh project with no separately-installed GSD, `flowstate launch gsd <N>` produces a working handoff against the vendored GSD (the launcher's GSD detect-and-suggest path is neutralized)
-  4. A documented refresh path (mirroring `flowstate pack` staleness/manifest) updates the pinned GSD snapshot deliberately; the vendored VERSION is inspectable
-**Plans**: 5 plans
-- [x] 15-01-PLAN.md — Vendor the pinned MIT GSD distribution + LICENSE/VERSION/NOTICE + coverage/collection exclusions (GSD-01)
-- [x] 15-02-PLAN.md — Extend the installer to lay down GSD unconditionally into .claude/skills + .claude/get-shit-done + invokable gsd-sdk (GSD-02)
-- [x] 15-03-PLAN.md — Neutralize the launcher GSD detect-and-suggest path so launch gsd is unconditional (GSD-03)
-- [x] 15-04-PLAN.md — Documented GSD refresh/staleness path mirroring flowstate pack + inspectable VERSION (GSD-04)
-- [x] 15-05-PLAN.md — README reconciliation to the bundled-and-auto-installed reality + true test count (GSD-05)
+_(v0.6.2 phases populate here once planned.)_
 
 <details>
 <summary>📋 v0.7.0 Retrieval Benchmark Rigor (deferred behind v0.6.1 — renumbers to 16-21 on start)</summary>

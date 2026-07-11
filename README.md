@@ -99,7 +99,7 @@ You'll also need to install [Claude Code](https://docs.anthropic.com/en/docs/cla
 
 ```bash
 flowstate --version
-# flowstate, version 0.6.0
+# flowstate, version 0.6.1
 
 flowstate check
 # claude CLI found: /Users/you/.local/bin/claude

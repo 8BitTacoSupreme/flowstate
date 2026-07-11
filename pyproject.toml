@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flowstate"
-version = "0.6.0"
+version = "0.6.1"
 description = "The Context Orchestrator — runs a deterministic 5-step pipeline (context → research → strategy → gsd → discipline) for agentic frameworks, with persistent SQLite FTS5 memory across runs."
 license = "Apache-2.0"
 readme = "README.md"

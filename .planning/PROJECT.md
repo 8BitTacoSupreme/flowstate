@@ -12,39 +12,13 @@ Lives at `/Users/jhogan/frameworx`, package `flowstate`, Python 3.12+, Flox-mana
 
 If everything else fails, that compounding loop is what FlowState exists to deliver.
 
-## Current State: v0.6.0 Semantic Retrieval — SHIPPED & ARCHIVED (Phases 9–11)
+## Current State: v0.6.1 Make the Names Real — SHIPPED 2026-07-11 (Phases 12–15)
 
-**Shipped 2026-06-18, archived 2026-07-10.** Replaced lexical FTS5/BM25 with sqlite-vec semantic KNN across the memory and wiki layers, opt-in via the optional `[semantic]` embedder extra with byte-identical FTS5 fallback when absent. Phase 9 built the embedding provider + vec0 store (EMB/VEC); Phase 10 wired semantic KNN into `MemoryStore.get_context()` with a distance-floor no-match guard (MEM); Phase 11 added per-run semantic top-k retrieval to the opt-in `context_prefix` wiki layer (WIKI). The wiki retrieval mechanism is production-ready and awaits a curated corpus (deferred WIKI-F1, now in the ROADMAP Backlog). 749 tests at 92.19% coverage; every phase passed independent verification + adversarial code review (review caught a Critical FTS5-gate regression in Phase 10 and a Critical extension-load window in Phase 9, both fixed before close). Archive: [`milestones/v0.6.0-ROADMAP.md`](./milestones/v0.6.0-ROADMAP.md).
+**Shipped 2026-07-11.** Made the pipeline honest and the adapters real, then bundled the upstream tools self-contained. Phase 12 gave failure representability (discipline can fail, orchestrator reads the audit, research/strategy surface failure, live-no-`claude` fails loud — HON-01..06); Phase 13 gave each adapter its namesake mechanism (research groundedness measure→keep/discard, strategy scored rubric + ship/pivot/kill verdict, discipline runs tests + real git state + hook contents with `tests_pass` gating — MECH-01..03); Phase 14 vendored the gstack (59) + superpowers (14) MIT skills with `flowstate install-skills` + `launch` surfacing (VEND-01..05); Phase 15 bundled a **51 MB lean full-parity GSD** (`get-shit-done-cc@1.42.3`, `--omit=optional` drops the redundant 197 MB platform `claude` binary) that installs unconditionally and runs `gsd-sdk` zero-install (GSD-01..05). 1045 tests at ~91% coverage; every phase passed independent goal-backward verification + a live E2E smoke. Archive: [`milestones/v0.6.1-ROADMAP.md`](./milestones/v0.6.1-ROADMAP.md). (Prior: [v0.6.0 Semantic Retrieval](./milestones/v0.6.0-ROADMAP.md), shipped 2026-06-18.)
 
-<details><summary>Original milestone goal + target features</summary>
+## Current Milestone: v0.6.2 Make the Harness Real
 
-**Goal:** Replace lexical FTS5/BM25 retrieval with sqlite-vec semantic KNN across the memory and wiki layers, recovering the proven ~0.82 grounding accuracy (≈ oracle) that naive BM25 lost — opt-in via an optional embedder, with byte-identical fallback when absent.
-
-**Target features:**
-- New `flowstate/embeddings.py` — lazy embedding provider (`embed(texts)`, `dim`, `available()`), porting `bench/grounding.py::_default_embedder`.
-- `vec0` virtual table in `memory.db` + embed-on-`add()`/`update()`; one-time lazy backfill on open (never blocks startup; degrades to FTS5 if the embedder is absent).
-- Seam (a): `MemoryStore.get_context()` gains semantic KNN with FTS5/BM25 fallback.
-- Seam (b): `context_prefix` wiki layer gains per-run semantic retrieval over an embedded wiki corpus.
-- Optional `[semantic]` pip extra (fastembed); graceful degrade to today's lexical path when not installed.
-
-**Key context:** Embedder is an **optional dependency with FTS5 fallback** (settled) — core install stays dep-free, semantic retrieval is opt-in. The default (no-embedder) path must stay **byte-identical** (golden `context_prefix` tests stay green). Tests must NOT require the model/network (inject fake `embed_fn`, `skipif` on `sqlite_vec`). `sqlite-vec` is already a core dep (unused); only the embedder is new (and optional). Proven by the bench arc: `wikivec` (sqlite-vec KNN over fastembed bge-small-en-v1.5, 384-dim) hit **0.825 ≈ oracle 0.800**, surfacing the correct article **17/20** at k=3 vs BM25's 3/20. Authoritative spec: `bench/SEMANTIC_RETRIEVAL_HANDOFF.md`.
-
-</details>
-
-## Current Milestone: v0.6.1 Make the Names Real
-
-**Goal:** Undead the adapter stubs before any further benchmarking. FlowState's `research`/`strategy`/`discipline` adapters are named after real MIT upstreams (Karpathy **Autoresearch**, Garry Tan **Gstack**, Jesse Vincent **Superpowers**) but implement almost none of them — and the "enforcement" stage is structurally incapable of failing.
-
-**Target features:**
-- **Honesty:** `discipline.check_setup()` can return `success=False` (today hardcoded `True` at `discipline.py:56`; `orchestrator.py:315-319` never reads `.checks`); research/strategy return failure instead of `success=True`-with-a-failure-artifact; a live run with no `claude` CLI fails loud instead of writing `[dry-run]` stub text as real output.
-- **Mechanisms in-process:** research gets Autoresearch's measure→keep/discard *over output* (score groundedness vs the fixture's `retrieval_questions`, retry-or-discard); strategy gets Gstack's scored rubric (per-dimension 0–10 + ship/pivot/kill verdict); discipline gets Superpowers' RED-GREEN gate (actually run the tests, read real git state, check hook contents).
-- **Vendor & surface:** vendor the MIT gstack + superpowers `SKILL.md` assets into `flowstate/skills/`, auto-install to `.claude/skills/`, and surface via `flowstate launch strategy|discipline` — self-contained, zero manual user install.
-
-**Key context:** Prompted by an external review claiming FlowState does "execution enforcement," and a README audit showing the three adapters barely implement their namesakes. A stub inventory confirmed the Discipline stage cannot fail and two adapters report success on total failure — so **benchmarking harness compliance would currently measure nothing.** This milestone blocks v0.7.0.
-
-**GSD is now bundled (decision reversed 2026-07-10).** Per user direction — *"Let's break my no cross-harness packaging… It should be there, by whatever legal means. I don't want to detect or prompt for it"* — Phase 15 vendors GSD (`gsd-build/get-shit-done`, MIT © Lex Christopherson) **full-runtime** (skills + `get-shit-done/` Node runtime + `gsd-sdk`) into `flowstate/vendor/gsd/` and installs it unconditionally. No detection, no prompt, no separate user install. FlowState becomes a GSD redistributor and owns a pinned-version refresh path. (This does not reopen Codex/OpenCode/Cursor *adapters* — bundling a tool FlowState delegates *to* is a different axis from running FlowState *on* another harness.)
-
-Constraints: no new runtime deps of a new class (vendored gstack/superpowers are markdown; the mechanisms use stdlib + subprocess + the `claude --print` bridge; the vendored `gsd-sdk` is a Node CLI FlowState shells out to, and Node is already a prereq). No prompt self-modification in the runtime — research loops over *output*, honoring the locked "prompt tuning lives in bench/, never auto-applies" decision. autoresearch's pattern is reimplemented, not vendored (it's a training script). All four upstreams (gstack, superpowers, GSD, and the reference to autoresearch) verified MIT/permissive → vendorable with NOTICE attribution.
+**Goal:** Make the eval harness itself run end-to-end and **fail loud** before any further benchmarking. v0.6.1 made the *pipeline* honest; v0.6.2 makes the *measurement apparatus* honest — no silent no-op arms, no mode mislabeling (real-mode reporting must not print the cheap-mode caveat), no single-shot verdicts, and every arm must have a real producer feeding it. **Hard gate on all further benchmarking** (v0.7.0, v0.8.0) — same logic that deferred v0.7.0 behind v0.6.1: a harness you can't trust measures nothing. Scoped in [`seeds/SEED-002-harness-e2e.md`](./seeds/SEED-002-harness-e2e.md) (~3 phases, ~5 requirements HAR-01..05), grounded in a live distill spike that showed distill+inject compounding is achievable (judge 6.5 → 8.0, traceable) but surfaced three harness-correctness gaps.
 
 <details><summary>📋 Deferred: v0.7.0 Retrieval Benchmark Rigor (resumes after v0.6.1; renumbers to phases 16-21)</summary>
 
