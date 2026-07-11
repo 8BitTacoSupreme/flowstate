@@ -14,17 +14,19 @@ files_reviewed_list:
 findings:
   critical: 0
   warning: 0
-  info: 3
-  total: 3
+  info: 0
+  total: 0
 status: clean
+info_resolved: 3
+resolved_commits: [30834fb, 2791939, c56968a]
 ---
 
 # Phase 18: Code Review Report (Re-Review)
 
-**Reviewed:** 2026-07-10
+**Reviewed:** 2026-07-10 (info items resolved 2026-07-11 via `/gsd-code-review 18 --fix --all`)
 **Depth:** standard
 **Files Reviewed:** 7
-**Status:** clean (CR-01 / WR-01 / WR-02 genuinely resolved; 3 pre-existing info items intentionally deferred)
+**Status:** clean — CR-01 / WR-01 / WR-02 resolved earlier; all 3 info items now fixed (IN-01 `30834fb`, IN-02 `2791939`, IN-03 `c56968a`); suite 1110 passed @ 90%
 
 ## Summary
 
@@ -83,11 +85,12 @@ fixes added no dependency edge into the deterministic scorecard.
 
 ## Narrative Findings (AI reviewer)
 
-No blocker or warning findings remain. The three items below are the previously-identified
-info items, confirmed still present and re-listed. All were explicitly deferred as
-out-of-scope for phase 18; none are regressions.
+No blocker or warning findings remain. The three info items below were resolved on
+2026-07-11 via `/gsd-code-review 18 --fix --all` (commits IN-01 `30834fb`, IN-02 `2791939`,
+IN-03 `c56968a`); full suite 1110 passed @ 90%, Track-2 isolation and the CR-01/WR-01/WR-02
+and `_run_trial` contracts preserved. Retained below for the record.
 
-## Info
+## Info (all resolved 2026-07-11)
 
 ### IN-01: Cheap mode echoes `--arm`/`--baseline` labels its synthesized trajectories ignore
 
@@ -98,7 +101,7 @@ out-of-scope for phase 18; none are regressions.
 synthetic delta for a measurement of the named arms. Documented as an "apparatus check," but
 the labels still invite misreading.
 **Fix:** In cheap mode, stamp the labels as synthetic (e.g. `f"{args.arm} (synthetic)"`) or add
-a `"synthetic": true` flag to the cheap-mode result. Deferred (out of scope).
+a `"synthetic": true` flag to the cheap-mode result. **RESOLVED `30834fb`** — added `"synthetic": args.mode == "cheap"` to the result dict (True cheap, False real); payload shape unchanged.
 
 ### IN-02: `paired_bootstrap_ci` does not validate `resamples`
 
@@ -109,7 +112,7 @@ a `"synthetic": true` flag to the cheap-mode result. Deferred (out of scope).
 defaults to 2000), so latent only. Related latent edge: `close_loop --mode cheap --trials 0`
 yields an empty-delta null CI at exit 0 (cheap mode is deliberately outside the WR-01 guard).
 **Fix:** Guard early: `resamples = max(1, resamples)` (or return the None-bounds dict) before
-the loop. Deferred (out of scope).
+the loop. **RESOLVED `2791939`** — `resamples = max(1, resamples)` guard before the resample loop; `resamples=0` now yields a valid CI.
 
 ### IN-03: Cohen's d uses population stdev and equal-weight pooling
 
@@ -120,8 +123,10 @@ surviving-trial counts the pooled SD is mis-weighted, and population SD slightly
 denominator vs. the conventional sample SD (ddof=1). Minor for a directional effect-size
 readout, but worth a note given the milestone leans on the number.
 **Fix:** Switch to sample stdev and the n-weighted pooled variance
-`sqrt(((n1-1)s1**2 + (n2-1)s2**2)/(n1+n2-2))`, or document the simplification inline. Deferred
-(out of scope).
+`sqrt(((n1-1)s1**2 + (n2-1)s2**2)/(n1+n2-2))`, or document the simplification inline.
+**RESOLVED `c56968a`** — chose the inline-documentation option: a sample-stdev switch
+(`statistics.stdev`) raises on legitimate n=1 trials, so `_agg`/`_cohens_d` now carry an inline
+note explaining the ddof=0 / equal-weight-pooling assumption; zero numeric change, never-raises preserved.
 
 ---
 
