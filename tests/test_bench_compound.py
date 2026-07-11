@@ -551,6 +551,67 @@ def test_render_report_markdown_branch():
     assert "Compounding Eval Run" in out
 
 
+def test_render_report_real_mode_omits_cheap_caveat():
+    """HAR-01: a --mode real report (Rich + markdown) never leaks the cheap caveat."""
+    from bench.report import render_report
+
+    card = compute_scorecard(_compounding_sequence())
+    for markdown in (False, True):
+        out = _captured_console_output(
+            lambda c, md=markdown: render_report(
+                card,
+                console=c,
+                markdown=md,
+                mode="real",
+                arm="none",
+                sample_size=5,
+                producers=("## Eval Fixtures",),
+            )
+        )
+        assert "cheap mode" not in out.lower()
+        # Provenance: mode, arm, and sample size are stated.
+        assert "real" in out.lower()
+        assert "none" in out.lower()
+        assert "5" in out
+
+
+def test_render_report_cheap_mode_keeps_caveat():
+    """Over-correction guard: cheap mode STILL emits its accurate caveat."""
+    from bench.report import render_report
+
+    card = compute_scorecard(_compounding_sequence())
+    out = _captured_console_output(
+        lambda c: render_report(card, console=c, mode="cheap", arm="none", sample_size=5)
+    )
+    assert "validates that the substrate" in out or "validates the apparatus" in out
+    assert "cheap" in out.lower()
+
+
+def test_write_json_real_mode_note_has_no_cheap(tmp_path: Path):
+    """A real-mode JSON payload carries no 'cheap' in caveat/mode_note and mode=='real'."""
+    import json
+
+    from bench.report import write_json
+
+    card = compute_scorecard(_compounding_sequence())
+    out = tmp_path / "r.json"
+    write_json(
+        card,
+        out,
+        mode="real",
+        arm="memory",
+        sample_size=3,
+        producers=("## Gotchas",),
+    )
+    payload = json.loads(out.read_text())
+    assert payload["mode"] == "real"
+    assert payload["arm"] == "memory"
+    assert payload["sample_size"] == 3
+    assert payload["producers"] == ["## Gotchas"]
+    assert "cheap" not in payload["caveat"].lower()
+    assert "cheap" not in payload["mode_note"].lower()
+
+
 def test_judge_stub_refuses_without_real_and_allow():
     import argparse
     from io import StringIO
