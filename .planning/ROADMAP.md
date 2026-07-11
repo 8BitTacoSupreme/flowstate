@@ -155,7 +155,7 @@ Scoped and roadmapped this session, then deferred so the adapter stubs get fixed
 | 16. Mode-Honest Reporting | v0.6.2 | 1/1 | Complete    | 2026-07-11 |
 | 17. No Silent No-Op Arms + Producers | v0.6.2 | 3/3 | Complete   | 2026-07-11 |
 | 18. Close the Loop with a CI | v0.6.2 | 3/3 | Complete   | 2026-07-11 |
-| 19. The Tax | v0.8.0 | 3/3 | Complete   | 2026-07-11 |
+| 19. The Tax | v0.8.0 | 3/3 | Complete    | 2026-07-11 |
 | 20. Evaluator Independence | v0.8.0 | 0/0 | Not started | - |
 | 21. Activate the Wiki | v0.8.0 | 0/0 | Not started | - |
 | 22. The Verdict | v0.8.0 | 0/0 | Not started | - |

@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.8.0
 milestone_name: Harness Tax & Value
-status: verifying
-stopped_at: Completed 19-02-PLAN.md — RunSnapshot real consumption fields wired end-to-end (TAX-02)
-last_updated: "2026-07-11T05:40:31.137Z"
+status: ready_to_plan
+stopped_at: Phase 19 complete (3/3) — ready to discuss Phase 20
+last_updated: 2026-07-11T05:59:55.102Z
 last_activity: 2026-07-11
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 3
-  completed_plans: 3
+  completed_plans: 18
   percent: 25
 ---
 
@@ -21,20 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Phase 19 — the-tax
+**Current focus:** Phase 20 — evaluator independence
 
 ## Current Position
 
-Phase: 19 (the-tax) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
+Phase: 20
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-07-11
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 28
+- Total plans completed: 31
 - Average duration: ~15 min/plan
 - Total execution time: ~2.5 hours
 
@@ -52,6 +52,7 @@ Last activity: 2026-07-11
 | 14 | 4 | - | - |
 | 15 | 5 | - | - |
 | 16 | 1 | - | - |
+| 19 | 3 | - | - |
 
 **Recent Trend:**
 
