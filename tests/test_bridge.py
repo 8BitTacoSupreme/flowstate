@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from flowstate.bridge import CANON, BridgeConfig, ClaudeBridge, _find_claude
+from flowstate.bridge import CANON, BridgeConfig, BridgeUsage, ClaudeBridge, _find_claude
 
 
 def test_dry_run_returns_success():
@@ -251,3 +251,107 @@ class TestPromptCaching1h:
         )
         assert "fixture" in doc.lower(), "ClaudeBridge docstring must mention fixtures layer"
         assert "memory" in doc.lower(), "ClaudeBridge docstring must mention memory layer"
+
+
+def _make_payload_bridge(tmp_path: Path, payload: str) -> ClaudeBridge:
+    """Fake claude that emits a fixed stdout payload (payload + trailing newline)."""
+    fake_claude = tmp_path / "claude"
+    fake_claude.write_text(f"#!/bin/sh\ncat <<'PAYLOAD_EOF'\n{payload}\nPAYLOAD_EOF")
+    fake_claude.chmod(0o755)
+    config = BridgeConfig(claude_bin=str(fake_claude), project_root=tmp_path)
+    return ClaudeBridge(config=config)
+
+
+class TestUsageAndDuration:
+    """Task 1 (TAX-01): BridgeResult.usage + duration_s via the json path."""
+
+    def test_text_mode_output_byte_identical_and_usage_none(self, tmp_path: Path):
+        """Text mode (default): .output is byte-identical raw stdout; usage is None."""
+        payload = "plain text response line"
+        bridge = _make_payload_bridge(tmp_path, payload)
+        result = bridge.run("Hello")
+        assert result.output == payload + "\n"
+        assert result.usage is None
+
+    def test_json_mode_extracts_result_and_usage(self, tmp_path: Path):
+        """Json mode: .output is the parsed top-level `result`; usage is populated."""
+        payload = (
+            '{"result": "the answer", '
+            '"usage": {"input_tokens": 10, "output_tokens": 109, '
+            '"cache_read_input_tokens": 24308}}'
+        )
+        bridge = _make_payload_bridge(tmp_path, payload)
+        result = bridge.run("Hello", output_format="json")
+        assert result.output == "the answer"
+        assert result.usage == BridgeUsage(tokens_in=10, tokens_out=109, cache_read=24308)
+
+    def test_json_mode_missing_usage_subkeys_default_zero(self, tmp_path: Path):
+        """Missing usage sub-keys default to 0."""
+        payload = '{"result": "ok", "usage": {"input_tokens": 7}}'
+        bridge = _make_payload_bridge(tmp_path, payload)
+        result = bridge.run("Hello", output_format="json")
+        assert result.usage == BridgeUsage(tokens_in=7, tokens_out=0, cache_read=0)
+
+    def test_json_mode_malformed_guarded(self, tmp_path: Path):
+        """Malformed stdout: never raise; usage None; .output falls back to raw stdout."""
+        payload = "not valid json {{{"
+        bridge = _make_payload_bridge(tmp_path, payload)
+        result = bridge.run("Hello", output_format="json")
+        assert result.usage is None
+        assert result.output == payload + "\n"
+        assert result.success
+
+    def test_json_mode_missing_result_key_falls_back(self, tmp_path: Path):
+        """Absent top-level `result` key: usage None, .output falls back to raw stdout."""
+        payload = '{"usage": {"input_tokens": 5}}'
+        bridge = _make_payload_bridge(tmp_path, payload)
+        result = bridge.run("Hello", output_format="json")
+        assert result.usage is None
+        assert result.output == payload + "\n"
+
+    def test_duration_s_set_on_success(self, tmp_path: Path):
+        """duration_s is set on every non-dry, non-error return regardless of format."""
+        bridge = _make_payload_bridge(tmp_path, "hi")
+        result = bridge.run("Hello")
+        assert result.duration_s is not None
+        assert result.duration_s >= 0
+
+    def test_dry_run_usage_and_duration_none(self):
+        """dry_run measures no real work: usage and duration_s stay None."""
+        bridge = ClaudeBridge(dry_run=True)
+        result = bridge.run("Hello", output_format="json")
+        assert result.usage is None
+        assert result.duration_s is None
+
+
+class TestCumulativeTotals:
+    """Task 2 (TAX-01): ClaudeBridge cumulative usage + wall-clock totals."""
+
+    def test_initial_totals_zero(self, tmp_path: Path):
+        bridge = _make_payload_bridge(tmp_path, "x")
+        assert bridge.total_tokens_in == 0
+        assert bridge.total_tokens_out == 0
+        assert bridge.total_cache_read == 0
+        assert bridge.total_wall_clock_s == 0.0
+
+    def test_totals_sum_across_json_calls(self, tmp_path: Path):
+        payload = (
+            '{"result": "a", '
+            '"usage": {"input_tokens": 10, "output_tokens": 100, '
+            '"cache_read_input_tokens": 24308}}'
+        )
+        bridge = _make_payload_bridge(tmp_path, payload)
+        r1 = bridge.run("one", output_format="json")
+        r2 = bridge.run("two", output_format="json")
+        assert bridge.total_tokens_in == 20
+        assert bridge.total_tokens_out == 200
+        assert bridge.total_cache_read == 48616
+        assert bridge.total_wall_clock_s == (r1.duration_s or 0.0) + (r2.duration_s or 0.0)
+
+    def test_text_call_adds_wall_clock_not_tokens(self, tmp_path: Path):
+        bridge = _make_payload_bridge(tmp_path, "plain")
+        result = bridge.run("one")  # text mode → usage None
+        assert bridge.total_tokens_in == 0
+        assert bridge.total_tokens_out == 0
+        assert bridge.total_cache_read == 0
+        assert bridge.total_wall_clock_s == (result.duration_s or 0.0)
