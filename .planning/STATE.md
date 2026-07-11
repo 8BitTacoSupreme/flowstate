@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.6.2
 milestone_name: Make the Harness Real
-status: executing
-stopped_at: "Completed 18-03-PLAN.md (HAR-05): CI-safe E2E smoke covers all 5 bench arms + fail-loud producer gate"
-last_updated: "2026-07-11T02:36:51.095Z"
+status: verifying
+stopped_at: "Completed 18-02-PLAN.md (HAR-04): bench/close_loop.py — one-command prior-runs→distill→inject→judge→CI driver"
+last_updated: "2026-07-11T02:46:42.520Z"
 last_activity: 2026-07-11
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 7
-  completed_plans: 6
-  percent: 67
+  completed_plans: 7
+  percent: 100
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 Phase: 18 (Close the Loop with a CI, E2E) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-11
 
 ## Performance Metrics
@@ -73,6 +73,7 @@ Last activity: 2026-07-11
 | Phase 17 P03 | 12min | 2 tasks | 3 files |
 | Phase 18 P01 | 6min | 2 tasks | 4 files |
 | Phase 18 P03 | 25min | 1 tasks | 1 files |
+| Phase 18 P02 | 7min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -102,6 +103,7 @@ Recent decisions affecting current work:
 - [Phase 18-01]: Percentile CI indices use round(p*(resamples-1)) with a defensive ci_low<=mean<=ci_high clamp against 2-decimal rounding drift
 - [Phase 18-01]: bench/report.py intentionally left untouched per plan scope note; no caller in this phase routes the CI through report.write_json
 - [Phase 18-03]: E2E smoke writes producer artifacts (repomix-pack.xml, wiki/*.md) directly to disk instead of shelling out to repomix/npx, keeping the harness-of-harnesses gate CI-safe with zero external tool dependency
+- [Phase 18-02]: close_loop uses module-reference imports (import bench.X as X) instead of from-imports so tests can monkeypatch bench.replicate._run_trial / bench.prepare_fixture.main effectively
 
 ### Pending Todos
 
@@ -134,8 +136,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-11T02:36:51.092Z
-Stopped at: Completed 18-03-PLAN.md (HAR-05): CI-safe E2E smoke covers all 5 bench arms + fail-loud producer gate
+Last session: 2026-07-11T02:46:42.516Z
+Stopped at: Completed 18-02-PLAN.md (HAR-04): bench/close_loop.py — one-command prior-runs→distill→inject→judge→CI driver
 
 **Why v0.6.1 exists (verified this session, file:line):**
 
