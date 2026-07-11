@@ -14,11 +14,13 @@ FlowState locates/invokes claude. Never raises: any failure yields a ``None`` sc
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import re
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -155,3 +157,78 @@ def summarize(results: list[JudgeResult]) -> dict:
         "last": last,
         "delta": delta,
     }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Independence guard (IND-01) — a config/validation-time HARD failure.
+#
+# This is distinct from the runtime never-raise -> None contract of judge_run (D-03):
+# an empty judge set or a judge that equals the producer is *operator error*, caught
+# BEFORE any judging starts, whereas a failed `claude` call is a soft None score. The
+# helper is pure (no subprocess, no I/O) so both this CLI and the Wave-2 compound_eval
+# caller can reuse it (D-06).
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def _validate_judges(judge_models: list[str], producer_model: str) -> None:
+    """Fail loud on a compromised judge configuration. RAISES ``ValueError``.
+
+    Empty judge set is a hard fail (D-06). ANY judge model equal to the producer model
+    is a hard fail (D-04/D-07) — not merely the aggregate, EVERY judge must differ. Pure
+    validation: no subprocess, no I/O, so callers reuse it at config/validate time.
+    """
+    if not judge_models:
+        raise ValueError(
+            "no judge model configured — refusing to judge (independence guard, IND-01)"
+        )
+    dupes = sorted({m for m in judge_models if m == producer_model})
+    if dupes:
+        raise ValueError(
+            f"judge model(s) {dupes} equal the producer model {producer_model!r} — a judge "
+            "must not grade its own producer (independence guard, IND-01)"
+        )
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="bench.judge",
+        description="LLM-as-judge independence guard + validate surface (IND-01).",
+    )
+    parser.add_argument(
+        "--producer-model",
+        required=True,
+        help="Model that PRODUCED the artifacts under judgement. No judge may equal it.",
+    )
+    parser.add_argument(
+        "--judge-model",
+        default=None,
+        help=(
+            "Judge model(s). Comma-separate for the multi-judge case (e.g. 'sonnet,opus'). "
+            "Every judge must differ from --producer-model. Absent => hard fail (IND-01)."
+        ),
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Validate judge independence (IND-01). Returns 0 when clean, nonzero on violation.
+
+    The guard fires at validate time, BEFORE any judging — an absent judge model or a
+    judge equal to the producer prints an operator-facing error and returns 1 (D-03/D-04).
+    """
+    args = _build_parser().parse_args(argv)
+    judge_models = [m.strip() for m in (args.judge_model or "").split(",") if m.strip()]
+    try:
+        _validate_judges(judge_models, args.producer_model)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(
+        f"ok: {len(judge_models)} judge model(s) {judge_models} distinct from "
+        f"producer {args.producer_model!r}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

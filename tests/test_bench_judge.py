@@ -188,6 +188,66 @@ def test_judge_run_early_return_no_subprocess_calls(monkeypatch):
     assert call_count.call_count == 0
 
 
+# ---------------------------------------------------------------------------
+# Independence guard + CLI (IND-01)
+# ---------------------------------------------------------------------------
+
+
+def test_validate_judges_empty_raises():
+    import pytest
+
+    with pytest.raises(ValueError):
+        judge_mod._validate_judges([], "opus")
+
+
+def test_validate_judges_same_model_raises():
+    import pytest
+
+    with pytest.raises(ValueError):
+        judge_mod._validate_judges(["opus"], "opus")
+
+
+def test_validate_judges_any_judge_equals_producer_raises():
+    """ANY judge == producer is a hard fail, not just the aggregate (D-07)."""
+    import pytest
+
+    with pytest.raises(ValueError):
+        judge_mod._validate_judges(["sonnet", "opus"], "opus")
+
+
+def test_validate_judges_all_distinct_ok():
+    assert judge_mod._validate_judges(["sonnet", "haiku"], "opus") is None
+
+
+def test_main_absent_judge_model_nonzero():
+    assert judge_mod.main(["--producer-model", "opus"]) != 0
+
+
+def test_main_same_model_nonzero():
+    assert judge_mod.main(["--judge-model", "opus", "--producer-model", "opus"]) != 0
+
+
+def test_main_distinct_model_zero():
+    assert judge_mod.main(["--judge-model", "sonnet", "--producer-model", "opus"]) == 0
+
+
+def test_main_multi_judge_one_equals_producer_nonzero():
+    assert judge_mod.main(["--judge-model", "sonnet,opus", "--producer-model", "opus"]) != 0
+
+
+def test_guard_does_not_touch_judge_run_neverraise(monkeypatch):
+    """judge_run still returns its parsed score unchanged — the guard did not
+    add any raise into the per-run never-raise path (D-03)."""
+    monkeypatch.setattr(judge_mod, "_locate_claude", lambda: "/bin/claude")
+
+    class _P:
+        stdout = '{"score": 8, "rationale": "specific"}'
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _P())
+    r = judge_run(2, "artifacts text", {"retrieval_questions": ["q"]})
+    assert r.score == 8.0
+
+
 def test_summarize_trends():
     mk = lambda i, s: JudgeResult(i, s, "")  # noqa: E731
     assert summarize([mk(0, 4), mk(1, 8)])["trend"] == "improving"
