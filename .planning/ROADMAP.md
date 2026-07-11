@@ -122,7 +122,7 @@ Scoped and roadmapped this session, then deferred so the adapter stubs get fixed
 | 13. Adapters Earn Their Names | v0.6.1 | 3/3 | Complete    | 2026-07-10 |
 | 14. Vendor & Surface | v0.6.1 | 4/4 | Complete    | 2026-07-10 |
 | 15. Bundle GSD | v0.6.1 | 5/5 | Complete    | 2026-07-11 |
-| 16. Mode-Honest Reporting | v0.6.2 | 1/1 | Complete   | 2026-07-11 |
+| 16. Mode-Honest Reporting | v0.6.2 | 1/1 | Complete    | 2026-07-11 |
 | 17. No Silent No-Op Arms + Producers | v0.6.2 | 0/? | Not started | - |
 | 18. Close the Loop with a CI | v0.6.2 | 0/? | Not started | - |
 | _v0.7.0 Retrieval Benchmark Rigor_ | v0.7.0 | deferred | renumbers 16-21 on start | - |
