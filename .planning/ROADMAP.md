@@ -128,7 +128,11 @@ Full detail: [`milestones/v0.6.2-ROADMAP.md`](./milestones/v0.6.2-ROADMAP.md).
   1. Verdict rules — effect-size threshold, CI width, minimum n, what counts as a win — are written down and committed *before* the paired-design run starts.
   2. A paired-design run via `bench/close_loop.py` executes on a real repo (not `bench/fixtures/sample_project`) across arms `none`/`pack`/`memory`/`wiki`/`full`, and the report shows the compounding curve across run 1→N (run 1 empty memory → no wiki; wiki value, if any, appears run 2+).
   3. The final report states quality **and** tax per arm, applies the pre-registered rules, and a null `wiki − none` (or any arm) is accepted and documented as a valid outcome that licenses stripping the layer — not retried until significant.
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 22-01-PLAN.md — Pre-register the verdict protocol (VERD-01): commit 22-PREREGISTRATION.md before any real run
+- [ ] 22-02-PLAN.md — Build bench/verdict.py: 4-contrast driver + Holm-Bonferroni + quality/tax/compounding report, proven in --mode cheap (VERD-02/03)
+- [ ] 22-03-PLAN.md — Gated paid --mode real run on floxybot2 + write 22-VERDICT.md applying the pre-registered rules (VERD-02/03)
 **Note**: expensive — live LLM runs across 5 arms × multiple trials × multiple runs (compounding curve); smoke at reduced trials/runs before scaling per the SEED's cost-reality note.
 
 <details>
