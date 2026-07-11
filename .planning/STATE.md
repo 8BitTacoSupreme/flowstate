@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.8.0
 milestone_name: Harness Tax & Value
-status: executing
+status: verifying
 stopped_at: Phase 21 context gathered
-last_updated: "2026-07-11T15:22:37.020Z"
+last_updated: "2026-07-11T15:31:59.000Z"
 last_activity: 2026-07-11
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 8
-  completed_plans: 6
-  percent: 50
+  completed_plans: 8
+  percent: 75
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 Phase: 21 (activate-the-wiki) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-11
 
 ## Performance Metrics
@@ -82,6 +82,7 @@ Last activity: 2026-07-11
 | Phase 20 P01 | 360 | 2 tasks | 2 files |
 | Phase 20 P02 | ~10 min | 2 tasks | 3 files |
 | Phase 21 P01 | 660 | 3 tasks | 8 files |
+| Phase 21 P03 | ~12 min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -123,6 +124,7 @@ Recent decisions affecting current work:
 - [Phase 20]: 20-02: independence guard enforced at compound_eval chokepoint before _real_loop; absent judge-model = empty set = hard stop (D-04); replicate threads a distinct judge/producer pair (D-06); IND-03 test locks compounding_score as judge-independent
 - [Phase ?]: [Phase 21-01 / WIKI-03]: promoted bench/distiller.py to flowstate/distiller.py (imports nothing from bench/; _locate_claude delegates to bridge._find_claude mapping empty-string to None); bench is now a re-export shim; added kind=wiki manifest + is_wiki_stale (memory.db mtime gate mirroring is_pack_stale); flowstate distill is the explicit producer; run_pipeline untouched (D-03 fence)
 - [Phase ?]: 21-02: opt-in wiki_layer flag wires the Phase-11 semantic wiki layer into production; default off byte-identical; [semantic]-absent is a one-time warning
+- [Phase 21]: 21-03 dogfood test proves the wiki layer fires end-to-end (WIKI-06); real-memory dogfood skips on the empty checkout memory.db while a synthetic guard fires green
 
 ### Pending Todos
 
@@ -156,7 +158,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-11T15:13:51.241Z
+Last session: 2026-07-11T15:31:14.131Z
 Stopped at: Phase 21 context gathered
 
 **Why v0.8.0 exists (SEED-001, verified prior session):**
