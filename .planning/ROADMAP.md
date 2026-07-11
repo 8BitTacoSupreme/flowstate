@@ -89,7 +89,10 @@ Full detail: [`milestones/v0.6.2-ROADMAP.md`](./milestones/v0.6.2-ROADMAP.md).
   2. `RunSnapshot` records real `tokens_in` / `tokens_out` / `cache_read` / `wall_clock_s` per run, replacing the `len(prefix)//4` `prefix_tokens` estimate as the source of truth.
   3. `bench/report.py` shows per-arm tokens and seconds alongside the existing quality metrics, visibly excluded from `compounding_score` (Track-2, not Track-1).
   4. The report's cost-per-success line names `flowstate verify`'s deterministic acceptance gates — not "commits" — as its denominator.
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 19-01-PLAN.md — TAX-01: BridgeResult.usage + duration_s via the json path (text-mode byte-identical) + cumulative bridge totals
+- [ ] 19-02-PLAN.md — TAX-02: real tokens/wall_clock_s on RunSnapshot threaded bridge→journal→capture; compute_scorecard unchanged
+- [ ] 19-03-PLAN.md — TAX-03/04: per-arm tokens+seconds in report.py (Track-2, excluded) + cost per verified acceptance gate
 
 ### Phase 20: Evaluator Independence
 **Goal**: The judge can no longer silently grade its own producer's output, and a single judge call becomes a defensible multi-judge verdict — without disturbing `metrics.py`'s authority.
