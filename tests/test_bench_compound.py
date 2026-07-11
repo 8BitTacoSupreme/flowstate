@@ -1323,3 +1323,126 @@ def test_real_loop_calls_scaffold_with_synthetic_false(tmp_path: Path, monkeypat
     assert scaffold_calls[0]["synthetic"] is False, (
         f"_real_loop must call scaffold(target, synthetic=False); got synthetic={scaffold_calls[0]['synthetic']!r}"
     )
+
+
+# ── Plan 19-03: the tax — per-arm tokens/seconds, Track-2, EXCLUDED from score ─
+
+
+def _consumption_snap(
+    i: int,
+    *,
+    tokens_in: int,
+    tokens_out: int,
+    cache_read: int,
+    wall_clock_s: float | None,
+    verify_pass: int = 0,
+    artifacts_changed: int = 0,
+    new_gotchas: int = 0,
+    verify_fail: int = 0,
+    prefix_tokens: int = 0,
+    mem_hits: int = 0,
+    layers_present: tuple[str, ...] = (),
+) -> RunSnapshot:
+    return RunSnapshot(
+        run_index=i,
+        run_id=f"run{i}",
+        artifacts_changed=artifacts_changed,
+        new_gotchas=new_gotchas,
+        reencountered_gotchas=0,
+        verify_pass=verify_pass,
+        verify_fail=verify_fail,
+        verify_skip=0,
+        prefix_tokens=prefix_tokens,
+        mem_hits=mem_hits,
+        layers_present=layers_present,
+        tokens_in=tokens_in,
+        tokens_out=tokens_out,
+        cache_read=cache_read,
+        wall_clock_s=wall_clock_s,
+    )
+
+
+def _tax_scorecard() -> Scorecard:
+    """A 2-run scorecard carrying consumption + passed verify gates (2 + 3 = 5)."""
+    snaps = [
+        _consumption_snap(
+            0, tokens_in=1000, tokens_out=400, cache_read=50, wall_clock_s=2.0, verify_pass=2
+        ),
+        _consumption_snap(
+            1, tokens_in=1500, tokens_out=600, cache_read=70, wall_clock_s=3.5, verify_pass=3
+        ),
+    ]
+    return compute_scorecard(snaps)
+
+
+def test_write_json_tax_totals_and_excluded_note(tmp_path: Path):
+    """The JSON payload gains a top-level 'tax' key summing consumption per arm."""
+    import json
+
+    from bench.report import write_json
+
+    card = _tax_scorecard()
+    out = tmp_path / "r.json"
+    write_json(card, out)
+    tax = json.loads(out.read_text())["tax"]
+    assert tax["tokens_in"] == 2500
+    assert tax["tokens_out"] == 1000
+    assert tax["cache_read"] == 120
+    assert tax["wall_clock_s"] == 5.5
+    assert "EXCLUDED from compounding_score" in tax["note"]
+
+
+def test_tax_wall_clock_none_treated_as_zero(tmp_path: Path):
+    """A snapshot with wall_clock_s=None contributes 0.0 to the tax seconds total."""
+    import json
+
+    from bench.report import write_json
+
+    snaps = [
+        _consumption_snap(0, tokens_in=100, tokens_out=50, cache_read=0, wall_clock_s=None),
+        _consumption_snap(1, tokens_in=100, tokens_out=50, cache_read=0, wall_clock_s=1.25),
+    ]
+    card = compute_scorecard(snaps)
+    out = tmp_path / "r.json"
+    write_json(card, out)
+    tax = json.loads(out.read_text())["tax"]
+    assert tax["wall_clock_s"] == 1.25
+
+
+def test_tax_does_not_alter_compounding_score(tmp_path: Path):
+    """Rendering the tax must not touch the deterministic compounding_score."""
+    import json
+
+    from bench.report import write_json
+
+    card = _tax_scorecard()
+    out = tmp_path / "r.json"
+    write_json(card, out)
+    payload = json.loads(out.read_text())
+    assert payload["compounding_score"] == card.compounding_score
+
+
+def test_report_tax_is_presentation_only_no_scorer_feed():
+    """report.py must never recompute the scorer — tax stays presentation-only."""
+    src = (Path(__file__).resolve().parent.parent / "bench" / "report.py").read_text()
+    assert "compute_scorecard" not in src
+
+
+def test_render_report_shows_tax_totals_and_excluded_note():
+    """The Rich report renders per-arm tokens + seconds under the excluded note."""
+    from bench.report import render_report
+
+    card = _tax_scorecard()
+    out = _captured_console_output(lambda c: render_report(card, console=c))
+    assert "EXCLUDED from compounding_score" in out
+    assert "2500" in out  # summed tokens_in
+
+
+def test_markdown_record_includes_tax_totals():
+    """The markdown record carries the per-arm tax totals."""
+    from bench.report import render_report
+
+    card = _tax_scorecard()
+    out = _captured_console_output(lambda c: render_report(card, console=c, markdown=True))
+    assert "Track-2" in out
+    assert "EXCLUDED from compounding_score" in out
