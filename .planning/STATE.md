@@ -4,7 +4,7 @@ milestone: v0.8.0
 milestone_name: Harness Tax & Value
 status: executing
 stopped_at: Phase 21 context gathered
-last_updated: "2026-07-11T15:14:03.179Z"
+last_updated: "2026-07-11T15:22:37.020Z"
 last_activity: 2026-07-11
 progress:
   total_phases: 4
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 ## Current Position
 
 Phase: 21 (activate-the-wiki) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-07-11
 
@@ -122,6 +122,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 20-01]: judge independence guard is a pure config-time helper (_validate_judges) reused by CLI + Wave-2; judge_run never-raise untouched; aggregate_judges reuses grounding._wilson via function-scope import; _PASS_THRESHOLD=7.0, even-N tie=fail (D-08), None excluded from denominator
 - [Phase 20]: 20-02: independence guard enforced at compound_eval chokepoint before _real_loop; absent judge-model = empty set = hard stop (D-04); replicate threads a distinct judge/producer pair (D-06); IND-03 test locks compounding_score as judge-independent
 - [Phase ?]: [Phase 21-01 / WIKI-03]: promoted bench/distiller.py to flowstate/distiller.py (imports nothing from bench/; _locate_claude delegates to bridge._find_claude mapping empty-string to None); bench is now a re-export shim; added kind=wiki manifest + is_wiki_stale (memory.db mtime gate mirroring is_pack_stale); flowstate distill is the explicit producer; run_pipeline untouched (D-03 fence)
+- [Phase ?]: 21-02: opt-in wiki_layer flag wires the Phase-11 semantic wiki layer into production; default off byte-identical; [semantic]-absent is a one-time warning
 
 ### Pending Todos
 
