@@ -354,6 +354,79 @@ def test_capture_run_snapshot_never_raises_on_empty_dir(tmp_path: Path):
     assert snap.layers_present == ()
 
 
+def test_capture_reads_consumption_from_run_entry(tmp_path: Path):
+    from bench.capture import capture_run_snapshot
+    from flowstate.memory import MemoryEntry, MemoryKind, MemoryStore
+
+    with MemoryStore(root=tmp_path) as store:
+        store.add(
+            MemoryEntry.create(
+                MemoryKind.RUN,
+                content="run con journal",
+                summary="run con",
+                metadata={
+                    "artifacts_changed": ["f"],
+                    "tokens_in": 1500,
+                    "tokens_out": 620,
+                    "cache_read": 77,
+                    "wall_clock_s": 3.75,
+                },
+                run_id="con",
+            )
+        )
+    snap = capture_run_snapshot(tmp_path, "q")
+    assert snap.tokens_in == 1500
+    assert snap.tokens_out == 620
+    assert snap.cache_read == 77
+    assert snap.wall_clock_s == 3.75
+
+
+def test_capture_consumption_defaults_when_keys_absent(tmp_path: Path):
+    """A RUN entry without the consumption keys yields 0/0/0/None, never raising."""
+    from bench.capture import capture_run_snapshot
+    from flowstate.memory import MemoryEntry, MemoryKind, MemoryStore
+
+    with MemoryStore(root=tmp_path) as store:
+        store.add(
+            MemoryEntry.create(
+                MemoryKind.RUN,
+                content="run bare journal",
+                summary="run bare",
+                metadata={"artifacts_changed": ["f", "g"]},
+                run_id="bare",
+            )
+        )
+    snap = capture_run_snapshot(tmp_path, "q")
+    assert snap.artifacts_changed == 2  # existing behavior intact
+    assert snap.tokens_in == 0
+    assert snap.tokens_out == 0
+    assert snap.cache_read == 0
+    assert snap.wall_clock_s is None
+
+
+def test_capture_prefix_tokens_unchanged_role(tmp_path: Path):
+    """prefix_tokens remains derived from prefix length, not consumption metadata."""
+    from bench.capture import capture_run_snapshot
+    from flowstate.memory import MemoryEntry, MemoryKind, MemoryStore
+
+    with MemoryStore(root=tmp_path) as store:
+        store.add(
+            MemoryEntry.create(
+                MemoryKind.RUN,
+                content="run pt journal",
+                summary="run pt",
+                # Large consumption tokens must NOT leak into prefix_tokens.
+                metadata={"tokens_in": 999999, "wall_clock_s": 12.0},
+                run_id="pt",
+            )
+        )
+    snap = capture_run_snapshot(tmp_path, "q")
+    # prefix_tokens is len(prefix)//4 over an empty/near-empty project — a small number,
+    # decoupled from the injected token count.
+    assert snap.prefix_tokens < 1000
+    assert snap.tokens_in == 999999
+
+
 def test_capture_run_index_derives_from_prior(tmp_path: Path):
     from bench.capture import capture_run_snapshot
 
