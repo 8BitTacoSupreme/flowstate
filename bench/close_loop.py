@@ -30,11 +30,11 @@ import random
 import sys
 from pathlib import Path
 
+import bench.prepare_fixture as prepare_fixture
+import bench.replicate as replicate
 from bench.bootstrap import _BOOTSTRAP_SEED, paired_bootstrap_ci
 from bench.compound_eval import _worktree
-from bench.prepare_fixture import main as prepare_fixture_main
 from bench.project import scaffold
-from bench.replicate import _agg, _run_trial
 
 # Arms with a real producer that prepare_fixture must provision. Baseline arms
 # (typically "none") never need provisioning.
@@ -72,7 +72,7 @@ def _distill(target: Path, arm: str) -> int:
     scaffold(target)
     if arm not in _PRODUCER_ARMS:
         return 0
-    return prepare_fixture_main(["--root", str(target), "--arms", arm])
+    return prepare_fixture.main(["--root", str(target), "--arms", arm])
 
 
 def _cheap_trajectories(
@@ -99,10 +99,10 @@ def _real_trajectories(
     arm_trials: list[list[float]] = []
     baseline_trials: list[list[float]] = []
     for t in range(trials):
-        scores = _run_trial(arm, runs, target, f"{arm}{t}")
+        scores = replicate._run_trial(arm, runs, target, f"{arm}{t}")
         if scores is not None:
             arm_trials.append(scores)
-        base_scores = _run_trial(baseline, runs, target, f"{baseline}{t}")
+        base_scores = replicate._run_trial(baseline, runs, target, f"{baseline}{t}")
         if base_scores is not None:
             baseline_trials.append(base_scores)
     return arm_trials, baseline_trials
@@ -112,8 +112,8 @@ def _paired_deltas(
     arm_trials: list[list[float]], baseline_trials: list[list[float]]
 ) -> list[float]:
     """Per-trial (arm improvement - baseline improvement), paired by trial index."""
-    arm_improvements = _agg(arm_trials).get("improvements", [])
-    baseline_improvements = _agg(baseline_trials).get("improvements", [])
+    arm_improvements = replicate._agg(arm_trials).get("improvements", [])
+    baseline_improvements = replicate._agg(baseline_trials).get("improvements", [])
     k = min(len(arm_improvements), len(baseline_improvements))
     return [arm_improvements[i] - baseline_improvements[i] for i in range(k)]
 
