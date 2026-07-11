@@ -11,11 +11,10 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import Mock
 
-import bench.prepare_fixture as prepare_fixture_mod
-from bench.prepare_fixture import main
-
 import bench.distiller as distiller_mod
+import bench.prepare_fixture as prepare_fixture_mod
 from bench.distiller import _WIKI_CORPUS_REL
+from bench.prepare_fixture import main
 from flowstate.memory import MemoryEntry, MemoryKind, MemoryStore
 from flowstate.pack import PackResult
 
