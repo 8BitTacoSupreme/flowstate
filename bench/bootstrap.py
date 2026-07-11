@@ -53,6 +53,12 @@ def paired_bootstrap_ci(
     try:
         mean = round(statistics.mean(deltas), 2)
 
+        # Guard against resamples <= 0: an empty resample list makes
+        # resample_means[lo_idx] raise IndexError, which the broad except below
+        # would turn into a null CI even for perfectly valid deltas. Clamp so
+        # the CI is always computed on at least one resample.
+        resamples = max(1, resamples)
+
         rng = random.Random(seed)
         resample_means = []
         for _ in range(resamples):

@@ -71,6 +71,17 @@ def test_never_raises_on_non_numeric_input():
     assert result["ci_high"] is None
 
 
+def test_resamples_zero_yields_valid_ci_for_nonempty_deltas():
+    """IN-02: resamples=0 must not produce a null CI — the guard clamps to >=1 so
+    valid deltas still get real (non-None) bounds instead of an IndexError-null."""
+    result = paired_bootstrap_ci([1.0, 2.0, 3.0], resamples=0)
+    assert result["n"] == 3
+    assert result["mean"] == 2.0
+    assert result["ci_low"] is not None
+    assert result["ci_high"] is not None
+    assert result["ci_low"] <= result["mean"] <= result["ci_high"]
+
+
 def test_result_keys_present():
     result = paired_bootstrap_ci([1.0, 2.0, 3.0])
     for key in ("n", "mean", "ci_low", "ci_high", "resamples", "seed", "confidence"):
