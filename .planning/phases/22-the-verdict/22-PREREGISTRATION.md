@@ -125,7 +125,33 @@ Chosen posture is "straight to full 5×3" (no intermediate real smoke) — but t
 fail-loud discipline, a `--mode real` run that produced no usable paired trials exits non-zero;
 it must never report a null CI as success.
 
+## 8. Setup addendum — one-time repo grounding (2026-07-11)
+
+**Setup-only note; does NOT amend the frozen decision rule, arms, or n.**
+
+Before the sweep, the subject repo is grounded **once** on `--root` via an auto-derived
+interview — a single bounded `claude --print` call (`bench/ground.py::ground_from_repo`,
+`output_format="json"`, `allowed_tools=[]`, `max_turns=2`) that reads the repo's README + a
+bounded structural summary and returns the interview fields (`core_problem`, `ten_x_vision`,
+`architecture_pattern`, `milestones`, `research_focus`) — plus a repomix pack. Both are frozen
+into `flowstate.json` / `.planning/codebase/repomix-pack.xml` and every `_worktree` copy
+inherits them unchanged via `scaffold(synthetic=False)` (which mutates only `memory.db`).
+
+**Why:** without it, `load_state` on a raw repo returns an empty interview, so every arm plans
+a generic/empty project and the research arm discards every section — biasing all arms equally
+toward null. Grounding gives research real substance to plan, **constant across all arms and
+trials**; only the context layers (`none`/`pack`/`memory`/`wiki`/`full`) differ, which is
+exactly what the arms test.
+
+**Integrity:** the derivation is a ONE-TIME `--root` setup step, run **once before** the sweep
+— **never per-trial** (a per-trial LLM call would vary across arms and confound the paired
+design). It runs in `--mode real` only; `--mode cheap` never invokes it (stays free +
+deterministic). This addendum documents setup **only**: it does **NOT** change the frozen D-02
+decision rule (95% CI excludes 0 **AND** Cohen's d ≥ 0.8 **AND** survives Holm-Bonferroni), the
+5 arms, the 4 co-primary contrasts, or the pre-registered n (trials = 5, runs = 3, seed = 20260711).
+
 ---
 
 *Pre-registration for Phase 22 (v0.8.0 "Harness Tax & Value"). Frozen 2026-07-11. Committed
-before any `--mode real` trial (D-04).*
+before any `--mode real` trial (D-04). §8 setup addendum appended 2026-07-11 — setup-only, the
+frozen win rule / arms / n are unchanged.*

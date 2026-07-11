@@ -148,3 +148,35 @@ def test_main_returns_nonzero_on_failure(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(ground, "_find_repomix", lambda: "")
 
     assert ground.main(["--root", str(tmp_path)]) == 1
+
+
+def test_scaffold_synthetic_false_preserves_grounding(tmp_path: Path, monkeypatch):
+    """scaffold(synthetic=False) preserves the grounded interview + pack, wipes memory.db.
+
+    This is the preservation contract the verdict setup relies on: grounding is frozen
+    on --root once, and every per-trial worktree copy inherits it via scaffold — the
+    ONLY mutation is deleting memory.db so each trial starts from a clean compounding
+    baseline.
+    """
+    from bench.project import scaffold
+
+    _write_readme(tmp_path)
+    _install_stub_bridge(monkeypatch, _derivation())
+    _install_pack_ok(monkeypatch, tmp_path)
+    ground.ground_from_repo(tmp_path)
+
+    # Simulate the frozen pack + a stale memory.db that scaffold must wipe.
+    pack = tmp_path / ".planning" / "codebase" / "repomix-pack.xml"
+    pack.parent.mkdir(parents=True, exist_ok=True)
+    pack.write_text("<pack/>")
+    (tmp_path / "memory.db").write_text("stale run history")
+
+    scaffold(tmp_path, synthetic=False)
+
+    # Interview survives.
+    state = load_state(tmp_path)
+    assert state.interview.research_focus == "vector retrieval, channel adapters, prompt caching"
+    # Pack survives.
+    assert pack.is_file()
+    # memory.db is wiped so the compounding baseline starts fresh.
+    assert not (tmp_path / "memory.db").exists()

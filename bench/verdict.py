@@ -40,6 +40,7 @@ from bench import report
 from bench.bootstrap import paired_bootstrap_ci, paired_bootstrap_p
 from bench.close_loop import _EXIT_NO_PAIRED_DATA, _PRODUCER_ARMS
 from bench.compound_eval import _worktree
+from bench.ground import ground_from_repo
 from bench.judge import JudgeResult, aggregate_judges
 from bench.metrics import RunSnapshot
 from bench.project import scaffold
@@ -587,6 +588,14 @@ def main(argv: list[str] | None = None) -> int:
     # embedded in the emitted 22-VERDICT.md (evidence must survive in the artifact).
     # A cheap filesystem check — safe to run in both modes, no spend.
     pristine = assert_pristine_worktree(root)
+
+    # One-time repo grounding (real mode only): derive an interview from the subject
+    # repo + run the repomix pack ONCE on --root, BEFORE the sweep, so the grounded
+    # flowstate.json + pack are frozen and every _worktree copy inherits them via
+    # scaffold(synthetic=False). Never per-trial — a per-trial LLM call would vary
+    # across arms and confound the paired design. Cheap mode stays free/deterministic.
+    if args.mode == "real":
+        ground_from_repo(root)
 
     trajectories, tax, synthetic = _collect(root, args.mode, args.trials, args.runs, args.seed)
     contrasts = _compute_contrasts(trajectories, args.seed)
