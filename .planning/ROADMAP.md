@@ -13,7 +13,7 @@
 
 ## Phases
 
-- [ ] **Phase 19: The Tax** - Real token/cost/latency accounting through `BridgeResult`, `RunSnapshot`, and `bench/report.py`
+- [x] **Phase 19: The Tax** - Real token/cost/latency accounting through `BridgeResult`, `RunSnapshot`, and `bench/report.py` — completed 2026-07-11
 - [ ] **Phase 20: Evaluator Independence** - Judge-model ≠ producer-model enforced in code, with multi-judge averaging
 - [ ] **Phase 21: Activate the Wiki** - Promote the memory→wiki distiller to production and fire the dormant semantic wiki layer
 - [ ] **Phase 22: The Verdict** - Pre-registered, paired-design run on a real repo measuring quality and tax per context-layer arm
