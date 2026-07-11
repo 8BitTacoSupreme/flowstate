@@ -4,13 +4,13 @@ milestone: v0.8.0
 milestone_name: Harness Tax & Value
 status: executing
 stopped_at: Phase 21 context gathered
-last_updated: "2026-07-11T15:05:26.185Z"
-last_activity: 2026-07-11 -- Phase 21 planning complete
+last_updated: "2026-07-11T15:14:03.179Z"
+last_activity: 2026-07-11
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 8
-  completed_plans: 5
+  completed_plans: 6
   percent: 50
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Phase 21 — activate the wiki
+**Current focus:** Phase 21 — activate-the-wiki
 
 ## Current Position
 
-Phase: 21
-Plan: Not started
+Phase: 21 (activate-the-wiki) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-07-11 -- Phase 21 planning complete
+Last activity: 2026-07-11
 
 ## Performance Metrics
 
@@ -81,6 +81,7 @@ Last activity: 2026-07-11 -- Phase 21 planning complete
 | Phase 19 P03 | 540 | 2 tasks | 2 files |
 | Phase 20 P01 | 360 | 2 tasks | 2 files |
 | Phase 20 P02 | ~10 min | 2 tasks | 3 files |
+| Phase 21 P01 | 660 | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -120,6 +121,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 19-03 / TAX-03/04]: tax rendering lives entirely in bench/report.py (presentation-only) — per-arm tokens/seconds as a Track-2 block EXCLUDED from compounding_score; cost-per-success = (tokens_in+tokens_out)/summed verify_pass (passed flowstate verify acceptance gates, NOT run/commit count), gates_passed==0 -> n/a
 - [Phase ?]: [Phase 20-01]: judge independence guard is a pure config-time helper (_validate_judges) reused by CLI + Wave-2; judge_run never-raise untouched; aggregate_judges reuses grounding._wilson via function-scope import; _PASS_THRESHOLD=7.0, even-N tie=fail (D-08), None excluded from denominator
 - [Phase 20]: 20-02: independence guard enforced at compound_eval chokepoint before _real_loop; absent judge-model = empty set = hard stop (D-04); replicate threads a distinct judge/producer pair (D-06); IND-03 test locks compounding_score as judge-independent
+- [Phase ?]: [Phase 21-01 / WIKI-03]: promoted bench/distiller.py to flowstate/distiller.py (imports nothing from bench/; _locate_claude delegates to bridge._find_claude mapping empty-string to None); bench is now a re-export shim; added kind=wiki manifest + is_wiki_stale (memory.db mtime gate mirroring is_pack_stale); flowstate distill is the explicit producer; run_pipeline untouched (D-03 fence)
 
 ### Pending Todos
 
@@ -153,7 +155,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-11T14:39:38.162Z
+Last session: 2026-07-11T15:13:51.241Z
 Stopped at: Phase 21 context gathered
 
 **Why v0.8.0 exists (SEED-001, verified prior session):**

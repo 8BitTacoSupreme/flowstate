@@ -82,3 +82,7 @@ None — plan executed exactly as written. The plan's context already corrected 
 ## Notes for Downstream (Plan 21-02+)
 
 - The consumer half (opt-in `wiki_layer` config flag + orchestrator `include_layers` union D-06, `[semantic]`-absent warning D-07, dogfood smoke-test D-08) is NOT in this plan. The D-03 fence means nothing auto-invokes the distiller yet — a user/pipeline runs `flowstate distill` after a run, and the next run's wiki layer reads the fresh corpus.
+
+## Self-Check: PASSED
+
+All created files and commits (78dd0b7, c55ccb8, 7084510, b8f0b2e) verified present.

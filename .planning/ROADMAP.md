@@ -116,7 +116,7 @@ Full detail: [`milestones/v0.6.2-ROADMAP.md`](./milestones/v0.6.2-ROADMAP.md).
   3. With the flag on but the `[semantic]` extra absent, the wiki layer degrades to a no-op-with-warning — never a hard crash — and `pip install flowstate[semantic]` is surfaced as the requirement for the KNN path.
   4. A dogfood smoke-test runs FlowState's own pipeline on a FlowState task with the wiki flag on, against this project's real `memory.db`, and asserts the corpus is globbed and top-k articles are injected with the run green (acceptance = "the layer fires," not "quality improved").
 **Plans**: 3 plans
-- [ ] 21-01-PLAN.md — WIKI-03: promote bench/distiller.py → flowstate/distiller.py (bench re-imports) + `flowstate distill` CLI + kind="wiki" manifest & is_wiki_stale (staleness mirrors flowstate pack); run_pipeline distill side untouched (D-03 fence)
+- [x] 21-01-PLAN.md — WIKI-03: promote bench/distiller.py → flowstate/distiller.py (bench re-imports) + `flowstate distill` CLI + kind="wiki" manifest & is_wiki_stale (staleness mirrors flowstate pack); run_pipeline distill side untouched (D-03 fence)
 - [ ] 21-02-PLAN.md — WIKI-04/WIKI-05: opt-in `wiki_layer` pref (default false, byte-identical off) + _STANDARD_LAYERS ∪ {wiki} union at orchestrator.py:254 + one-time `[semantic]`-absent degradation warning
 - [ ] 21-03-PLAN.md — WIKI-06: dogfood integration test — distill this project's real memory.db, build prefix with the wiki union, assert the layer fires (globbed + top-k injected), skip/static-degrade gracefully
 
@@ -162,7 +162,7 @@ Scoped and roadmapped this session, then deferred so the adapter stubs get fixed
 | 18. Close the Loop with a CI | v0.6.2 | 3/3 | Complete   | 2026-07-11 |
 | 19. The Tax | v0.8.0 | 3/3 | Complete    | 2026-07-11 |
 | 20. Evaluator Independence | v0.8.0 | 2/2 | Complete    | 2026-07-11 |
-| 21. Activate the Wiki | v0.8.0 | 0/0 | Not started | - |
+| 21. Activate the Wiki | v0.8.0 | 1/3 | In Progress|  |
 | 22. The Verdict | v0.8.0 | 0/0 | Not started | - |
 | _v0.7.0 Retrieval Benchmark Rigor_ | v0.7.0 | deferred | renumbers 16-21 on start | - |
 

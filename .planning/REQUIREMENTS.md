@@ -21,7 +21,7 @@
 
 ### Activate the Wiki (production wiring of the dormant WIKI-F1 layer)
 
-- [ ] **WIKI-03**: a production caller runs the memory→wiki distiller (promoted from `bench/distiller.py`) to write the `.planning/codebase/wiki/` article corpus, manifest-tracked and staleness-gated like `flowstate pack` (regenerates only when memory changed); runs end-of-run so the next run reads this run's distilled knowledge.
+- [x] **WIKI-03**: a production caller runs the memory→wiki distiller (promoted from `bench/distiller.py`) to write the `.planning/codebase/wiki/` article corpus, manifest-tracked and staleness-gated like `flowstate pack` (regenerates only when memory changed); runs end-of-run so the next run reads this run's distilled knowledge.
 - [ ] **WIKI-04**: an opt-in config flag makes the orchestrator pass `include_layers={"wiki"}` to `build_context_prefix()`, so the Phase-11 semantic wiki layer fires in production; the default (flag off) stays byte-identical, and the path degrades gracefully when the `[semantic]` extra is absent.
 - [ ] **WIKI-05**: the `flowstate[semantic]` extra is surfaced as the requirement for the KNN wiki path; with the flag on but the extra absent, the layer is a no-op-with-warning (never a hard crash).
 - [ ] **WIKI-06**: a dogfood smoke-test runs FlowState's own pipeline on a FlowState task with the wiki flag on, using this project's `memory.db`, and asserts the wiki layer demonstrably fires (corpus globbed, top-k injected) with the run green — phase acceptance is "the layer fires," NOT "quality improved."
@@ -56,7 +56,7 @@
 | IND-01 | Phase 20 | Complete |
 | IND-02 | Phase 20 | Complete |
 | IND-03 | Phase 20 | Complete |
-| WIKI-03 | Phase 21 | Pending |
+| WIKI-03 | Phase 21 | Complete |
 | WIKI-04 | Phase 21 | Pending |
 | WIKI-05 | Phase 21 | Pending |
 | WIKI-06 | Phase 21 | Pending |
