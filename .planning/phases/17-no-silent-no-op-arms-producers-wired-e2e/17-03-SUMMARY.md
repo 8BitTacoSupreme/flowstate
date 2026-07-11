@@ -105,3 +105,12 @@ None — no external service configuration required. Default path (`--arms pack,
 ---
 *Phase: 17-no-silent-no-op-arms-producers-wired-e2e*
 *Completed: 2026-07-11*
+
+## Self-Check: PASSED
+
+- FOUND: bench/prepare_fixture.py
+- FOUND: tests/test_bench_prepare_fixture.py
+- FOUND: .planning/phases/17-no-silent-no-op-arms-producers-wired-e2e/17-03-SUMMARY.md
+- FOUND commit: 160ab0a (test, red)
+- FOUND commit: dcadada (feat, green)
+- FOUND commit: 4d53864 (docs, summary)
