@@ -110,6 +110,32 @@ def test_compound_eval_real_distinct_pair_passes_guard(tmp_path: Path, monkeypat
     assert rc == ce._EXIT_NO_BRIDGE
 
 
+def test_compound_eval_real_judge_without_producer_model_aborts_config(tmp_path: Path, monkeypatch):
+    """REAL path (WR-01 regression): --judge --allow-llm --judge-model X with NO
+    --producer-model aborts with the judge-config exit code BEFORE the bridge check.
+
+    Without this guard the dupe test `judge == None` is never true for a real model
+    name, so the guard would silently PASS even when the judge IS the real producer.
+    The bridge is forced off to prove the config gate returns first — it never reaches
+    _real_loop / _EXIT_NO_BRIDGE."""
+    monkeypatch.setattr(ce, "_bridge_available", lambda: False)
+    rc = ce.main(
+        [
+            "--mode",
+            "real",
+            "--judge",
+            "--allow-llm",
+            "--layers",
+            "full",
+            "--judge-model",
+            "sonnet",
+            "--root",
+            str(tmp_path),
+        ]
+    )
+    assert rc == ce._EXIT_JUDGE_CONFIG
+
+
 def test_compound_eval_parser_exposes_producer_model():
     """compound_eval owns a --producer-model arg (default None)."""
     args = ce._build_parser().parse_args(["--root", "x"])

@@ -391,6 +391,23 @@ def main(argv: list[str] | None = None) -> int:
     # mechanical scorecard path.
     if do_judge:
         judge_models = [args.judge_model] if args.judge_model else []
+        # An unset --producer-model must be a hard stop when judging (WR-01): the dupe
+        # test in _validate_judges compares each judge against the producer, and
+        # `judge == None` is never true for a real model name, so a None producer would
+        # silently PASS the guard even when the judge IS the real producer. Reject it here
+        # with the same config exit code, mirroring judge.py's own CLI where
+        # --producer-model is required=True. The empty-judge-list hard stop in
+        # _validate_judges still fires (it does not depend on the producer being set).
+        if args.producer_model is None:
+            console.print(
+                Panel(
+                    "judge configuration rejected: --producer-model is required with --judge "
+                    "(cannot verify independence against an unknown producer, IND-01)",
+                    title="JUDGE CONFIG",
+                    border_style="bold red",
+                )
+            )
+            return _EXIT_JUDGE_CONFIG
         try:
             _validate_judges(judge_models, args.producer_model)
         except ValueError as exc:
