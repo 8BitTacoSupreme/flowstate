@@ -4,13 +4,13 @@ milestone: v0.8.0
 milestone_name: Harness Tax & Value
 status: executing
 stopped_at: ROADMAP.md written for v0.8.0 Harness Tax & Value (phases 19-22, 14/14 requirements mapped)
-last_updated: "2026-07-11T05:08:38.555Z"
-last_activity: 2026-07-11 -- Phase 19 planning complete
+last_updated: "2026-07-11T05:19:56.950Z"
+last_activity: 2026-07-11
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 3
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** v0.8.0 Harness Tax & Value roadmapped (SEED-001, phases 19-22) — run `/gsd-plan-phase 19`
+**Current focus:** Phase 19 — the-tax
 
 ## Current Position
 
-Phase: 19. The Tax (not started)
-Plan: —
+Phase: 19 (the-tax) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-07-11 -- Phase 19 planning complete
+Last activity: 2026-07-11
 
 ## Performance Metrics
 
@@ -74,6 +74,7 @@ Last activity: 2026-07-11 -- Phase 19 planning complete
 | Phase 18 P01 | 6min | 2 tasks | 4 files |
 | Phase 18 P03 | 25min | 1 tasks | 1 files |
 | Phase 18 P02 | 7min | 2 tasks | 2 files |
+| Phase 19 P01 | 18 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -108,6 +109,7 @@ Recent decisions affecting current work:
 - [Phase 18-01]: bench/report.py intentionally left untouched per plan scope note; no caller in this phase routes the CI through report.write_json
 - [Phase 18-03]: E2E smoke writes producer artifacts (repomix-pack.xml, wiki/*.md) directly to disk instead of shelling out to repomix/npx, keeping the harness-of-harnesses gate CI-safe with zero external tool dependency
 - [Phase 18-02]: close_loop uses module-reference imports (import bench.X as X) instead of from-imports so tests can monkeypatch bench.replicate._run_trial / bench.prepare_fixture.main effectively
+- [Phase ?]: Phase 19-01 TAX-01: BridgeResult.usage/duration_s appended after existing fields (positional-ctor safe); json path parses only when output_format=json AND top-level result key present, else raw-stdout fallback with usage=None (never raises); cumulative totals accumulate only on successful returns
 
 ### Pending Todos
 
@@ -141,7 +143,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-11T04:47:53.000Z
+Last session: 2026-07-11T05:19:48.277Z
 Stopped at: ROADMAP.md written for v0.8.0 Harness Tax & Value (phases 19-22, 14/14 requirements mapped)
 
 **Why v0.8.0 exists (SEED-001, verified prior session):**

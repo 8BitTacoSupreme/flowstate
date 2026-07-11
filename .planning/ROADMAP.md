@@ -90,7 +90,7 @@ Full detail: [`milestones/v0.6.2-ROADMAP.md`](./milestones/v0.6.2-ROADMAP.md).
   3. `bench/report.py` shows per-arm tokens and seconds alongside the existing quality metrics, visibly excluded from `compounding_score` (Track-2, not Track-1).
   4. The report's cost-per-success line names `flowstate verify`'s deterministic acceptance gates — not "commits" — as its denominator.
 **Plans**: 3 plans
-- [ ] 19-01-PLAN.md — TAX-01: BridgeResult.usage + duration_s via the json path (text-mode byte-identical) + cumulative bridge totals
+- [x] 19-01-PLAN.md — TAX-01: BridgeResult.usage + duration_s via the json path (text-mode byte-identical) + cumulative bridge totals
 - [ ] 19-02-PLAN.md — TAX-02: real tokens/wall_clock_s on RunSnapshot threaded bridge→journal→capture; compute_scorecard unchanged
 - [ ] 19-03-PLAN.md — TAX-03/04: per-arm tokens+seconds in report.py (Track-2, excluded) + cost per verified acceptance gate
 
@@ -155,7 +155,7 @@ Scoped and roadmapped this session, then deferred so the adapter stubs get fixed
 | 16. Mode-Honest Reporting | v0.6.2 | 1/1 | Complete    | 2026-07-11 |
 | 17. No Silent No-Op Arms + Producers | v0.6.2 | 3/3 | Complete   | 2026-07-11 |
 | 18. Close the Loop with a CI | v0.6.2 | 3/3 | Complete   | 2026-07-11 |
-| 19. The Tax | v0.8.0 | 0/0 | Not started | - |
+| 19. The Tax | v0.8.0 | 1/3 | In Progress|  |
 | 20. Evaluator Independence | v0.8.0 | 0/0 | Not started | - |
 | 21. Activate the Wiki | v0.8.0 | 0/0 | Not started | - |
 | 22. The Verdict | v0.8.0 | 0/0 | Not started | - |
