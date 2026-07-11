@@ -793,6 +793,55 @@ def pack(root: Path | None, compress: bool, force: bool):
         sys.exit(1)
 
 
+@main.command("distill")
+@click.option(
+    "--root",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Project root directory.",
+)
+@click.option("--force", is_flag=True, help="Regenerate even when the wiki corpus is up to date.")
+@click.option("--llm", is_flag=True, help="Densify each article via one bounded claude call.")
+@click.option("--model", default="opus", help="Model for --llm densification (default: opus).")
+def distill(root: Path | None, force: bool, llm: bool, model: str):
+    """Distill memory.db into the .planning/codebase/wiki/ article corpus.
+
+    Skips regeneration when the corpus is up to date (memory.db is no newer than
+    the corpus's install_manifest entry). Use --force to regenerate unconditionally.
+    The wiki layer reads this corpus on the next run when the opt-in flag is set.
+    """
+    import sys
+
+    from flowstate.context import _register
+    from flowstate.distiller import _WIKI_CORPUS_REL, is_wiki_stale
+    from flowstate.distiller import main as distiller_main
+    from flowstate.state import load_state, save_state
+
+    root = resolve_root(root, option_was_explicit=_root_was_explicit())
+    state = load_state(root)
+
+    has_wiki_entry = any(e.path == _WIKI_CORPUS_REL for e in state.install_manifest)
+    if not force and has_wiki_entry and not is_wiki_stale(root, state):
+        console.print("[dim]Wiki corpus up to date; skipping (use --force to regenerate).[/dim]")
+        return
+
+    # Pass --force through so the distiller's own populated-corpus skip does not
+    # block a staleness-driven regeneration decided here.
+    argv = ["--root", str(root), "--force"]
+    if llm:
+        argv.append("--llm")
+        argv.extend(["--model", model])
+    rc = distiller_main(argv)
+
+    if rc == 0:
+        _register(state, root, root / _WIKI_CORPUS_REL, owner="distill", kind="wiki")
+        save_state(state, root)
+        console.print(f"[green]Wiki corpus written:[/green] {_WIKI_CORPUS_REL}")
+    else:
+        console.print("[red]distill failed; see message above.[/red]")
+        sys.exit(rc)
+
+
 @main.command("gsd-version")
 @click.option(
     "--refresh",

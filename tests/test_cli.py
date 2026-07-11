@@ -1190,3 +1190,63 @@ class TestRepairGotchaCapture:
             result = runner.invoke(main, ["repair", "--root", str(tmp_path)])
 
         assert result.exit_code == 0
+
+
+class TestDistillCommand:
+    """`flowstate distill` — memory->wiki producer with staleness gating (Task 3)."""
+
+    def _seed_memory(self, root: Path) -> None:
+        from flowstate.memory import MemoryEntry, MemoryKind, MemoryStore
+
+        with MemoryStore(root=root) as store:
+            store.add(
+                MemoryEntry.create(
+                    MemoryKind.DECISION,
+                    content="use sqlite-vec for semantic retrieval",
+                    summary="retrieval backend decision",
+                )
+            )
+
+    def test_help_lists_flags(self):
+        runner = CliRunner()
+        result = runner.invoke(main, ["distill", "--help"])
+        assert result.exit_code == 0
+        assert "--force" in result.output
+        assert "--llm" in result.output
+        assert "--model" in result.output
+
+    def test_distill_writes_corpus_and_registers_manifest(self, tmp_path):
+        from flowstate.state import load_state
+
+        self._seed_memory(tmp_path)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["distill", "--root", str(tmp_path)])
+        assert result.exit_code == 0, result.output
+
+        corpus = tmp_path / ".planning" / "codebase" / "wiki"
+        assert list(corpus.glob("**/*.md"))
+
+        state = load_state(tmp_path)
+        assert any(e.kind == "wiki" for e in state.install_manifest)
+
+    def test_second_distill_without_change_skips(self, tmp_path):
+        self._seed_memory(tmp_path)
+        runner = CliRunner()
+
+        first = runner.invoke(main, ["distill", "--root", str(tmp_path)])
+        assert first.exit_code == 0, first.output
+
+        second = runner.invoke(main, ["distill", "--root", str(tmp_path)])
+        assert second.exit_code == 0
+        assert "up to date" in second.output.lower()
+
+    def test_distill_empty_memory_exits_nonzero(self, tmp_path):
+        from flowstate.memory import MemoryStore
+
+        with MemoryStore(root=tmp_path):
+            pass  # create an empty memory.db
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["distill", "--root", str(tmp_path)])
+        assert result.exit_code != 0
