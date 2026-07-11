@@ -1446,3 +1446,89 @@ def test_markdown_record_includes_tax_totals():
     out = _captured_console_output(lambda c: render_report(card, console=c, markdown=True))
     assert "Track-2" in out
     assert "EXCLUDED from compounding_score" in out
+
+
+def test_tax_cost_per_verified_gate(tmp_path: Path):
+    """Cost-per-success = total tax ÷ summed verify_pass (5 gates here)."""
+    import json
+
+    from bench.report import write_json
+
+    card = _tax_scorecard()  # verify_pass 2 + 3 = 5
+    out = tmp_path / "r.json"
+    write_json(card, out)
+    tax = json.loads(out.read_text())["tax"]
+    assert tax["gates_passed"] == 5
+    # total tokens = (2500 + 1000) / 5 = 700 ; seconds = 5.5 / 5 = 1.1
+    assert tax["tokens_per_verified_acceptance_gate"] == 700.0
+    assert tax["seconds_per_verified_acceptance_gate"] == 1.1
+
+
+def test_tax_denominator_is_verify_pass_not_commit_count(tmp_path: Path):
+    """The denominator equals the summed verify_pass, NOT any commit/run count."""
+    import json
+
+    from bench.report import write_json
+
+    # 2 runs (would-be commit count = 2), but 7 passed acceptance gates total.
+    snaps = [
+        _consumption_snap(
+            0, tokens_in=700, tokens_out=0, cache_read=0, wall_clock_s=0.0, verify_pass=3
+        ),
+        _consumption_snap(
+            1, tokens_in=700, tokens_out=0, cache_read=0, wall_clock_s=0.0, verify_pass=4
+        ),
+    ]
+    card = compute_scorecard(snaps)
+    out = tmp_path / "r.json"
+    write_json(card, out)
+    tax = json.loads(out.read_text())["tax"]
+    assert tax["gates_passed"] == 7
+    # 1400 / 7 == 200 (would be 700 if it wrongly divided by run count 2)
+    assert tax["tokens_per_verified_acceptance_gate"] == 200.0
+
+
+def test_tax_cost_per_gate_zero_gates_is_na(tmp_path: Path):
+    """Zero passed gates yields 'n/a' — no divide-by-zero."""
+    import json
+
+    from bench.report import write_json
+
+    snaps = [
+        _consumption_snap(
+            0, tokens_in=100, tokens_out=50, cache_read=0, wall_clock_s=1.0, verify_pass=0
+        ),
+        _consumption_snap(
+            1, tokens_in=200, tokens_out=60, cache_read=0, wall_clock_s=1.0, verify_pass=0
+        ),
+    ]
+    card = compute_scorecard(snaps)
+    out = tmp_path / "r.json"
+    write_json(card, out)
+    tax = json.loads(out.read_text())["tax"]
+    assert tax["gates_passed"] == 0
+    assert tax["tokens_per_verified_acceptance_gate"] == "n/a"
+    assert tax["seconds_per_verified_acceptance_gate"] == "n/a"
+
+
+def test_tax_label_names_acceptance_gate_never_commit(tmp_path: Path):
+    """The tax JSON block names the denominator honestly and never says 'commit'."""
+    import json
+
+    from bench.report import write_json
+
+    card = _tax_scorecard()
+    out = tmp_path / "r.json"
+    write_json(card, out)
+    tax_text = json.dumps(json.loads(out.read_text())["tax"]).lower()
+    assert "acceptance gate" in tax_text
+    assert "commit" not in tax_text
+
+
+def test_render_and_markdown_cost_per_gate_labeled_honestly():
+    """Rich + markdown render the cost-per-success line as 'acceptance gate', not 'commit'."""
+    from bench.report import render_report
+
+    card = _tax_scorecard()
+    out = _captured_console_output(lambda c: render_report(card, console=c, markdown=True))
+    assert "acceptance gate" in out.lower()
