@@ -40,6 +40,12 @@ from bench.project import scaffold
 # (typically "none") never need provisioning.
 _PRODUCER_ARMS = ("pack", "wiki")
 
+# Exit code when --mode real produced no usable paired trials (no claude bridge,
+# or every trial failed on one side). Mirrors compound_eval's _EXIT_NO_BRIDGE
+# fail-loud discipline: a real run that measured nothing must never report
+# success with a null CI. Cheap mode always synthesizes trials, so it is exempt.
+_EXIT_NO_PAIRED_DATA = 4
+
 
 def _build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
@@ -156,6 +162,13 @@ def main(argv: list[str] | None = None) -> int:
 
             print("[CI] paired-bootstrap on per-trial judge deltas")
             deltas = _paired_deltas(arm_trials, baseline_trials)
+            # Fail-loud: a real run that produced zero paired trials (no bridge,
+            # or every trial failed on one side) measured nothing. Exit non-zero
+            # instead of reporting success with a null CI. Cheap mode always
+            # synthesizes trials, so this only trips on genuine real-mode failure.
+            if args.mode == "real" and not deltas:
+                print("[close_loop] real mode produced no paired trials — failing loud")
+                return _EXIT_NO_PAIRED_DATA
             ci = paired_bootstrap_ci(deltas, seed=args.seed)
     except Exception as exc:  # never raise — pipeline failure is reported, not fatal
         print(f"[close_loop] pipeline error: {exc}")

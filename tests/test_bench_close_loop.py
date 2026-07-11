@@ -174,3 +174,32 @@ def test_real_mode_pairs_by_trial_index_when_arm_trial_drops(tmp_path, monkeypat
     assert ci["n"] == 2
     assert ci["mean"] == 1.5
     assert ci["ci_low"] <= ci["mean"] <= ci["ci_high"]
+
+
+def test_real_mode_all_trials_fail_exits_nonzero(tmp_path, monkeypatch):
+    """WR-01: when every real-mode trial returns None (no bridge / all fail), main
+    must fail loud with a non-zero exit and write no result — not exit 0 + null CI."""
+    monkeypatch.setattr(replicate, "_run_trial", lambda *a, **k: None)
+    monkeypatch.setattr(prepare_fixture, "main", lambda argv: 0)
+
+    out = tmp_path / "r.json"
+    rc = main(
+        [
+            "--root",
+            _FIXTURE,
+            "--mode",
+            "real",
+            "--arm",
+            "wiki",
+            "--baseline",
+            "none",
+            "--trials",
+            "3",
+            "--runs",
+            "3",
+            "--out",
+            str(out),
+        ]
+    )
+    assert rc != 0
+    assert not out.exists(), "no result file should be written on the fail-loud path"
