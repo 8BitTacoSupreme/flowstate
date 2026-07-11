@@ -81,58 +81,79 @@ Full detail: [`milestones/v0.6.2-ROADMAP.md`](./milestones/v0.6.2-ROADMAP.md).
 ## Phase Details
 
 ### Phase 19: The Tax
+
 **Goal**: Every pipeline run can be measured for what it actually costs (tokens, cost, latency) instead of estimated — the accounting layer the harness has been missing since `bench/` began.
 **Depends on**: v0.6.2 complete (nothing new this phase touches is unbuilt: `RunSnapshot`, `bench/report.py`, `output_format="json"` all already exist)
 **Requirements**: TAX-01, TAX-02, TAX-03, TAX-04
 **Success Criteria** (what must be TRUE):
+
   1. `BridgeResult` carries a real `usage` field (tokens_in/out/cache_read) populated via the existing `output_format="json"` path, and every existing caller's `.output` is unchanged (no regression).
   2. `RunSnapshot` records real `tokens_in` / `tokens_out` / `cache_read` / `wall_clock_s` per run, replacing the `len(prefix)//4` `prefix_tokens` estimate as the source of truth.
   3. `bench/report.py` shows per-arm tokens and seconds alongside the existing quality metrics, visibly excluded from `compounding_score` (Track-2, not Track-1).
   4. The report's cost-per-success line names `flowstate verify`'s deterministic acceptance gates — not "commits" — as its denominator.
+
 **Plans**: 3 plans
+
 - [x] 19-01-PLAN.md — TAX-01: BridgeResult.usage + duration_s via the json path (text-mode byte-identical) + cumulative bridge totals
 - [x] 19-02-PLAN.md — TAX-02: real tokens/wall_clock_s on RunSnapshot threaded bridge→journal→capture; compute_scorecard unchanged
 - [x] 19-03-PLAN.md — TAX-03/04: per-arm tokens+seconds in report.py (Track-2, excluded) + cost per verified acceptance gate
 
 ### Phase 20: Evaluator Independence
+
 **Goal**: The judge can no longer silently grade its own producer's output, and a single judge call becomes a defensible multi-judge verdict — without disturbing `metrics.py`'s authority.
 **Depends on**: Phase 19 (shares the report surface the tax lands on)
 **Requirements**: IND-01, IND-02, IND-03
 **Success Criteria** (what must be TRUE):
+
   1. Running `bench/judge.py` with `--judge-model` absent, or equal to the producer model, fails loud (explicit error / nonzero exit) instead of silently grading.
   2. `judge.py` supports multi-judge averaging (majority vote + Wilson CI), mirroring the `--judge-models` pattern already shipped in `bench/grounding.py`.
   3. A test asserts `bench/metrics.py`'s `compounding_score` stays the authoritative deterministic scorer and the LLM judge remains excluded under the new multi-judge path.
+
 **Plans**: 2 plans
+
 - [x] 20-01-PLAN.md — IND-01/IND-02: independence guard helper + `python -m bench.judge` CLI + multi-judge aggregation (0-10 mean/median + Wilson-CI pass-rate) in judge.py
 - [x] 20-02-PLAN.md — IND-01/IND-03: wire the shared guard into compound_eval.py/close_loop.py + exclusion test proving compounding_score stays deterministic and judge-excluded
 
 ### Phase 21: Activate the Wiki
+
 **Goal**: The proven-best context layer (distilled wiki + semantic retrieval, measured 0.825 ≈ oracle 0.800) stops sitting dormant and actually fires on production runs, with the default path staying byte-identical when the flag is off.
 **Depends on**: v0.6.2's shipped `bench/distiller.py` (the producer already exists; this phase is production wiring only)
 **Requirements**: WIKI-03, WIKI-04, WIKI-05, WIKI-06
 **Success Criteria** (what must be TRUE):
+
   1. A production entry point runs the memory→wiki distiller end-of-run, writing a manifest-tracked, staleness-gated `.planning/codebase/wiki/` article corpus (mirrors the `flowstate pack` pattern) that regenerates only when memory changed, so the *next* run reads this run's distilled knowledge.
   2. An opt-in config flag makes the orchestrator pass `include_layers={"wiki"}` to `build_context_prefix()`; with the flag off, the output is byte-identical to today's default.
   3. With the flag on but the `[semantic]` extra absent, the wiki layer degrades to a no-op-with-warning — never a hard crash — and `pip install flowstate[semantic]` is surfaced as the requirement for the KNN path.
   4. A dogfood smoke-test runs FlowState's own pipeline on a FlowState task with the wiki flag on, against this project's real `memory.db`, and asserts the corpus is globbed and top-k articles are injected with the run green (acceptance = "the layer fires," not "quality improved").
+
 **Plans**: 3 plans
+
 - [x] 21-01-PLAN.md — WIKI-03: promote bench/distiller.py → flowstate/distiller.py (bench re-imports) + `flowstate distill` CLI + kind="wiki" manifest & is_wiki_stale (staleness mirrors flowstate pack); run_pipeline distill side untouched (D-03 fence)
 - [x] 21-02-PLAN.md — WIKI-04/WIKI-05: opt-in `wiki_layer` pref (default false, byte-identical off) + _STANDARD_LAYERS ∪ {wiki} union at orchestrator.py:254 + one-time `[semantic]`-absent degradation warning
 - [x] 21-03-PLAN.md — WIKI-06: dogfood integration test — distill this project's real memory.db, build prefix with the wiki union, assert the layer fires (globbed + top-k injected), skip/static-degrade gracefully
 
 ### Phase 22: The Verdict
+
 **Goal**: A pre-registered, paired-design measurement honestly answers whether FlowState's context stack — and specifically the now-active wiki layer — earns its token/latency tax on a real repo, accepting a null result as a legitimate outcome.
 **Depends on**: Phase 19 (tax accounting), Phase 20 (independent judge), Phase 21 (wiki actually fires) — this is the capstone phase; it needs all three measurement primitives in place before it can produce a trustworthy verdict.
 **Requirements**: VERD-01, VERD-02, VERD-03
 **Success Criteria** (what must be TRUE):
+
   1. Verdict rules — effect-size threshold, CI width, minimum n, what counts as a win — are written down and committed *before* the paired-design run starts.
   2. A paired-design run via `bench/close_loop.py` executes on a real repo (not `bench/fixtures/sample_project`) across arms `none`/`pack`/`memory`/`wiki`/`full`, and the report shows the compounding curve across run 1→N (run 1 empty memory → no wiki; wiki value, if any, appears run 2+).
   3. The final report states quality **and** tax per arm, applies the pre-registered rules, and a null `wiki − none` (or any arm) is accepted and documented as a valid outcome that licenses stripping the layer — not retried until significant.
+
 **Plans**: 3 plans
 Plans:
+**Wave 1**
+
 - [ ] 22-01-PLAN.md — Pre-register the verdict protocol (VERD-01): commit 22-PREREGISTRATION.md before any real run
 - [ ] 22-02-PLAN.md — Build bench/verdict.py: 4-contrast driver + Holm-Bonferroni + quality/tax/compounding report, proven in --mode cheap (VERD-02/03)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 22-03-PLAN.md — Gated paid --mode real run on floxybot2 + write 22-VERDICT.md applying the pre-registered rules (VERD-02/03)
+
 **Note**: expensive — live LLM runs across 5 arms × multiple trials × multiple runs (compounding curve); smoke at reduced trials/runs before scaling per the SEED's cost-reality note.
 
 <details>
