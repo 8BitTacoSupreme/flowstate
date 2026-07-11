@@ -74,7 +74,7 @@ Phases 12–15 (15 plans) — adapters made honest and real (12–13), the two M
   1. A `--mode real` run's report/output contains NO cheap-mode caveat string; a regression test asserts this.
   2. Every report states mode (cheap|real), arm, sample size (K/trials), and which producer artifacts were present.
 **Plans**: 1 plan
-- [ ] 16-01-PLAN.md — thread mode/arm/sample-size/producers into the report; real mode never leaks the cheap-mode caveat (HAR-01)
+- [x] 16-01-PLAN.md — thread mode/arm/sample-size/producers into the report; real mode never leaks the cheap-mode caveat (HAR-01)
 
 ### Phase 17: No Silent No-Op Arms + Producers Wired E2E
 **Goal**: Every arm whose producer artifact is absent fails loud (never a bare number), and the bench-side producers the readers actually consume are shipped — the memory→wiki distiller (promoted from the spike) and the article corpus the Phase-11 semantic retriever reads. One `prepare-fixture` path.
@@ -122,7 +122,7 @@ Scoped and roadmapped this session, then deferred so the adapter stubs get fixed
 | 13. Adapters Earn Their Names | v0.6.1 | 3/3 | Complete    | 2026-07-10 |
 | 14. Vendor & Surface | v0.6.1 | 4/4 | Complete    | 2026-07-10 |
 | 15. Bundle GSD | v0.6.1 | 5/5 | Complete    | 2026-07-11 |
-| 16. Mode-Honest Reporting | v0.6.2 | 0/1 | Planned | - |
+| 16. Mode-Honest Reporting | v0.6.2 | 1/1 | Complete   | 2026-07-11 |
 | 17. No Silent No-Op Arms + Producers | v0.6.2 | 0/? | Not started | - |
 | 18. Close the Loop with a CI | v0.6.2 | 0/? | Not started | - |
 | _v0.7.0 Retrieval Benchmark Rigor_ | v0.7.0 | deferred | renumbers 16-21 on start | - |
