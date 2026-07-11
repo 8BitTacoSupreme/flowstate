@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.6.2
 milestone_name: Make the Harness Real
-status: executing
+status: completed
 stopped_at: "Completed 17-03-PLAN.md (HAR-03): prepare_fixture entry point wiring per-arm producers"
-last_updated: "2026-07-11T01:34:39.524Z"
-last_activity: 2026-07-11
+last_updated: "2026-07-11T01:41:42.244Z"
+last_activity: 2026-07-11 -- Phase 17 marked complete
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 19
-  completed_plans: 19
-  percent: 100
+  total_phases: 3
+  completed_phases: 2
+  total_plans: 4
+  completed_plans: 4
+  percent: 67
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 ## Current Position
 
-Phase: 17 (No Silent No-Op Arms + Producers Wired E2E) — COMPLETE
+Phase: 17 — COMPLETE
 Plan: 3 of 3
-Status: Phase complete (3/3 plans)
-Last activity: 2026-07-11
+Status: Phase 17 complete
+Last activity: 2026-07-11 -- Phase 17 marked complete
 
 ## Performance Metrics
 
