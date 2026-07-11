@@ -52,6 +52,53 @@ _PROBE_QUERY = "core problem vision architecture compounding"
 
 _console = Console()
 
+# Exit code when an arm's REQUIRED producer artifact is absent (HAR-02 fail-loud gate).
+_EXIT_PRODUCER_ABSENT = 3
+
+# Producer-artifact paths, mirroring the reader-side constants in
+# flowstate/context_prefix.py (kept as local literals — bench deliberately does
+# not import flowstate.context_prefix, to stay decoupled from the LLM substrate).
+_PACK_PATH = ".planning/codebase/repomix-pack.xml"
+_WIKI_PATH = ".planning/codebase/wiki.md"
+_WIKI_CORPUS_DIR = ".planning/codebase/wiki"
+
+# Maps --layers arm to the name of its REQUIRED producer, or None when the arm
+# has no producer requirement (full/memory/none run unchanged).
+_ARM_PRODUCERS: dict[str, str | None] = {
+    "full": None,
+    "none": None,
+    "pack": "pack",
+    "memory": None,
+    "wiki": "wiki",
+}
+
+
+def _missing_producer(arm: str, root: Path) -> str | None:
+    """Return the missing producer's name for ``arm`` under ``root``, else None.
+
+    ``pack`` requires ``.planning/codebase/repomix-pack.xml``. ``wiki`` requires
+    EITHER a non-empty ``.planning/codebase/wiki/`` corpus (>=1 ``*.md``) OR the
+    single-file ``.planning/codebase/wiki.md`` fallback. ``full``/``memory``/``none``
+    have no requirement and always return None. Never raises — a missing or
+    oddly-shaped ``.planning`` tree (e.g. a file where a directory is expected)
+    counts as "producer absent".
+    """
+    required = _ARM_PRODUCERS.get(arm)
+    if required is None:
+        return None
+    try:
+        if required == "pack":
+            return None if (root / _PACK_PATH).is_file() else "pack"
+        if required == "wiki":
+            corpus = root / _WIKI_CORPUS_DIR
+            has_corpus = corpus.is_dir() and any(corpus.glob("**/*.md"))
+            has_wiki_md = (root / _WIKI_PATH).is_file()
+            return None if (has_corpus or has_wiki_md) else "wiki"
+    except OSError:
+        return required
+    return required
+
+
 # Maps --layers CLI choice to the include_layers frozenset for build_context_prefix.
 # full   -> None            : all layers (no patch — call run_pipeline directly)
 # none   -> frozenset()     : empty prefix (== old inject=off control arm)
