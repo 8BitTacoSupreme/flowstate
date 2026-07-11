@@ -4,14 +4,14 @@ milestone: v0.8.0
 milestone_name: Harness Tax & Value
 status: executing
 stopped_at: Phase 22 pre-registration captured; awaiting greenlight to plan + paid run
-last_updated: "2026-07-11T18:19:47.847Z"
-last_activity: 2026-07-11 -- Phase 22 planning complete
+last_updated: "2026-07-11T18:23:16.417Z"
+last_activity: 2026-07-11 -- 22-01 pre-registration committed (a1f09aa)
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 11
-  completed_plans: 8
-  percent: 73
+  completed_plans: 9
+  percent: 75
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Phase 22 — the verdict
+**Current focus:** Phase 22 — the-verdict
 
 ## Current Position
 
-Phase: 22
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-07-11 -- Phase 22 planning complete
+Phase: 22 (the-verdict) — EXECUTING
+Plan: 2 of 3
+Status: Executing Phase 22 — Plan 22-01 complete (pre-registration frozen + committed)
+Last activity: 2026-07-11 -- 22-01 pre-registration committed (a1f09aa)
 
 ## Performance Metrics
 
@@ -84,6 +84,7 @@ Last activity: 2026-07-11 -- Phase 22 planning complete
 | Phase 20 P02 | ~10 min | 2 tasks | 3 files |
 | Phase 21 P01 | 660 | 3 tasks | 8 files |
 | Phase 21 P03 | ~12 min | 1 tasks | 2 files |
+| Phase 22 P01 | 120 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -126,6 +127,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 21-01 / WIKI-03]: promoted bench/distiller.py to flowstate/distiller.py (imports nothing from bench/; _locate_claude delegates to bridge._find_claude mapping empty-string to None); bench is now a re-export shim; added kind=wiki manifest + is_wiki_stale (memory.db mtime gate mirroring is_pack_stale); flowstate distill is the explicit producer; run_pipeline untouched (D-03 fence)
 - [Phase ?]: 21-02: opt-in wiki_layer flag wires the Phase-11 semantic wiki layer into production; default off byte-identical; [semantic]-absent is a one-time warning
 - [Phase 21]: 21-03 dogfood test proves the wiki layer fires end-to-end (WIKI-06); real-memory dogfood skips on the empty checkout memory.db while a synthetic guard fires green
+- [Phase ?]: [Phase 22-01 / VERD-01]: froze the verdict pre-registration in 22-PREREGISTRATION.md and committed it (a1f09aa) before any --mode real run (D-04); three-part GATING win rule (CI-excludes-0 AND Cohen's d>=0.8 AND survives-Holm), seed pinned 20260711 (D-08); bench/verdict.py (Plan 02) must implement this verbatim
 
 ### Pending Todos
 

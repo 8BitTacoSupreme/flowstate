@@ -147,7 +147,7 @@ Full detail: [`milestones/v0.6.2-ROADMAP.md`](./milestones/v0.6.2-ROADMAP.md).
 Plans:
 **Wave 1**
 
-- [ ] 22-01-PLAN.md — Pre-register the verdict protocol (VERD-01): commit 22-PREREGISTRATION.md before any real run
+- [x] 22-01-PLAN.md — Pre-register the verdict protocol (VERD-01): commit 22-PREREGISTRATION.md before any real run
 - [ ] 22-02-PLAN.md — Build bench/verdict.py: 4-contrast driver + Holm-Bonferroni + quality/tax/compounding report, proven in --mode cheap (VERD-02/03)
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -188,7 +188,7 @@ Scoped and roadmapped this session, then deferred so the adapter stubs get fixed
 | 19. The Tax | v0.8.0 | 3/3 | Complete    | 2026-07-11 |
 | 20. Evaluator Independence | v0.8.0 | 2/2 | Complete    | 2026-07-11 |
 | 21. Activate the Wiki | v0.8.0 | 3/3 | Complete    | 2026-07-11 |
-| 22. The Verdict | v0.8.0 | 0/0 | Not started | - |
+| 22. The Verdict | v0.8.0 | 1/3 | In Progress|  |
 | _v0.7.0 Retrieval Benchmark Rigor_ | v0.7.0 | deferred | renumbers 16-21 on start | - |
 
 ## Backlog

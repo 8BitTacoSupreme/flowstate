@@ -28,7 +28,7 @@
 
 ### The Verdict
 
-- [ ] **VERD-01**: verdict rules (effect-size threshold, CI width, minimum n, what counts as a win) are pre-registered in writing **before** the paired-design run.
+- [x] **VERD-01**: verdict rules (effect-size threshold, CI width, minimum n, what counts as a win) are pre-registered in writing **before** the paired-design run.
 - [ ] **VERD-02**: a paired-design run via `bench/close_loop.py` on a **real repo** (not `bench/fixtures/sample_project`) across arms `none` · `pack` · `memory` · `wiki` · `full`, measuring the **compounding curve** (run 1 empty → wiki value appears run 2+), not a one-shot.
 - [ ] **VERD-03**: the verdict reports quality **and** tax per arm and applies the pre-registered rules; a null `wiki − none` (or any arm) is an accepted, documented outcome that licenses stripping the layer.
 
@@ -60,6 +60,6 @@
 | WIKI-04 | Phase 21 | Complete |
 | WIKI-05 | Phase 21 | Complete |
 | WIKI-06 | Phase 21 | Complete |
-| VERD-01 | Phase 22 | Pending |
+| VERD-01 | Phase 22 | Complete |
 | VERD-02 | Phase 22 | Pending |
 | VERD-03 | Phase 22 | Pending |
