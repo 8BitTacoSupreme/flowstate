@@ -5,7 +5,7 @@ milestone_name: Make the Harness Real
 status: completed
 stopped_at: "Completed 18-02-PLAN.md (HAR-04): bench/close_loop.py — one-command prior-runs→distill→inject→judge→CI driver"
 last_updated: "2026-07-11T03:11:35.168Z"
-last_activity: 2026-07-11 -- Phase 18 marked complete
+last_activity: 2026-07-11 -- Completed quick task 260710-x5a: harden _run_trial error handling
 progress:
   total_phases: 3
   completed_phases: 3
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 Phase: 18 — COMPLETE
 Plan: 3 of 3
 Status: Phase 18 complete
-Last activity: 2026-07-11 -- Phase 18 marked complete
+Last activity: 2026-07-11 -- Completed quick task 260710-x5a: harden _run_trial error handling
 
 ## Performance Metrics
 
@@ -133,6 +133,7 @@ None yet.
 | 260709-qte | Chunk-level semantic retrieval (semantic_rank_chunked + --chunk-tokens): fixes measured truncation — 94.6% of LongMemEval sessions exceed bge 512-tok cap (median 2500 tok) | complete | 2026-07-09 | 7a67cec, 585ae5e |
 | 260709-rep | Add --corpus turns|observations arm to bench/locomo.py (paper's best RAG corpus; observation docs carry dia_id provenance; summaries excluded — no provenance) | complete | 2026-07-09 | a07259b, 2fb5113 |
 | 260710-ffo | Correct the benchmarking record — new bench/BENCHMARKING_SCOPE.md (two-track model: Track 1 retrieval/deterministic where BM25 is the incumbent counterfactual, vs Track 2 harness-value) + fix stale PAIRED_DESIGN_RUNBOOK.md (prereqs #1/#2 LANDED, #3 unbuilt; pack≈none vs wiki 0.825≈oracle). NOTE: its "dead-alias" claim about autoresearch/gstack/superpowers was WRONG and later corrected by erratum eab8ae8 — those are real MIT upstreams FlowState's adapters are named after and barely implement (v0.6.1 fixes that). | complete | 2026-07-10 | 9790284, c268cc9, e61ebe1, eab8ae8 |
+| 260710-x5a | Harden bench/replicate.py::_run_trial — distinguish judge-output contract violations (malformed JSON / `per_run` row missing `score` → propagate/halt) from legitimate trial gaps (nonzero returncode, unreadable/missing output → None + diagnostic). Narrows `except Exception`→`except OSError`, checks subprocess returncode, moves JSON/score parse after the finally so a broken judge contract can't be silently averaged into the paired-bootstrap CI. close_loop.py unchanged (its pipeline guard surfaces a propagated error as exit 1). Follow-up to Phase 18 re-review. | complete | 2026-07-11 | ba21455, a689922 |
 
 ## Session Continuity
 
