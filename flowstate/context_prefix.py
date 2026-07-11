@@ -76,6 +76,10 @@ _STANDARD_LAYERS = frozenset({"fixtures", "pack", "gotchas", "memory", "since_la
 # Module-level console — callers can inject their own via the ``console`` param
 _console = Console()
 
+# One-time-per-process guard for the [semantic]-absent wiki warning (WIKI-05 / D-07).
+# Reset in tests via monkeypatch to re-arm the warning.
+_semantic_warning_emitted = False
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Private helpers
@@ -423,6 +427,28 @@ def _read_pack_layer(root: Path) -> str:
         return ""
 
 
+def _warn_semantic_absent(console: Console) -> None:
+    """Emit a ONE-TIME console warning that the semantic wiki path is inactive (WIKI-05 / D-07).
+
+    Fired when the wiki layer is requested but the embedder is absent/unavailable
+    (the ``[semantic]`` extra is not installed), so the KNN retrieval path degrades
+    to the static single-file reader. Informational only — never raises, never
+    blocks the run. Guarded by a module-level sentinel so repeated
+    ``build_context_prefix`` calls in one process do not spam.
+    """
+    global _semantic_warning_emitted
+    if _semantic_warning_emitted:
+        return
+    _semantic_warning_emitted = True
+    # Escape the opening bracket of `[semantic]` so Rich markup renders it literally
+    # instead of parsing it as a (invalid) style tag.
+    console.print(
+        "[yellow]wiki layer: semantic retrieval is unavailable — the KNN wiki path is "
+        "inactive. Install the optional extra with `pip install flowstate\\[semantic]` to "
+        "activate it; falling back to the static wiki reader for now.[/yellow]"
+    )
+
+
 def _read_wiki_layer(root: Path) -> str:
     """Read the distilled-CAG architecture wiki and format it under '## Codebase Wiki'.
 
@@ -520,10 +546,17 @@ def build_context_prefix(
     # path), which would include wiki on every call and break byte-identity.
     wiki_included = include_layers is not None and "wiki" in include_layers
     if wiki_included:
+        # Capture the embedder ONCE (WIKI-05 / D-07): reused for both the semantic
+        # retrieval call AND the warning gate below — never probe get_embedder twice.
+        emb = get_embedder(root)
         # Attempt semantic retrieval first; fall back to the static single-file read when
         # the embedder is absent, sqlite-vec is not installed, the corpus dir does not
         # exist, or any exception occurs.
-        _semantic = _semantic_wiki_layer(root, query, get_embedder(root))
+        _semantic = _semantic_wiki_layer(root, query, emb)
+        if _semantic is None and (emb is None or not emb.available()):
+            # The [semantic] extra / embedder is absent — the KNN path can never fire.
+            # One-time warning, then degrade to the static reader (never crash — D-07).
+            _warn_semantic_absent(con)
         wiki_layer = _semantic if _semantic is not None else _read_wiki_layer(root)
     else:
         wiki_layer = ""

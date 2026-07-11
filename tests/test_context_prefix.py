@@ -1543,3 +1543,118 @@ class TestWikiSemantic:
         (zero_dir / ".planning").mkdir(parents=True, exist_ok=True)
         (zero_dir / ".planning" / "config.json").write_text('{"wiki_retrieval_k": 0}')
         assert _load_wiki_k(zero_dir) == _DEFAULT_WIKI_K
+
+
+# ---------------------------------------------------------------------------
+# [semantic]-absent degradation warning (WIKI-05, D-07)
+# ---------------------------------------------------------------------------
+
+
+class TestWikiSemanticAbsentWarning:
+    """The wiki layer must degrade to a ONE-TIME warning when the embedder is absent."""
+
+    def _patch_unavailable_embedder(self, monkeypatch):
+        """Return an Embedder whose available() is always False, patched into context_prefix."""
+        import flowstate.embeddings as emb_mod
+
+        unavailable = emb_mod.Embedder(model_name="bogus-model-that-does-not-exist")
+        monkeypatch.setattr(
+            "flowstate.context_prefix.get_embedder",
+            lambda root=None: unavailable,
+        )
+
+    def _fresh_console(self):
+        from io import StringIO
+
+        from rich.console import Console
+
+        buf = StringIO()
+        # markup=True to mirror production; the warning escapes the '[' of [semantic]
+        return Console(file=buf, highlight=False, width=200), buf
+
+    def test_warning_emitted_once_across_two_calls(self, tmp_path: Path, monkeypatch):
+        """Embedder absent + wiki requested → one warning naming flowstate[semantic], across 2 calls."""
+        import flowstate.context_prefix as cp
+
+        monkeypatch.setattr(cp, "_semantic_warning_emitted", False)
+        self._patch_unavailable_embedder(monkeypatch)
+
+        _make_wiki_file(tmp_path, "static wiki content\n")
+        memory = _make_memory_stub("")
+        console, buf = self._fresh_console()
+
+        with patch("flowstate.context_prefix.run_pack"):
+            r1 = build_context_prefix(
+                tmp_path,
+                memory,
+                "query",
+                budget_tokens=50000,
+                include_layers=frozenset({"wiki"}),
+                console=console,
+            )
+            r2 = build_context_prefix(
+                tmp_path,
+                memory,
+                "query",
+                budget_tokens=50000,
+                include_layers=frozenset({"wiki"}),
+                console=console,
+            )
+
+        assert isinstance(r1, str) and isinstance(r2, str), "must not raise (D-07)"
+        output = buf.getvalue()
+        assert output.count("flowstate[semantic]") == 1, (
+            f"warning must name flowstate[semantic] exactly ONCE across two calls; "
+            f"got {output.count('flowstate[semantic]')} in {output!r}"
+        )
+        # Static fallback still contributes the wiki layer
+        assert "## Codebase Wiki" in r1
+
+    def test_no_warning_on_default_path(self, tmp_path: Path, monkeypatch):
+        """include_layers=None (flag off) must emit NO flowstate[semantic] warning."""
+        import flowstate.context_prefix as cp
+
+        monkeypatch.setattr(cp, "_semantic_warning_emitted", False)
+        self._patch_unavailable_embedder(monkeypatch)
+
+        _make_wiki_file(tmp_path, "static wiki content\n")
+        memory = _make_memory_stub("")
+        console, buf = self._fresh_console()
+
+        with patch("flowstate.context_prefix.run_pack"):
+            build_context_prefix(
+                tmp_path,
+                memory,
+                "query",
+                budget_tokens=50000,
+                include_layers=None,
+                console=console,
+            )
+
+        assert "flowstate[semantic]" not in buf.getvalue(), (
+            "default path must not warn (byte-identity preserved)"
+        )
+
+    def test_does_not_raise_when_embedder_absent(self, tmp_path: Path, monkeypatch):
+        """Embedder absent + no corpus at all → returns a string, wiki portion empty, no raise."""
+        import flowstate.context_prefix as cp
+
+        monkeypatch.setattr(cp, "_semantic_warning_emitted", False)
+        self._patch_unavailable_embedder(monkeypatch)
+
+        # No wiki.md and no corpus dir → wiki contributes nothing
+        memory = _make_memory_stub("")
+        console, _ = self._fresh_console()
+
+        with patch("flowstate.context_prefix.run_pack"):
+            result = build_context_prefix(
+                tmp_path,
+                memory,
+                "query",
+                budget_tokens=50000,
+                include_layers=frozenset({"wiki"}),
+                console=console,
+            )
+
+        assert isinstance(result, str)
+        assert "## Codebase Wiki" not in result, "no corpus → wiki layer empty"
