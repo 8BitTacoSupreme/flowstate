@@ -12,6 +12,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from bench.replicate import _agg, _cohens_d, _paired_normalize, main
 
 
@@ -318,6 +320,103 @@ def test_run_trial_removes_temp_file_on_failure(monkeypatch):
     scores = rep._run_trial("none", 2, Path("."), "none0")
     assert scores is None
     assert not Path(captured["out"]).exists(), "temp file must be unlinked on failure"
+
+
+# ---------------------------------------------------------------------------
+# 260710-x5a: _run_trial three-class contract (gaps -> None; violations propagate)
+# ---------------------------------------------------------------------------
+
+
+def _fake_run_writing(content: str, returncode: int = 0):
+    """Build a fake subprocess.run replacement that writes `content` to --out."""
+
+    def fake_run(cmd, check=False):
+        out_path = cmd[cmd.index("--out") + 1]
+        if content is not None:
+            Path(out_path).write_text(content)
+        return subprocess.CompletedProcess(cmd, returncode=returncode)
+
+    return fake_run
+
+
+def test_run_trial_raises_on_malformed_json(monkeypatch):
+    """Contract violation: malformed JSON in the output file propagates, not None."""
+    import bench.replicate as rep
+
+    monkeypatch.setattr("bench.replicate.subprocess.run", _fake_run_writing("not valid json{{{"))
+
+    with pytest.raises(json.JSONDecodeError):
+        rep._run_trial("wiki", 2, Path("."), "wiki-badjson")
+
+
+def test_run_trial_raises_on_missing_score_key(monkeypatch):
+    """Contract violation: a per_run row missing 'score' propagates as KeyError."""
+    import bench.replicate as rep
+
+    monkeypatch.setattr(
+        "bench.replicate.subprocess.run",
+        _fake_run_writing(json.dumps({"judge": {"per_run": [{"foo": 1}]}})),
+    )
+
+    with pytest.raises(KeyError):
+        rep._run_trial("wiki", 2, Path("."), "wiki-noscore")
+
+
+def test_run_trial_returns_none_on_nonzero_returncode(monkeypatch, capsys):
+    """Legit gap: nonzero subprocess returncode -> None with a diagnostic, no raise."""
+    import bench.replicate as rep
+
+    captured: dict[str, str] = {}
+
+    def fake_run(cmd, check=False):
+        captured["out"] = cmd[cmd.index("--out") + 1]
+        return subprocess.CompletedProcess(cmd, returncode=1)
+
+    monkeypatch.setattr("bench.replicate.subprocess.run", fake_run)
+
+    scores = rep._run_trial("wiki", 2, Path("."), "wiki-rc1")
+    assert scores is None
+    assert "compound_eval exited 1" in capsys.readouterr().out
+    assert not Path(captured["out"]).exists(), "temp file must be unlinked"
+
+
+def test_run_trial_returns_none_on_missing_output_file(monkeypatch, capsys):
+    """Legit gap: output file missing/unreadable (OSError) -> None with a diagnostic."""
+    import bench.replicate as rep
+
+    captured: dict[str, str] = {}
+
+    def fake_run(cmd, check=False):
+        out_path = cmd[cmd.index("--out") + 1]
+        captured["out"] = out_path
+        Path(out_path).unlink()  # simulate missing output
+        return subprocess.CompletedProcess(cmd, returncode=0)
+
+    monkeypatch.setattr("bench.replicate.subprocess.run", fake_run)
+
+    scores = rep._run_trial("wiki", 2, Path("."), "wiki-nofile")
+    assert scores is None
+    assert "no/unreadable output" in capsys.readouterr().out
+    assert not Path(captured["out"]).exists(), "temp file must already be gone"
+
+
+def test_run_trial_happy_path_returns_float_scores(monkeypatch):
+    """Regression guard: a valid judge payload still returns the float scores."""
+    import bench.replicate as rep
+
+    captured: dict[str, str] = {}
+
+    def fake_run(cmd, check=False):
+        out_path = cmd[cmd.index("--out") + 1]
+        captured["out"] = out_path
+        Path(out_path).write_text(json.dumps({"judge": {"per_run": [{"score": 7}, {"score": 9}]}}))
+        return subprocess.CompletedProcess(cmd, returncode=0)
+
+    monkeypatch.setattr("bench.replicate.subprocess.run", fake_run)
+
+    scores = rep._run_trial("wiki", 2, Path("."), "wiki-happy")
+    assert scores == [7.0, 9.0]
+    assert not Path(captured["out"]).exists(), "temp file must be unlinked"
 
 
 # ---------------------------------------------------------------------------
