@@ -7,7 +7,11 @@ No subprocess / compound_eval / live LLM calls are made.
 
 from __future__ import annotations
 
-from bench.replicate import _agg, _cohens_d, _paired_normalize
+import json
+import tempfile
+from pathlib import Path
+
+from bench.replicate import _agg, _cohens_d, _paired_normalize, main
 
 
 def test_paired_normalize_starts_trajectories_at_zero():
@@ -189,3 +193,81 @@ def test_compound_eval_parser_accepts_layers_wiki():
     parser = _build_parser()
     args = parser.parse_args(["--root", ".", "--layers", "wiki"])
     assert args.layers == "wiki"
+
+
+# ---------------------------------------------------------------------------
+# Track-2 paired-bootstrap CI wiring
+# ---------------------------------------------------------------------------
+
+
+def test_main_emits_bootstrap_ci_delta_vs_none(monkeypatch, tmp_path):
+    """main() wires bootstrap_ci_delta_vs_none into the summary JSON for each
+    non-none arm, sourced from _run_trial's per-trial trajectories."""
+    fixed_trials = {
+        "wiki": [[5.0, 6.0, 8.0], [5.0, 7.0, 9.0], [5.0, 6.0, 7.0]],
+        "none": [[5.0, 5.5, 6.0], [5.0, 5.0, 5.5], [5.0, 6.0, 6.0]],
+    }
+    calls: dict[str, int] = {"wiki": 0, "none": 0}
+
+    def fake_run_trial(arm, runs, root, label):
+        idx = calls[arm]
+        calls[arm] += 1
+        return fixed_trials[arm][idx]
+
+    monkeypatch.setattr("bench.replicate._run_trial", fake_run_trial)
+
+    out_path = Path(tempfile.mkstemp(dir=tmp_path, suffix=".json")[1])
+    rc = main(
+        [
+            "--root",
+            str(tmp_path),
+            "--layers",
+            "wiki",
+            "none",
+            "--trials",
+            "3",
+            "--runs",
+            "3",
+            "--out",
+            str(out_path),
+        ]
+    )
+    assert rc == 0
+
+    summary = json.loads(out_path.read_text())
+    assert "bootstrap_ci_delta_vs_none" in summary
+    wiki_ci = summary["bootstrap_ci_delta_vs_none"]["wiki"]
+    assert isinstance(wiki_ci["mean"], float)
+    assert isinstance(wiki_ci["ci_low"], float)
+    assert isinstance(wiki_ci["ci_high"], float)
+    assert wiki_ci["ci_low"] <= wiki_ci["mean"] <= wiki_ci["ci_high"]
+    # none must not appear as a key of its own delta-vs-itself
+    assert "none" not in summary["bootstrap_ci_delta_vs_none"]
+
+
+def test_main_omits_bootstrap_ci_when_none_arm_absent(monkeypatch, tmp_path):
+    """When 'none' is not among --layers, no bootstrap_ci_delta_vs_none block is emitted."""
+
+    def fake_run_trial(arm, runs, root, label):
+        return [1.0, 2.0, 3.0]
+
+    monkeypatch.setattr("bench.replicate._run_trial", fake_run_trial)
+
+    out_path = Path(tempfile.mkstemp(dir=tmp_path, suffix=".json")[1])
+    rc = main(
+        [
+            "--root",
+            str(tmp_path),
+            "--layers",
+            "wiki",
+            "--trials",
+            "2",
+            "--runs",
+            "2",
+            "--out",
+            str(out_path),
+        ]
+    )
+    assert rc == 0
+    summary = json.loads(out_path.read_text())
+    assert "bootstrap_ci_delta_vs_none" not in summary

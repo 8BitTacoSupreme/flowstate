@@ -25,6 +25,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from bench.bootstrap import paired_bootstrap_ci
+
 
 def _run_trial(arm: str, runs: int, root: Path, label: str) -> list[float] | None:
     """One harness invocation; returns the per-run judge scores, or None on any gap."""
@@ -176,6 +178,20 @@ def main(argv: list[str] | None = None) -> int:
                 ),
             }
         summary["improvement_delta_vs_none"] = deltas
+
+        # Track-2 only: seeded paired-bootstrap CI on per-trial deltas
+        # (arm_improvement_t - none_improvement_t), paired by trial index.
+        # Stays isolated from the deterministic scorecard module.
+        none_improvements = arms_summary["none"][metric].get("improvements", [])
+        ci_deltas: dict[str, dict] = {}
+        for arm in a.layers:
+            if arm == "none":
+                continue
+            arm_improvements = arms_summary[arm][metric].get("improvements", [])
+            k = min(len(arm_improvements), len(none_improvements))
+            paired_deltas = [arm_improvements[i] - none_improvements[i] for i in range(k)]
+            ci_deltas[arm] = paired_bootstrap_ci(paired_deltas)
+        summary["bootstrap_ci_delta_vs_none"] = ci_deltas
 
     print(json.dumps(summary, indent=2))
     if a.out:
