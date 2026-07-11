@@ -200,10 +200,28 @@ class ClaudeBridge:
     def __init__(self, config: BridgeConfig | None = None, dry_run: bool = False):
         self.config = config or BridgeConfig()
         self.dry_run = dry_run
+        # Cumulative per-run consumption across all run() calls on this instance.
+        # Plan 02 reads these off the shared pipeline bridge; not persisted here.
+        self.total_tokens_in: int = 0
+        self.total_tokens_out: int = 0
+        self.total_cache_read: int = 0
+        self.total_wall_clock_s: float = 0.0
 
     @property
     def available(self) -> bool:
         return bool(self.config.claude_bin)
+
+    def _accumulate(self, result: BridgeResult) -> None:
+        """Fold a non-dry, non-error result into the instance totals."""
+        if not result.success:
+            # Error/timeout returns measure no real work.
+            return
+        if result.duration_s is not None:
+            self.total_wall_clock_s += result.duration_s
+        if result.usage is not None:
+            self.total_tokens_in += result.usage.tokens_in
+            self.total_tokens_out += result.usage.tokens_out
+            self.total_cache_read += result.usage.cache_read
 
     def run(
         self,
@@ -315,7 +333,7 @@ class ClaudeBridge:
                     output = result.stdout
                     usage = None
 
-            return BridgeResult(
+            bridge_result = BridgeResult(
                 success=result.returncode == 0,
                 output=output,
                 exit_code=result.returncode,
@@ -323,6 +341,8 @@ class ClaudeBridge:
                 usage=usage,
                 duration_s=duration_s,
             )
+            self._accumulate(bridge_result)
+            return bridge_result
         except subprocess.TimeoutExpired:
             return BridgeResult(
                 success=False,
