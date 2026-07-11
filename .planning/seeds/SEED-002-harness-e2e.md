@@ -1,6 +1,7 @@
 ---
 id: SEED-002
-status: active
+status: shipped
+shipped: 2026-07-11 (v0.6.2 phases 16-18 — mode-honest reporting, no silent no-op arms + producers, close-the-loop CI/E2E; all verified passed)
 planted: 2026-07-10
 planted_during: v0.6.1 Make the Names Real (post-Phase-13)
 committed_as: v0.6.2 Make the Harness Real

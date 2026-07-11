@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v0.6.2
 milestone_name: Make the Harness Real
-status: completed
+status: Awaiting next milestone
 stopped_at: "Completed 18-02-PLAN.md (HAR-04): bench/close_loop.py — one-command prior-runs→distill→inject→judge→CI driver"
-last_updated: "2026-07-11T03:11:35.168Z"
-last_activity: 2026-07-11 -- Completed quick task 260710-x5a: harden _run_trial error handling
+last_updated: "2026-07-11T04:38:39.324Z"
+last_activity: 2026-07-11 — Milestone v0.6.2 completed and archived
 progress:
   total_phases: 3
   completed_phases: 3
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Phase 18 — Close the Loop with a CI, E2E
+**Current focus:** Planning v0.8.0 Harness Tax & Value (SEED-001, phases 19–22) — run /gsd-new-milestone
 
 ## Current Position
 
-Phase: 18 — COMPLETE
-Plan: 3 of 3
-Status: Phase 18 complete
-Last activity: 2026-07-11 -- Completed quick task 260710-x5a: harden _run_trial error handling
+Phase: Milestone v0.6.2 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-07-11 — Milestone v0.6.2 completed and archived
 
 ## Performance Metrics
 
@@ -168,8 +168,4 @@ Data: `data/longmemeval_s_cleaned.json` (265MB) + `data/locomo10.json` present; 
 
 ## Operator Next Steps
 
-- Plan the first v0.6.1 phase with `/gsd-plan-phase 12` (Honesty & Failure-Capability)
-- v0.7.0 (retrieval bench) resumes after v0.6.1 ships; its spec waits at `.planning/deferred/v0.7.0-REQUIREMENTS.md`
-- Rotate the `OPENAI_API_KEY` pasted in an earlier chat session, if not already done
-
-</content>
+- Start the next milestone with /gsd-new-milestone

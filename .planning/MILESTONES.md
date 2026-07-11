@@ -1,5 +1,20 @@
 # Milestones
 
+## v0.6.2 Make the Harness Real (Shipped: 2026-07-11)
+
+**Phases completed:** 3 phases, 7 plans, 7 tasks
+
+**Key accomplishments:**
+
+- `bench/distiller.py` reads `memory.db` and writes a real `.planning/codebase/wiki/` article corpus (one `.md` per non-empty MemoryKind), closing the producer/reader mismatch where `wikigen.py`'s single `wiki.md` never fed the corpus-globbing Phase-11 semantic reader.
+- Fail-loud arm gate (HAR-02): `bench/compound_eval.py` now maps each arm to its required producer (`_ARM_PRODUCERS` / `_missing_producer`) and, when that artifact is absent or empty, emits "arm measured nothing: producer X absent" and exits `_EXIT_PRODUCER_ABSENT` (3) instead of reporting a bare number. Mode-honest reporting (HAR-01): real-mode reports never leak the cheap-mode caveat and always state mode/arm/sample-size/producers.
+- `bench/prepare_fixture.py` is the ONE `prepare-fixture` command (HAR-03, success criterion 3) that provisions every arm's producer artifact — repomix pack and wiki article corpus — before the `bench.compound_eval` arm matrix runs, wiring `flowstate.pack.run_pack` and `bench.distiller.main` without reimplementing either.
+- Seeded stdlib paired-bootstrap CI (`bench/bootstrap.py`) wired into `replicate.py`'s Track-2 summary as `bootstrap_ci_delta_vs_none[arm]`, isolated from the deterministic compounding_score.
+- `bench/close_loop.py` — one command chains scaffold-seeded worktree isolation, `bench.prepare_fixture` provisioning, `bench.replicate`-style judge trajectories, and `bench.bootstrap.paired_bootstrap_ci` into a single CI'd delta; `--mode cheap` runs with zero subprocess/LLM dependency and never mutates the checked-in fixture.
+- CI-safe E2E smoke test proving all five bench arms (full/none/memory/pack/wiki) run green in `--mode cheap` and that pack/wiki fail loud with `_EXIT_PRODUCER_ABSENT` when their producer artifact is missing.
+
+---
+
 ## v0.6.1 Make the Names Real (Shipped: 2026-07-11)
 
 **Phases completed:** 4 phases (12–15), 15 plans
