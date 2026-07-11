@@ -115,7 +115,10 @@ Full detail: [`milestones/v0.6.2-ROADMAP.md`](./milestones/v0.6.2-ROADMAP.md).
   2. An opt-in config flag makes the orchestrator pass `include_layers={"wiki"}` to `build_context_prefix()`; with the flag off, the output is byte-identical to today's default.
   3. With the flag on but the `[semantic]` extra absent, the wiki layer degrades to a no-op-with-warning — never a hard crash — and `pip install flowstate[semantic]` is surfaced as the requirement for the KNN path.
   4. A dogfood smoke-test runs FlowState's own pipeline on a FlowState task with the wiki flag on, against this project's real `memory.db`, and asserts the corpus is globbed and top-k articles are injected with the run green (acceptance = "the layer fires," not "quality improved").
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 21-01-PLAN.md — WIKI-03: promote bench/distiller.py → flowstate/distiller.py (bench re-imports) + `flowstate distill` CLI + kind="wiki" manifest & is_wiki_stale (staleness mirrors flowstate pack); run_pipeline distill side untouched (D-03 fence)
+- [ ] 21-02-PLAN.md — WIKI-04/WIKI-05: opt-in `wiki_layer` pref (default false, byte-identical off) + _STANDARD_LAYERS ∪ {wiki} union at orchestrator.py:254 + one-time `[semantic]`-absent degradation warning
+- [ ] 21-03-PLAN.md — WIKI-06: dogfood integration test — distill this project's real memory.db, build prefix with the wiki union, assert the layer fires (globbed + top-k injected), skip/static-degrade gracefully
 
 ### Phase 22: The Verdict
 **Goal**: A pre-registered, paired-design measurement honestly answers whether FlowState's context stack — and specifically the now-active wiki layer — earns its token/latency tax on a real repo, accepting a null result as a legitimate outcome.
