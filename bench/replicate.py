@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import statistics
 import subprocess
 import sys
@@ -30,7 +31,12 @@ from bench.bootstrap import paired_bootstrap_ci
 
 def _run_trial(arm: str, runs: int, root: Path, label: str) -> list[float] | None:
     """One harness invocation; returns the per-run judge scores, or None on any gap."""
-    out = Path(tempfile.mkstemp(prefix=f"repl_{label}_", suffix=".json")[1])
+    # mkstemp returns (open_fd, path); close the fd immediately so it does not
+    # leak, and unlink the file in the finally below so a full sweep
+    # (trials x arms x 2 invocations) cannot exhaust the fd limit or litter TMPDIR.
+    fd, path = tempfile.mkstemp(prefix=f"repl_{label}_", suffix=".json")
+    os.close(fd)
+    out = Path(path)
     cmd = [
         sys.executable,
         "-m",
@@ -48,12 +54,14 @@ def _run_trial(arm: str, runs: int, root: Path, label: str) -> list[float] | Non
         "--out",
         str(out),
     ]
-    subprocess.run(cmd, check=False)
     try:
+        subprocess.run(cmd, check=False)
         d = json.loads(out.read_text())
         scores = [r["score"] for r in d.get("judge", {}).get("per_run", [])]
     except Exception:
         return None
+    finally:
+        out.unlink(missing_ok=True)
     if not scores or any(s is None for s in scores):
         return None
     return [float(s) for s in scores]

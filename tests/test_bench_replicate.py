@@ -271,3 +271,45 @@ def test_main_omits_bootstrap_ci_when_none_arm_absent(monkeypatch, tmp_path):
     assert rc == 0
     summary = json.loads(out_path.read_text())
     assert "bootstrap_ci_delta_vs_none" not in summary
+
+
+# ---------------------------------------------------------------------------
+# WR-02: _run_trial must not leak the mkstemp fd / temp file
+# ---------------------------------------------------------------------------
+
+
+def test_run_trial_removes_temp_file_on_success(monkeypatch):
+    """_run_trial closes the mkstemp fd and unlinks the temp file after a run."""
+    import bench.replicate as rep
+
+    captured: dict[str, str] = {}
+
+    def fake_run(cmd, check=False):
+        out_path = cmd[cmd.index("--out") + 1]
+        captured["out"] = out_path
+        Path(out_path).write_text(
+            json.dumps({"judge": {"per_run": [{"score": 5.0}, {"score": 7.0}]}})
+        )
+
+    monkeypatch.setattr("bench.replicate.subprocess.run", fake_run)
+
+    scores = rep._run_trial("wiki", 2, Path("."), "wiki0")
+    assert scores == [5.0, 7.0]
+    assert not Path(captured["out"]).exists(), "temp file must be unlinked"
+
+
+def test_run_trial_removes_temp_file_on_failure(monkeypatch):
+    """The temp file is cleaned up even when the trial yields no usable scores."""
+    import bench.replicate as rep
+
+    captured: dict[str, str] = {}
+
+    def fake_run(cmd, check=False):
+        # write nothing -> read_text raises -> _run_trial returns None
+        captured["out"] = cmd[cmd.index("--out") + 1]
+
+    monkeypatch.setattr("bench.replicate.subprocess.run", fake_run)
+
+    scores = rep._run_trial("none", 2, Path("."), "none0")
+    assert scores is None
+    assert not Path(captured["out"]).exists(), "temp file must be unlinked on failure"
