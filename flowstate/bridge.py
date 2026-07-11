@@ -24,9 +24,11 @@ Prompt cache behavior:
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -101,12 +103,27 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 _SENTINEL = object()
 
 
+@dataclass(frozen=True)
+class BridgeUsage:
+    """Real per-call token consumption from `claude --print --output-format json`.
+
+    Populated from the response `usage` sub-object; missing keys default to 0.
+    """
+
+    tokens_in: int = 0
+    tokens_out: int = 0
+    cache_read: int = 0
+
+
 @dataclass
 class BridgeResult:
     success: bool
     output: str
     exit_code: int = 0
     error: str | None = None
+    # Appended after existing fields to preserve positional construction.
+    usage: BridgeUsage | None = None
+    duration_s: float | None = None
 
 
 @dataclass
@@ -209,6 +226,7 @@ class ClaudeBridge:
             model: Model override for this call. _SENTINEL = use config default.
         """
         if self.dry_run:
+            # Dry runs measure no real LLM work: usage/duration_s stay None.
             return BridgeResult(
                 success=True,
                 output=f"[dry-run] claude prompt ({len(prompt)} chars): {prompt[:120]}...",
@@ -268,6 +286,7 @@ class ClaudeBridge:
             env["ENABLE_PROMPT_CACHING_1H"] = "1"
 
         try:
+            start = time.monotonic()
             result = subprocess.run(
                 cmd,
                 cwd=self.config.project_root,
@@ -276,11 +295,33 @@ class ClaudeBridge:
                 timeout=self.config.timeout,
                 env=env,
             )
+            duration_s = time.monotonic() - start
+
+            output = result.stdout
+            usage: BridgeUsage | None = None
+            if output_format == "json":
+                # Never raise: malformed/absent `result` → usage=None, keep raw stdout.
+                try:
+                    parsed = json.loads(result.stdout)
+                    if isinstance(parsed, dict) and "result" in parsed:
+                        output = parsed["result"]
+                        raw_usage = parsed.get("usage") or {}
+                        usage = BridgeUsage(
+                            tokens_in=raw_usage.get("input_tokens", 0),
+                            tokens_out=raw_usage.get("output_tokens", 0),
+                            cache_read=raw_usage.get("cache_read_input_tokens", 0),
+                        )
+                except (json.JSONDecodeError, ValueError, TypeError):
+                    output = result.stdout
+                    usage = None
+
             return BridgeResult(
                 success=result.returncode == 0,
-                output=result.stdout,
+                output=output,
                 exit_code=result.returncode,
                 error=result.stderr if result.returncode != 0 else None,
+                usage=usage,
+                duration_s=duration_s,
             )
         except subprocess.TimeoutExpired:
             return BridgeResult(
