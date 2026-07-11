@@ -95,6 +95,31 @@ def test_glob_matches_reader_contract(tmp_path):
     assert len(matched) == 3
 
 
+def test_distills_more_than_default_limit_entries(tmp_path):
+    """WR-01: a kind with >20 entries must be distilled in full, not capped at 20."""
+    n = 50
+    with MemoryStore(tmp_path) as store:
+        for i in range(n):
+            store.add(
+                MemoryEntry.create(
+                    MemoryKind.DECISION,
+                    content=f"decision body {i}",
+                    summary=f"decision-summary-{i}",
+                )
+            )
+
+    rc = main(["--root", str(tmp_path)])
+    assert rc == 0
+
+    corpus_dir = tmp_path / _WIKI_CORPUS_REL
+    articles = list(corpus_dir.glob("**/*.md"))
+    assert len(articles) == 1
+    text = articles[0].read_text()
+    # Every seeded summary must appear — none silently dropped by a 20-item cap.
+    for i in range(n):
+        assert f"decision-summary-{i}" in text
+
+
 # ---------------------------------------------------------------------------
 # Task 2: --llm densification
 # ---------------------------------------------------------------------------

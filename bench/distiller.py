@@ -127,7 +127,11 @@ def main(argv: list[str] | None = None) -> int:
     store = None
     try:
         store = MemoryStore(root)
-        by_kind = {kind: store.get_by_kind(kind) for kind in _ARTICLE_KINDS}
+        # Pass an explicit high limit so distillation is complete, not a
+        # head-slice: get_by_kind defaults to limit=20, which would silently
+        # drop the oldest knowledge from any kind with >20 entries and turn the
+        # durable wiki corpus into a rolling 20-item window (WR-01).
+        by_kind = {kind: store.get_by_kind(kind, limit=100_000) for kind in _ARTICLE_KINDS}
     except Exception as exc:
         print(f"distiller: could not read memory.db under {root}: {exc}", file=sys.stderr)
         return 1
