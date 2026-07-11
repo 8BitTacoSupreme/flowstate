@@ -221,6 +221,55 @@ def test_compute_scorecard_never_raises_on_empty_and_single():
     assert card_single.compounding_score == 0
 
 
+def test_consumption_fields_do_not_change_scorecard():
+    """The new tokens_in/tokens_out/cache_read/wall_clock_s fields are pure carriage.
+
+    A snapshot sequence scored with the consumption fields at their defaults must
+    yield a byte-identical Scorecard to the same sequence with those fields set to
+    nonzero values — the scorer reads no consumption field.
+    """
+    base = _compounding_sequence()
+    enriched = [
+        RunSnapshot(
+            run_index=s.run_index,
+            run_id=s.run_id,
+            artifacts_changed=s.artifacts_changed,
+            new_gotchas=s.new_gotchas,
+            reencountered_gotchas=s.reencountered_gotchas,
+            verify_pass=s.verify_pass,
+            verify_fail=s.verify_fail,
+            verify_skip=s.verify_skip,
+            prefix_tokens=s.prefix_tokens,
+            mem_hits=s.mem_hits,
+            layers_present=s.layers_present,
+            tokens_in=1000 + s.run_index,
+            tokens_out=500 + s.run_index,
+            cache_read=200 + s.run_index,
+            wall_clock_s=1.5 * (s.run_index + 1),
+        )
+        for s in base
+    ]
+    card_base = compute_scorecard(base)
+    card_enriched = compute_scorecard(enriched)
+    # Compare every axis + headline; snapshots tuple differs (it carries the fields),
+    # so assert the scoring outputs are identical rather than the whole dataclass.
+    assert card_base.axis_convergence == card_enriched.axis_convergence
+    assert card_base.axis_gotcha_learning == card_enriched.axis_gotcha_learning
+    assert card_base.axis_verify_non_regression == card_enriched.axis_verify_non_regression
+    assert card_base.axis_enrichment == card_enriched.axis_enrichment
+    assert card_base.compounding_score == card_enriched.compounding_score
+    assert card_base.verdict == card_enriched.verdict
+
+
+def test_consumption_fields_default_to_zero_and_none():
+    """RunSnapshot construction without the consumption fields leaves them at defaults."""
+    s = _snap(0, artifacts_changed=3)
+    assert s.tokens_in == 0
+    assert s.tokens_out == 0
+    assert s.cache_read == 0
+    assert s.wall_clock_s is None
+
+
 def test_axes_never_raise_on_empty_input():
     for fn in (
         axis_convergence,
