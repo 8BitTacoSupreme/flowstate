@@ -26,7 +26,11 @@ Make `bench/judge.py` refuse to grade its own producer's output, and turn a sing
 
 ### Guard location (IND-01)
 - **D-05:** Add an **argparse `main()` / `python -m bench.judge` CLI to `judge.py`** with `--judge-model` and `--producer-model`, enforcing the guard at parse/validate time. This makes IND-01's "running `bench/judge.py` with `--judge-model` absent" literal, and matches `grounding.py`, which is already a CLI. `judge.py`'s existing library functions (`judge_run`, `summarize`, etc.) stay importable and unchanged in contract.
-- **D-06:** The shared validation (judge set non-empty; every judge ≠ producer) should live in a **reusable helper** so the caller path (`compound_eval.py` / `close_loop.py`, which already know the producer model from `RunSnapshot`) can call the same guard before judging — the CLI is the literal IND-01 surface, but the callers are where the guard actually protects a real run.
+- **D-06 (CORRECTED after plan-check — supersedes the original premise):** The shared validation (judge set non-empty; every judge ≠ producer) lives in a **reusable helper**, but the producer model is **passed explicitly**, NOT read from `RunSnapshot` — `RunSnapshot` has no producer field (Phase 19 added tokens/wall-clock only; the earlier assumption was wrong). The **real judged-run chokepoint is `bench/compound_eval.py`**, which both the direct CLI path and the `close_loop → replicate → subprocess` path flow through, and which already owns `--judge-model` (default `None`). Wire the guard there:
+  - `compound_eval.py` gains `--producer-model` and calls the shared guard when judging is active (`do_judge` true). Per IND-01/D-04: `--judge` set but `--judge-model` absent, OR judge == producer → **fail loud (nonzero exit)** before any judging.
+  - `bench/replicate.py::_run_trial` — the actual conduit — must thread an **explicit, distinct** `--judge-model` (and `--producer-model`) into the `compound_eval` subprocess command it builds, so the real replicate/close_loop path honors the guard AND stays runnable after it lands. `replicate.py` is therefore in scope (`files_modified`).
+  - `close_loop.py` does **NOT** get a direct `judge_run` guard — it never calls `judge_run`; its real path is covered **transitively** through `compound_eval`. Only touch `close_loop.py` if it must pass model config down to `replicate`; otherwise leave it out of scope.
+  - The guard must define its **unset/CLI-default-model semantics** explicitly and reconcile them with D-04 ("absent judge = hard stop") — the default real path must remain executable via a distinct judge/producer pairing (threaded through `replicate`), not raise on `judge==producer==None`.
 
 ### Judge set default (IND-02)
 - **D-07:** Default to a **single judge** (backward-compatible with existing callers). When multiple judge models are passed, **every** judge model must differ from the producer model — not merely the aggregate. Any judge == producer → hard fail (per D-03/D-04).
@@ -51,8 +55,10 @@ Make `bench/judge.py` refuse to grade its own producer's output, and turn a sing
 ### The authority that must NOT move (IND-03)
 - `bench/metrics.py` — `compute_scorecard` / `compounding_score` is the authoritative deterministic scorer; the LLM judge is and stays **excluded** from it. IND-03 requires a test asserting this holds under the new multi-judge path. (Phase 19 already established the "judge excluded" + "tax excluded" exclusion-note convention in `bench/report.py` — follow it.)
 
-### The callers that know the producer model (D-06)
-- `bench/compound_eval.py` and `bench/close_loop.py` — invoke the judge and already have the producer model available via `RunSnapshot` (Phase 19 wired real consumption + producer into the snapshot). These are where the reusable guard helper (D-06) gets called for a real run.
+### The real judged-run chokepoint + conduit (D-06, corrected)
+- `bench/compound_eval.py` — the real chokepoint. Already owns `--judge-model` (default `None`) and a `_should_judge`/`do_judge` gate; calls `judge_run`. The `--producer-model` flag + shared guard land here. `RunSnapshot` does **not** carry the producer model — pass it explicitly.
+- `bench/replicate.py::_run_trial` — builds the `python -m bench.compound_eval --judge --allow-llm` subprocess command with **no** judge/producer model today. Must thread an explicit distinct `--judge-model`/`--producer-model` so the real path honors the guard and stays runnable. In scope.
+- `bench/close_loop.py` — calls `replicate`, never `judge_run` directly; covered transitively via `compound_eval`. No direct guard. Touch only if it must pass model config to `replicate`.
 
 ### Milestone/phase spec
 - `.planning/ROADMAP.md` §"Phase 20: Evaluator Independence" — goal + 3 success criteria.
