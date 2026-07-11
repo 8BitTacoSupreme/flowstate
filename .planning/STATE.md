@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.6.1
 milestone_name: Make the Names Real
-status: milestone_complete
-stopped_at: Milestone complete (Phase 16 was final phase)
-last_updated: 2026-07-11T00:46:35.045Z
-last_activity: 2026-07-11
+status: executing
+stopped_at: "Completed 15-02-PLAN.md (GSD-02): installer lays down GSD unconditionally"
+last_updated: "2026-07-11T01:07:22.392Z"
+last_activity: 2026-07-11 -- Phase 17 planning complete
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 5
-  total_plans: 16
+  total_plans: 19
   completed_plans: 16
-  percent: 100
+  percent: 83
 ---
 
 # Project State
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 Phase: 16
 Plan: Not started
-Status: Milestone complete
-Last activity: 2026-07-11
+Status: Ready to execute
+Last activity: 2026-07-11 -- Phase 17 planning complete
 
 ## Performance Metrics
 
