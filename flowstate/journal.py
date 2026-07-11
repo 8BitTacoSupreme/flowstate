@@ -23,6 +23,10 @@ def append_run_entry(
     root: Path,
     dry_run: bool = False,
     timestamp: datetime | None = None,
+    tokens_in: int = 0,
+    tokens_out: int = 0,
+    cache_read: int = 0,
+    wall_clock_s: float | None = None,
 ) -> None:
     """Write one MemoryKind.RUN entry for this run_id (idempotent).
 
@@ -90,6 +94,12 @@ def append_run_entry(
         "gotchas": this_run_sigs,
         "delta_line": delta_line,
         "dry_run": dry_run,
+        # Real per-run consumption from the shared pipeline bridge (Plan 19-02);
+        # bench/capture.py reads these under the same keys. Cheap/dry runs pass 0/None.
+        "tokens_in": tokens_in,
+        "tokens_out": tokens_out,
+        "cache_read": cache_read,
+        "wall_clock_s": wall_clock_s,
     }
 
     # 7. Build human-readable summary and content

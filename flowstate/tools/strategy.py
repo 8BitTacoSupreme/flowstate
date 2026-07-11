@@ -151,6 +151,7 @@ class StrategyAdapter(ToolAdapter):
             allowed_tools=["WebSearch"],
             max_turns=5,
             model="sonnet",
+            output_format="json",
         )
 
         if br.success and br.output.strip():

@@ -108,6 +108,7 @@ class ResearchAdapter(ToolAdapter):
                 allowed_tools=["WebSearch", "WebFetch"],
                 max_turns=_RESEARCH_MAX_TURNS,
                 model="sonnet",
+                output_format="json",
             )
             if br.success and br.output.strip():
                 return br.output.strip(), None
@@ -135,6 +136,7 @@ class ResearchAdapter(ToolAdapter):
             allowed_tools=[],
             max_turns=2,
             model="sonnet",
+            output_format="json",
         )
         if not br.success:
             return 0.0

@@ -321,9 +321,21 @@ def run_pipeline(state: FlowStateModel, root: Path) -> FlowStateModel:
 
     _run_step(state, root, "discipline", 5, 5, _run_discipline, bus=bus)
 
-    # Journal: write delta entry after all steps complete
+    # Journal: write delta entry after all steps complete. Stamp the run's real
+    # consumption from the shared pipeline bridge (Plan 19-02). A dry bridge did no
+    # real work, so tokens are already 0 and wall_clock_s is None for dry runs.
     try:
-        append_run_entry(memory, state, run_id, root=root, dry_run=dry_run)
+        append_run_entry(
+            memory,
+            state,
+            run_id,
+            root=root,
+            dry_run=dry_run,
+            tokens_in=bridge.total_tokens_in,
+            tokens_out=bridge.total_tokens_out,
+            cache_read=bridge.total_cache_read,
+            wall_clock_s=None if dry_run else bridge.total_wall_clock_s,
+        )
     except Exception as exc:
         console.print(f"  [yellow]journal: non-fatal error: {exc}[/yellow]")
 
