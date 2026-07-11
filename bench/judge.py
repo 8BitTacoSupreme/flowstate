@@ -19,6 +19,7 @@ import json
 import os
 import re
 import shutil
+import statistics
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -26,6 +27,10 @@ from pathlib import Path
 
 _JUDGE_TIMEOUT = 180
 _JUDGE_MAX_ATTEMPTS = 3
+# Binarization threshold for the multi-judge pass-rate (IND-02 / D-02): a per-judge
+# 0-10 score >= _PASS_THRESHOLD counts as a "pass". Explicit + documented, not magic.
+# D-08 tie rule: majority-pass requires passes > n/2, so an even-N tie (e.g. 2/4) FAILS.
+_PASS_THRESHOLD = 7.0
 # LLM-produced artifacts worth judging (PROJECT.md/ROADMAP.md are deterministic templates).
 _ARTIFACT_FILES = ("research/report.md", "research/strategy.md", "research/brief.md")
 _MAX_ARTIFACT_CHARS = 8000
@@ -187,6 +192,54 @@ def _validate_judges(judge_models: list[str], producer_model: str) -> None:
             f"judge model(s) {dupes} equal the producer model {producer_model!r} — a judge "
             "must not grade its own producer (independence guard, IND-01)"
         )
+
+
+def aggregate_judges(results: list[JudgeResult]) -> dict:
+    """Multi-judge verdict (IND-02). Never raises (composes never-raise ``judge_run``).
+
+    Keeps the 0-10 signal (mean/median of per-judge scores) AND adds a binarized
+    pass-rate with a Wilson CI (D-01/D-02): each judge's score is binarized at
+    ``_PASS_THRESHOLD`` (``>=`` = pass). None (insufficient-data) per-judge scores are
+    EXCLUDED from the pass-rate denominator — an unusable judge does not vote (documented
+    choice; mirrors ``summarize``'s None-filter). Majority-pass is conservative per D-08:
+    ``passes > n/2``, so an even-N tie (e.g. 2/4) is NOT a majority -> FAIL.
+
+    This is an ADDITIONAL surface — ``summarize()``'s numeric 0-10 trend is unchanged.
+    """
+    # Function-scope import: grounding.py imports from bench.judge, so a module-top
+    # `from bench.grounding import _wilson` would create a circular import.
+    from bench.grounding import _wilson
+
+    scored = [r.score for r in results if r.score is not None]
+    n = len(scored)
+    if n == 0:
+        return {
+            "n_judges": len(results),
+            "n_scored": 0,
+            "mean": None,
+            "median": None,
+            "pass_threshold": _PASS_THRESHOLD,
+            "passes": 0,
+            "pass_rate": None,
+            "wilson_low": 0.0,
+            "wilson_high": 0.0,
+            "majority_pass": False,
+        }
+    passes = sum(1 for s in scored if s >= _PASS_THRESHOLD)
+    low, high = _wilson(passes, n)
+    return {
+        "n_judges": len(results),
+        "n_scored": n,
+        "mean": round(statistics.fmean(scored), 4),
+        "median": round(statistics.median(scored), 4),
+        "pass_threshold": _PASS_THRESHOLD,
+        "passes": passes,
+        "pass_rate": round(passes / n, 4),
+        "wilson_low": round(low, 4),
+        "wilson_high": round(high, 4),
+        # D-08: passes > n/2 — an even-N tie (2/4) is not a majority, so it fails.
+        "majority_pass": passes > n / 2,
+    }
 
 
 def _build_parser() -> argparse.ArgumentParser:

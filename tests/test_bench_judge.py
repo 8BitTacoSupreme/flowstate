@@ -257,6 +257,87 @@ def test_summarize_trends():
     assert summarize([mk(0, None), mk(1, None)])["trend"] == "insufficient-data"
 
 
+# ---------------------------------------------------------------------------
+# Multi-judge aggregation (IND-02)
+# ---------------------------------------------------------------------------
+
+
+def test_pass_threshold_constant_exists():
+    assert isinstance(judge_mod._PASS_THRESHOLD, float)
+
+
+def test_aggregate_two_all_pass_mean_and_wilson():
+    agg = judge_mod.aggregate_judges([JudgeResult(0, 8, ""), JudgeResult(1, 9, "")])
+    assert agg["mean"] == 8.5
+    assert agg["median"] == 8.5
+    assert agg["pass_rate"] == 1.0
+    assert agg["majority_pass"] is True
+    assert 0.0 <= agg["wilson_low"] <= agg["wilson_high"] <= 1.0
+
+
+def test_aggregate_three_majority_pass():
+    agg = judge_mod.aggregate_judges(
+        [JudgeResult(0, 6, ""), JudgeResult(1, 8, ""), JudgeResult(2, 9, "")]
+    )
+    assert agg["passes"] == 2
+    assert agg["majority_pass"] is True
+    assert round(agg["pass_rate"], 3) == 0.667
+
+
+def test_aggregate_even_n_tie_is_fail():
+    """2 pass / 4 total is a tie, not a majority -> majority_pass False (D-08)."""
+    agg = judge_mod.aggregate_judges(
+        [
+            JudgeResult(0, 8, ""),
+            JudgeResult(1, 9, ""),
+            JudgeResult(2, 5, ""),
+            JudgeResult(3, 4, ""),
+        ]
+    )
+    assert agg["passes"] == 2
+    assert agg["n_scored"] == 4
+    assert agg["pass_rate"] == 0.5
+    assert agg["majority_pass"] is False
+
+
+def test_aggregate_none_excluded_from_denominator():
+    """A None (insufficient-data) score is excluded from the pass-rate denominator."""
+    agg = judge_mod.aggregate_judges(
+        [JudgeResult(0, 8, ""), JudgeResult(1, 9, ""), JudgeResult(2, None, "")]
+    )
+    assert agg["n_judges"] == 3
+    assert agg["n_scored"] == 2  # None excluded
+    assert agg["pass_rate"] == 1.0
+    assert agg["majority_pass"] is True
+
+
+def test_aggregate_all_none_never_raises():
+    agg = judge_mod.aggregate_judges([JudgeResult(0, None, ""), JudgeResult(1, None, "")])
+    assert agg["n_scored"] == 0
+    assert agg["mean"] is None
+    assert agg["pass_rate"] is None
+    assert agg["majority_pass"] is False
+
+
+def test_aggregate_single_judge_backward_compatible():
+    agg = judge_mod.aggregate_judges([JudgeResult(0, 9, "")])
+    assert agg["mean"] == 9.0
+    assert agg["pass_rate"] == 1.0
+    assert agg["majority_pass"] is True
+
+
+def test_summarize_unchanged_for_fixed_input():
+    """Regression guard (D-02): summarize output is byte-identical to the known shape."""
+    results = [JudgeResult(0, 4, ""), JudgeResult(1, 8, "")]
+    assert summarize(results) == {
+        "scores": [4, 8],
+        "trend": "improving",
+        "first": 4,
+        "last": 8,
+        "delta": 4,
+    }
+
+
 def test_write_json_includes_judge_when_present(tmp_path: Path):
     from bench.metrics import compute_scorecard
 
