@@ -321,7 +321,7 @@ class ClaudeBridge:
                 # Never raise: malformed/absent `result` → usage=None, keep raw stdout.
                 try:
                     parsed = json.loads(result.stdout)
-                    if isinstance(parsed, dict) and "result" in parsed:
+                    if isinstance(parsed, dict) and isinstance(parsed.get("result"), str):
                         output = parsed["result"]
                         raw_usage = parsed.get("usage")
                         raw_usage = raw_usage if isinstance(raw_usage, dict) else {}
