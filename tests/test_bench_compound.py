@@ -951,6 +951,162 @@ def test_cheap_dry_all_four_axes_show_movement(tmp_path: Path):
     assert card.verdict == "compounding"
 
 
+# ── Task 1/2: no-silent-no-op-arm producer gate (HAR-02) ────────────────────
+
+
+def test_missing_producer_wiki_absent_then_present(tmp_path: Path):
+    from bench.compound_eval import _missing_producer
+
+    # Neither the corpus dir nor wiki.md exists.
+    assert _missing_producer("wiki", tmp_path) == "wiki"
+
+    # Corpus dir with a single article satisfies the requirement.
+    corpus = tmp_path / ".planning" / "codebase" / "wiki"
+    corpus.mkdir(parents=True)
+    (corpus / "x.md").write_text("# x")
+    assert _missing_producer("wiki", tmp_path) is None
+
+
+def test_missing_producer_wiki_satisfied_by_wiki_md(tmp_path: Path):
+    from bench.compound_eval import _missing_producer
+
+    wiki_md = tmp_path / ".planning" / "codebase" / "wiki.md"
+    wiki_md.parent.mkdir(parents=True)
+    wiki_md.write_text("# wiki")
+    assert _missing_producer("wiki", tmp_path) is None
+
+
+def test_missing_producer_pack_absent_then_present(tmp_path: Path):
+    from bench.compound_eval import _missing_producer
+
+    assert _missing_producer("pack", tmp_path) == "pack"
+
+    pack = tmp_path / ".planning" / "codebase" / "repomix-pack.xml"
+    pack.parent.mkdir(parents=True)
+    pack.write_text("<repomix/>")
+    assert _missing_producer("pack", tmp_path) is None
+
+
+def test_missing_producer_no_requirement_arms_always_none(tmp_path: Path):
+    from bench.compound_eval import _missing_producer
+
+    for arm in ("full", "memory", "none"):
+        assert _missing_producer(arm, tmp_path) is None
+
+
+def test_missing_producer_never_raises_on_odd_planning_tree(tmp_path: Path):
+    """A file where a directory is expected must degrade to 'producer absent', never raise."""
+    from bench.compound_eval import _missing_producer
+
+    planning = tmp_path / ".planning"
+    planning.mkdir()
+    # Put a plain file at the path where the wiki corpus dir would live.
+    (planning / "codebase").write_text("not a dir")
+    assert _missing_producer("wiki", tmp_path) == "wiki"
+    assert _missing_producer("pack", tmp_path) == "pack"
+
+
+def test_main_fails_loud_on_missing_wiki_producer(tmp_path: Path):
+    from bench.compound_eval import main
+
+    rc = main(["--mode", "cheap", "--layers", "wiki", "--root", str(tmp_path)])
+    assert rc != 0
+
+
+def test_main_fails_loud_on_missing_wiki_producer_prints_marker(tmp_path: Path):
+    from io import StringIO
+
+    from rich.console import Console
+
+    import bench.compound_eval as ce
+
+    buf = StringIO()
+    console = Console(file=buf, width=120, force_terminal=False)
+    original_console = ce._console
+    try:
+        ce._console = console
+        rc = ce.main(["--mode", "cheap", "--layers", "wiki", "--root", str(tmp_path)])
+    finally:
+        ce._console = original_console
+
+    out = buf.getvalue()
+    assert rc != 0
+    assert "arm measured nothing: producer wiki absent" in out
+
+
+def test_main_fails_loud_on_missing_pack_producer_prints_marker():
+    import tempfile
+    from io import StringIO
+
+    from rich.console import Console
+
+    import bench.compound_eval as ce
+
+    buf = StringIO()
+    console = Console(file=buf, width=120, force_terminal=False)
+    original_console = ce._console
+    with tempfile.TemporaryDirectory() as td:
+        try:
+            ce._console = console
+            rc = ce.main(["--mode", "cheap", "--layers", "pack", "--root", td])
+        finally:
+            ce._console = original_console
+    out = buf.getvalue()
+    assert rc != 0
+    assert "arm measured nothing: producer pack absent" in out
+
+
+def test_main_wiki_arm_reaches_report_when_corpus_present(tmp_path: Path):
+    """A run whose wiki corpus IS present does NOT trip the gate — reaches report, rc == 0."""
+    import shutil
+
+    from bench.compound_eval import main
+
+    dest = tmp_path / "sample_project"
+    shutil.copytree(_FIXTURE_ROOT, dest)
+    corpus = dest / ".planning" / "codebase" / "wiki"
+    corpus.mkdir(parents=True)
+    (corpus / "x.md").write_text("# x")
+    rc = main(["--mode", "cheap", "--runs", "1", "--layers", "wiki", "--root", str(dest)])
+    assert rc == 0
+
+
+def test_main_full_memory_none_never_print_absent_marker(tmp_path: Path):
+    import shutil
+    import tempfile as _tempfile
+    from io import StringIO
+
+    from rich.console import Console
+
+    import bench.compound_eval as ce
+
+    for arm in ("full", "memory", "none"):
+        buf = StringIO()
+        console = Console(file=buf, width=120, force_terminal=False)
+        original_console = ce._console
+        with _tempfile.TemporaryDirectory() as td:
+            dest = Path(td) / "sample_project"
+            shutil.copytree(_FIXTURE_ROOT, dest)
+            try:
+                ce._console = console
+                rc = ce.main(
+                    ["--mode", "cheap", "--runs", "1", "--layers", arm, "--root", str(dest)]
+                )
+            finally:
+                ce._console = original_console
+        out = buf.getvalue()
+        assert rc == 0, f"arm={arm} unexpectedly non-zero"
+        assert "arm measured nothing" not in out, f"arm={arm} unexpectedly tripped the gate"
+
+
+def test_real_loop_wiki_gate_fires_for_real_mode_too(tmp_path: Path):
+    """The gate fires for --mode real as well (arm cannot measure its layer either way)."""
+    from bench.compound_eval import main
+
+    rc = main(["--mode", "real", "--layers", "wiki", "--root", str(tmp_path)])
+    assert rc != 0
+
+
 def test_real_loop_calls_scaffold_with_synthetic_false(tmp_path: Path, monkeypatch):
     """Guard: _real_loop must invoke scaffold with synthetic=False (not the default True)."""
     from io import StringIO
