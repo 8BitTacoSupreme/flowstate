@@ -28,6 +28,14 @@ from pathlib import Path
 
 from bench.bootstrap import paired_bootstrap_ci
 
+# Distinct judge/producer models threaded into the compound_eval subprocess so the
+# real replicate/close_loop path passes the independence guard (D-06) AND stays
+# runnable: judge != producer is REQUIRED by the compound_eval guard. Kept as
+# module-level constants so _run_trial's call-site signature stays unchanged and the
+# existing whole-function / subprocess.run monkeypatch tests remain valid.
+_JUDGE_MODEL = "claude-opus-4-1"
+_PRODUCER_MODEL = "claude-sonnet-4-5"
+
 
 def _run_trial(arm: str, runs: int, root: Path, label: str) -> list[float] | None:
     """One harness invocation; returns the per-run judge scores.
@@ -62,6 +70,12 @@ def _run_trial(arm: str, runs: int, root: Path, label: str) -> list[float] | Non
         str(root),
         "--judge",
         "--allow-llm",
+        # judge != producer is required by the compound_eval independence guard (D-06);
+        # a bare --judge --allow-llm with no models would now abort with _EXIT_JUDGE_CONFIG.
+        "--judge-model",
+        _JUDGE_MODEL,
+        "--producer-model",
+        _PRODUCER_MODEL,
         "--out",
         str(out),
     ]

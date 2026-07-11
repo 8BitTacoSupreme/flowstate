@@ -43,7 +43,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from bench.capture import capture_run_snapshot
-from bench.judge import JudgeResult, collect_artifacts, judge_run
+from bench.judge import JudgeResult, _validate_judges, collect_artifacts, judge_run
 from bench.metrics import RunSnapshot, Scorecard, compute_scorecard
 from bench.project import mutate_for_run, scaffold
 from bench.report import render_judge_panel, render_report, write_json
@@ -60,6 +60,12 @@ _EXIT_PRODUCER_ABSENT = 3
 # scorecard). Distinct from the producer gate but equally "the arm measured
 # nothing", so it must also exit non-zero rather than reporting success.
 _EXIT_NO_BRIDGE = 4
+
+# Exit code when the judge configuration is compromised (absent judge model, or a
+# judge model equal to the producer). This is fail-loud OPERATOR/CONFIG error
+# (IND-01/D-04), distinct from the producer/bridge gates: it fires at config time
+# BEFORE any judging or bridge check, so a same-model/absent judge never grades.
+_EXIT_JUDGE_CONFIG = 5
 
 # Producer-artifact paths, mirroring the reader-side constants in
 # flowstate/context_prefix.py (kept as local literals — bench deliberately does
@@ -163,6 +169,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "--judge-model",
         default=None,
         help="Model for the Tier-2 judge (default: claude CLI's default model).",
+    )
+    parser.add_argument(
+        "--producer-model",
+        default=None,
+        help=(
+            "Model FlowState uses to PRODUCE artifacts. Compared against --judge-model "
+            "for independence: a judge may not grade its own producer (IND-01)."
+        ),
     )
     return parser
 
@@ -367,6 +381,27 @@ def main(argv: list[str] | None = None) -> int:
         return _EXIT_PRODUCER_ABSENT
 
     do_judge = _judge_allowed(args, console)
+
+    # Independence guard (IND-01/D-06): when judging is active, enforce the SAME
+    # shared guard from bench.judge BEFORE _real_loop (so it fires without needing a
+    # bridge). Unset semantics: an absent --judge-model becomes an EMPTY judge list,
+    # which _validate_judges rejects on the empty-set branch (D-04 hard stop) BEFORE
+    # any judge==producer==None equality comparison; a distinct pair passes. This is
+    # fail-loud config error — kept OUT of any never-raise wrapper and off the
+    # mechanical scorecard path.
+    if do_judge:
+        judge_models = [args.judge_model] if args.judge_model else []
+        try:
+            _validate_judges(judge_models, args.producer_model)
+        except ValueError as exc:
+            console.print(
+                Panel(
+                    f"judge configuration rejected: {exc}",
+                    title="JUDGE CONFIG",
+                    border_style="bold red",
+                )
+            )
+            return _EXIT_JUDGE_CONFIG
 
     judged: list[JudgeResult] = []
     if args.mode == "real":
