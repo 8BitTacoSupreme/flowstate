@@ -57,6 +57,32 @@ def test_empty_memory_returns_nonzero_no_files(tmp_path):
     assert not corpus_dir.exists() or not list(corpus_dir.glob("**/*.md"))
 
 
+def test_changed_kind_set_leaves_no_orphaned_articles(tmp_path):
+    """A second distill with a changed non-empty-kind set clears orphans (WR-02).
+
+    Run 1 has only INSIGHT -> 01-insights.md. Run 2 adds DECISION, which is
+    ordered first, so DECISION becomes 01-decisions.md and INSIGHT shifts to
+    02-insights.md. Without clearing, the run-1 01-insights.md would orphan
+    alongside the run-2 02-insights.md and be ingested as a duplicate article.
+    """
+    corpus_dir = tmp_path / _WIKI_CORPUS_REL
+
+    _seed(tmp_path, [MemoryKind.INSIGHT])
+    assert main(["--root", str(tmp_path)]) == 0
+    run1 = {p.name for p in corpus_dir.glob("*.md")}
+    assert run1 == {"01-insights.md"}
+
+    # Add a higher-priority kind so the filename numbering shifts. --force
+    # mirrors the CLI, which always passes it (the staleness decision is made
+    # upstream in cli.distill), bypassing the distiller's populated-corpus skip.
+    _seed(tmp_path, [MemoryKind.DECISION])
+    assert main(["--root", str(tmp_path), "--force"]) == 0
+    run2 = {p.name for p in corpus_dir.glob("*.md")}
+
+    # Exactly the current article set — the orphaned 01-insights.md is gone.
+    assert run2 == {"01-decisions.md", "02-insights.md"}
+
+
 # ---------------------------------------------------------------------------
 # Task 2: is_wiki_stale — manifest-tracked staleness gate (mirrors is_pack_stale)
 # ---------------------------------------------------------------------------

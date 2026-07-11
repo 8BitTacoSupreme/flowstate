@@ -219,6 +219,18 @@ def main(argv: list[str] | None = None) -> int:
     # not propagated as a traceback (WR-04).
     try:
         corpus_dir.mkdir(parents=True, exist_ok=True)
+        # Clear the stale article files this distiller owns before writing the
+        # fresh set. Article filenames are position-numbered by non-empty kind,
+        # so a changed kind set (e.g. adding DECISION shifts INSIGHT from
+        # 01-insights.md to 02-insights.md) would otherwise orphan old files.
+        # _semantic_wiki_layer globs **/*.md with no dedup, so an orphan is
+        # ingested as a duplicate article (WR-02). Only clear the top-level
+        # *.md article files the distiller writes — never nested files or the
+        # parent tree — and stay best-effort so a cleanup failure never aborts
+        # the write (never-raise contract).
+        for stale in corpus_dir.glob("*.md"):
+            with contextlib.suppress(OSError):
+                stale.unlink()
         for filename, text in written.items():
             (corpus_dir / filename).write_text(text)
     except OSError as exc:
