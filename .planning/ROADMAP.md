@@ -175,7 +175,7 @@ Plans:
 - [x] 23-01-PLAN.md — Core seam + observe tier + env-scrub with the _AUTH_EXEMPT carve-out (SBX-02) [wave 1]
 - [x] 23-02-PLAN.md — macOS SBPL profile builder + Linux bwrap mount-namespace arg builder (SBX-02) [wave 2]
 - [x] 23-03-PLAN.md — Linux Landlock ctypes + functional bwrap smoke test + D-03 degradation ladder (SBX-02) [wave 3]
-- [ ] 23-04-PLAN.md — Linux bwrap+landlock spike + committed 23-SPIKE-LINUX.md finding (SBX-01) [wave 1]
+- [x] 23-04-PLAN.md — Linux bwrap+landlock spike + committed 23-SPIKE-LINUX.md finding (SBX-01) [wave 1]
 
 ### Phase 24: Thread the Seam + Config
 

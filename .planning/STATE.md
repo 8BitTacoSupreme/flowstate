@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Sandbox Guardrail
-status: executing
+status: verifying
 stopped_at: Completed 23-03-PLAN.md
-last_updated: "2026-07-12T17:19:24.536Z"
+last_updated: "2026-07-12T19:46:43.519Z"
 last_activity: 2026-07-12
 progress:
   total_phases: 7
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 15
-  completed_plans: 13
-  percent: 43
+  completed_plans: 14
+  percent: 57
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 Phase: 23 (Linux Parity + Core Seam) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-12
 
 **Parked from v0.8.0:** Phase 22 (The Verdict) code shipped; the 5×3 paid benchmark run is OWED (see Blockers). `.planning/phases/22-the-verdict/` retained intact; v0.8.0 not archived.
@@ -91,6 +91,7 @@ Last activity: 2026-07-12
 | Phase 23 P01 | 9min | 2 tasks | 2 files |
 | Phase 23 P02 | 9min | 2 tasks | 2 files |
 | Phase 23 P03 | 25min | 2 tasks | 2 files |
+| Phase 23 P04 | 25min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -136,6 +137,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 22-01 / VERD-01]: froze the verdict pre-registration in 22-PREREGISTRATION.md and committed it (a1f09aa) before any --mode real run (D-04); three-part GATING win rule (CI-excludes-0 AND Cohen's d>=0.8 AND survives-Holm), seed pinned 20260711 (D-08); bench/verdict.py (Plan 02) must implement this verbatim
 - [Phase ?]: 23-01: Denylist pattern set finalized per RESEARCH.md Pitfall 1 with _AUTH_EXEMPT checked before any prefix/suffix/exact match; deliberately no bare ANTHROPIC_ prefix block
 - [Phase ?]: 23-02: build_macos_profile/build_linux_bwrap_args are pure golden-tested builders (args-only convention for bwrap, no binary/--/cmd); neither wired to a live caller (Phase 24) or shipped for production confinement (Phase 25)
+- [Phase ?]: SBX-01 retired: Linux bwrap+landlock spike VERDICT = PARITY PROVEN — Linux confine ships in Phase 25 (not degraded to observe-only). Real-kernel evidence: filesystem confinement (EACCES/EROFS) + confined claude --print auth-preservation (exit 0, real model output) both demonstrated on kernel 6.12.76 aarch64, Landlock ABI v6.
 
 ### Pending Todos
 
@@ -171,7 +173,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-12T17:19:24.532Z
+Last session: 2026-07-12T19:45:49.858Z
 Stopped at: Completed 23-03-PLAN.md
 
 **Why v0.8.0 exists (SEED-001, verified prior session):**
