@@ -170,6 +170,13 @@ Plans:
   1. A Linux `bwrap`+landlock spike demonstrates an allow-default + selective-deny profile that preserves `claude` auth and API reachability (mirroring the macOS finding), OR the parity gap is documented with its consequence for phases 24–25 — a failed spike is a recorded outcome, not a silent skip.
   2. `flowstate/sandbox.py` exposes `wrap(cmd, surface, project_root, env)` with per-platform profile builders; the default `observe` tier is env-scrub only and never blocks a command (unit-tested against a fake command; profile emission golden-tested).
 
+**Plans:** 4 plans in 3 waves
+
+- [ ] 23-01-PLAN.md — Core seam + observe tier + env-scrub with the _AUTH_EXEMPT carve-out (SBX-02) [wave 1]
+- [ ] 23-02-PLAN.md — macOS SBPL profile builder + Linux bwrap mount-namespace arg builder (SBX-02) [wave 2]
+- [ ] 23-03-PLAN.md — Linux Landlock ctypes + functional bwrap smoke test + D-03 degradation ladder (SBX-02) [wave 3]
+- [ ] 23-04-PLAN.md — Linux bwrap+landlock spike + committed 23-SPIKE-LINUX.md finding (SBX-01) [wave 1]
+
 ### Phase 24: Thread the Seam + Config
 
 **Goal**: The agent-directed subprocess sites actually run through `wrap()` with auth intact, and a user can choose their posture via a defaulted `ProjectPreferences.sandbox` field — env-scrub live by default, confinement opt-in — with no state migration.
