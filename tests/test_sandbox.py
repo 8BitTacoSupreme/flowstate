@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from flowstate.sandbox import _scrub_env
+from pathlib import Path
+
+from flowstate.sandbox import _scrub_env, wrap
 
 # ---------------------------------------------------------------------------
 # TestScrubEnv
@@ -64,3 +66,44 @@ class TestScrubEnv:
         original = {"PATH": "/usr/bin"}
         result = _scrub_env(original)
         assert result is not original
+
+
+# ---------------------------------------------------------------------------
+# TestWrapObserve
+# ---------------------------------------------------------------------------
+
+
+class TestWrapObserve:
+    def test_argv_byte_identical_under_default_tier(self):
+        argv = ["echo", "hi"]
+        new_argv, _ = wrap(argv, "llm", Path("/tmp/p"), {"PATH": "/usr/bin"})
+        assert new_argv == argv
+
+    def test_default_tier_equals_observe_env_matches_scrub_env(self):
+        env = {"PATH": "/usr/bin", "AWS_SECRET_ACCESS_KEY": "leak"}
+        _, new_env = wrap(["echo", "hi"], "llm", Path("/tmp/p"), env)
+        assert new_env == _scrub_env(env)
+
+    def test_observe_never_strips_claude_auth_vars(self):
+        env = {
+            "ANTHROPIC_API_KEY": "sk-ant-should-survive",
+            "CLAUDE_CODE_OAUTH_TOKEN": "should-also-survive",
+            "AWS_SECRET_ACCESS_KEY": "leak-me-not",
+        }
+        _, new_env = wrap(["echo", "hi"], "llm", Path("/tmp/p"), env)
+        assert new_env["ANTHROPIC_API_KEY"] == "sk-ant-should-survive"
+        assert new_env["CLAUDE_CODE_OAUTH_TOKEN"] == "should-also-survive"
+        assert "AWS_SECRET_ACCESS_KEY" not in new_env
+
+    def test_observe_never_mutates_argv(self):
+        argv = ["echo", "hi"]
+        original = list(argv)
+        wrap(argv, "llm", Path("/tmp/p"), {"PATH": "/usr/bin"})
+        assert argv == original
+
+    def test_unsupported_platform_confine_returns_scrubbed(self, monkeypatch):
+        monkeypatch.setattr("flowstate.sandbox.sys.platform", "sunos5")
+        env = {"PATH": "/usr/bin", "AWS_SECRET_ACCESS_KEY": "leak"}
+        argv, new_env = wrap(["echo", "hi"], "llm", Path("/tmp/p"), env, tier="confine")
+        assert argv == ["echo", "hi"]
+        assert new_env == _scrub_env(env)
