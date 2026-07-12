@@ -50,7 +50,11 @@ class ToolAdapter:
     @property
     def bridge(self) -> ClaudeBridge:
         if self._bridge is None:
-            config = BridgeConfig(project_root=self.root)
+            # SBX-03: thread the adapter's confinement tier into the lazily-built
+            # bridge too, so a caller on this path doesn't silently downgrade to
+            # observe when confine was requested (the orchestrator injects an
+            # explicit bridge, but this path must not lose the level).
+            config = BridgeConfig(project_root=self.root, sandbox=self.sandbox)
             self._bridge = ClaudeBridge(config=config, dry_run=self.dry_run)
         return self._bridge
 

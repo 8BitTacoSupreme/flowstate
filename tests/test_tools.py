@@ -89,6 +89,14 @@ def test_research_passes_model_to_bridge(tmp_path: Path, monkeypatch):
     assert call_kwargs["model"] == "sonnet"
 
 
+def test_lazy_bridge_threads_sandbox_tier(tmp_path: Path):
+    """SBX-03: the lazily-built .bridge inherits the adapter's confinement tier,
+    so a caller on this path is not silently downgraded to observe."""
+    adapter = ResearchAdapter(root=tmp_path, dry_run=False, sandbox="confine")
+    # No explicit bridge injected -> the .bridge property builds one lazily.
+    assert adapter.bridge.config.sandbox == "confine"
+
+
 def test_strategy_passes_model_to_bridge(tmp_path: Path):
     """Strategy adapter passes model='sonnet' to bridge.run()."""
     from unittest.mock import MagicMock
