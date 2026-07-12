@@ -118,15 +118,38 @@ Landlock ABI v6, bubblewrap 0.9.0) inside Docker:
 Linux confine is not blocked by an auth or mechanism gap. **Linux confine ships in Phase 25**,
 mirroring the macOS Seatbelt tier rather than degrading to observe-only.
 
+### Caveat — two production-shape gaps between this probe and the shipped code (code-review WR-03, 2026-07-12)
+
+The verdict above answers the chartered SBX-01 question — *can a confined `claude --print`
+authenticate and reach the API on Linux under the bwrap namespace?* — with an empirical **yes**.
+But the probe diverged from the code as shipped in two ways that Phase 25 **must** close before
+the Linux `confine` tier is trusted in production; neither reopens the SBX-01 unknown, both are
+integration-shape confirmations:
+
+1. **Writable HOME.** The probe passed `--setenv HOME /tmp/chome` (a writable, bound home) so a
+   confinement-unrelated `~/.claude` write could not cause a false GAP. The shipped
+   `build_linux_bwrap_args()` (23-02) does **not** provide a writable HOME — it leaves `$HOME`
+   under the `--ro-bind / /` read-only root. Phase 25 must decide/confirm whether the confine
+   profile provides a writable HOME or scratch dir for `claude`, and re-probe with the **exact
+   shipped argv**. If `claude --print` needs to write config/cache under a read-only HOME, the
+   builder needs a bound-writable home (analogous to the macOS profile re-allowing
+   `/private/var/folders`).
+2. **File-path credential.** Only the **token-path** (`CLAUDE_CODE_OAUTH_TOKEN` via env) was
+   proven. The production default `bridge.py` relies on is the **file-path**
+   (`~/.claude/.credentials.json`, 0600). Phase 25 must confirm that a confined `claude` reads
+   that file successfully under the shipped profile (structurally simpler — a read of a
+   ro-bound file — but unverified here).
+
 ## 6. Consequence for phases 24-25
 
 - **Phase 24** (thread the seam + config): the `wrap(cmd, surface, project_root, env)` seam's
-  Linux branch can route through the `confine` level (not just `observe`) with no auth caveat to
-  document in the `ProjectPreferences.sandbox` config surface — Linux and macOS get the same
-  three-tier menu (`observe` / `confine` / future tiers) rather than Linux being capped at
-  `observe`. The env-scrub `_AUTH_EXEMPT` carve-out (SBX-02, already shipped in 23-01) continues
-  to apply unchanged; this spike only proves the *filesystem* confinement layer stacks cleanly on
-  top of it.
+  Linux branch can route through the `confine` level (not just `observe`) — Linux and macOS get
+  the same tier menu (`observe` / `confine`) rather than Linux being capped at `observe`. The
+  env-scrub `_AUTH_EXEMPT` carve-out (SBX-02, already shipped in 23-01) continues to apply
+  unchanged; this spike proves the *filesystem* confinement layer stacks cleanly on top of it.
+  **The two Caveat gaps above (writable HOME, file-path credential) are Phase-25 confirmations,
+  not Phase-24 blockers** — Phase 24 wires the seam/config; it does not need the production-shape
+  auth re-probe.
 - **Phase 25** (Linux confine profile ships): the bwrap-arg builder from 23-02 and the Landlock
   ctypes ruleset from 23-03 can be composed into one process-launch path (bwrap mount namespace +
   `landlock_restrict_self()` applied to the child before exec, or via bwrap's own `--seccomp`/
