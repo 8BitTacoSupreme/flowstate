@@ -26,11 +26,12 @@ Decision cross-references (see .planning/phases/23-linux-parity-core-seam/23-CON
           executes anything.
 
 Phase 23-01 built the `observe` path and the env-scrub denylist. Plan
-23-02 implements the macOS SBPL profile builder (`build_macos_profile`)
-and its confine wiring (`_wrap_macos`) — a pure, golden-tested builder,
+23-02 implements the macOS SBPL profile builder (`build_macos_profile`),
+its confine wiring (`_wrap_macos`), and the Linux bwrap mount-namespace
+argv builder (`build_linux_bwrap_args`) — pure, golden-tested builders,
 not yet wired to any live caller (Phase 24) and not yet shipping real
-production confinement (Phase 25). `build_linux_bwrap_args` and
-`_wrap_linux` remain contract stubs for plan 23-03.
+production confinement (Phase 25). `_wrap_linux` (landlock application +
+bwrap binary dispatch) remains a contract stub for plan 23-03.
 """
 
 from __future__ import annotations
@@ -178,11 +179,35 @@ def build_macos_profile(project_root: Path) -> str:
 
 
 def build_linux_bwrap_args(project_root: Path) -> list[str]:
-    """Build the `bwrap` argv prefix confining writes to `project_root`.
+    """Build the `bwrap` mount-namespace argv confining writes to `project_root`.
 
-    Pure, I/O-free builder — implemented in plan 23-03.
+    Pure, I/O-free builder — no subprocess, no ctypes, no file I/O inside
+    this function. Returns ARGS ONLY: no `bwrap` binary, no `--` separator,
+    no target cmd. `_wrap_linux` (plan 23-03) prepends the located `bwrap`
+    binary and appends `["--", *cmd]`. The `--tmpfs <home>/.ssh` shadows the
+    ssh dir (Information-Disclosure mitigation, 23-RESEARCH.md Security
+    Domain). Deterministic: two calls with the same `project_root` return an
+    equal list.
     """
-    raise NotImplementedError("implemented in plan 23-03")  # pragma: no cover
+    project = str(project_root)
+    return [
+        "--ro-bind",
+        "/",
+        "/",
+        "--bind",
+        project,
+        project,
+        "--tmpfs",
+        str(Path.home() / ".ssh"),
+        "--dev",
+        "/dev",
+        "--proc",
+        "/proc",
+        "--unshare-pid",
+        "--unshare-uts",
+        "--unshare-ipc",
+        "--die-with-parent",
+    ]
 
 
 def check_bwrap_available() -> bool:

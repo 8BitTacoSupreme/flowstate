@@ -8,6 +8,7 @@ from flowstate.sandbox import (
     _find_sandbox_exec,
     _scrub_env,
     _wrap_macos,
+    build_linux_bwrap_args,
     build_macos_profile,
     wrap,
 )
@@ -219,3 +220,56 @@ class TestWrapMacos:
         env = {"PATH": "/b"}
         _, new_env = _wrap_macos(["claude", "--print"], tmp_path, env)
         assert new_env == {"PATH": "/b"}
+
+
+# ---------------------------------------------------------------------------
+# TestBuildLinuxBwrapArgs
+# ---------------------------------------------------------------------------
+
+
+class TestBuildLinuxBwrapArgs:
+    def test_matches_golden_shape(self, tmp_path: Path):
+        project = str(tmp_path)
+        ssh_dir = str(Path.home() / ".ssh")
+        assert build_linux_bwrap_args(tmp_path) == [
+            "--ro-bind",
+            "/",
+            "/",
+            "--bind",
+            project,
+            project,
+            "--tmpfs",
+            ssh_dir,
+            "--dev",
+            "/dev",
+            "--proc",
+            "/proc",
+            "--unshare-pid",
+            "--unshare-uts",
+            "--unshare-ipc",
+            "--die-with-parent",
+        ]
+
+    def test_deterministic_same_project_root_equal_list(self, tmp_path: Path):
+        assert build_linux_bwrap_args(tmp_path) == build_linux_bwrap_args(tmp_path)
+
+    def test_project_root_appears_exactly_once_as_bind_pair(self, tmp_path: Path):
+        args = build_linux_bwrap_args(tmp_path)
+        assert args.count(str(tmp_path)) == 2
+
+    def test_contains_die_with_parent_and_unshare_flags(self, tmp_path: Path):
+        args = build_linux_bwrap_args(tmp_path)
+        assert "--die-with-parent" in args
+        assert "--unshare-pid" in args
+        assert "--unshare-uts" in args
+        assert "--unshare-ipc" in args
+
+    def test_contains_tmpfs_ssh_shadow(self, tmp_path: Path):
+        args = build_linux_bwrap_args(tmp_path)
+        idx = args.index("--tmpfs")
+        assert args[idx + 1] == str(Path.home() / ".ssh")
+
+    def test_does_not_contain_bwrap_binary_or_separator(self, tmp_path: Path):
+        args = build_linux_bwrap_args(tmp_path)
+        assert "bwrap" not in args
+        assert "--" not in args
