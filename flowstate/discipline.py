@@ -37,6 +37,15 @@ def _read_git_state(root: Path) -> dict:
     missing git binary, not a repo, no upstream — degrades to None/False safe
     defaults and never raises. Branch names and paths are inert argv elements,
     so a malicious branch name cannot inject a command.
+
+    SBX-03/D-01: these three subprocess.run calls (and _run_project_tests'
+    pytest call below) are DELIBERATELY left un-wrapped by flowstate.sandbox's
+    wrap(). They are internal, read-only `git` commands with no agent-directed
+    or untrusted input and no injection surface — confining a read-only
+    `git status` buys nothing, and scrubbing GIT_* env off them could only
+    risk breaking them. This is a decision, not an omission: the SBX-03 site
+    inventory (plan 24-02) accounts for these four sites explicitly. A `vcs`
+    confine profile is reserved for Phase 25 only if a real threat surfaces.
     """
     state: dict = {"branch": None, "dirty": None, "ahead": None, "behind": None}
     try:
@@ -89,6 +98,8 @@ def _run_project_tests(root: Path) -> bool | None:
     (FileNotFoundError) or times out. Bounded by _TEST_TIMEOUT; never raises.
     """
     try:
+        # SBX-03/D-01: internal read-only command, deliberately left un-wrapped
+        # — see _read_git_state.
         result = subprocess.run(
             ["python", "-m", "pytest", "-q"],
             cwd=root,
