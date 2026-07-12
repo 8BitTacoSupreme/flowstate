@@ -25,14 +25,20 @@ Decision cross-references (see .planning/phases/23-linux-parity-core-seam/23-CON
     D-04: `wrap()` returns a transformed `(argv, env)` tuple; it never
           executes anything.
 
-This phase (23-01) builds ONLY the `observe` path and the env-scrub
-denylist. The `confine`-tier platform builders are declared as contract
-stubs for plans 23-02 (macOS) and 23-03 (Linux) to implement.
+Phase 23-01 built the `observe` path and the env-scrub denylist. Plan
+23-02 implements the macOS SBPL profile builder (`build_macos_profile`)
+and its confine wiring (`_wrap_macos`) — a pure, golden-tested builder,
+not yet wired to any live caller (Phase 24) and not yet shipping real
+production confinement (Phase 25). `build_linux_bwrap_args` and
+`_wrap_linux` remain contract stubs for plan 23-03.
 """
 
 from __future__ import annotations
 
+import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -145,9 +151,30 @@ def wrap(
 def build_macos_profile(project_root: Path) -> str:
     """Build the macOS Seatbelt (SBPL) profile string for `project_root`.
 
-    Pure, I/O-free builder — implemented in plan 23-02.
+    Pure, I/O-free builder — spike-proven shape (23-CONTEXT.md <specifics>):
+    `(allow default)` baseline, selective `(deny file-write*)` re-allowing
+    `project_root`/`/private/tmp`/`/private/var/folders`/`/dev`, then a
+    `(deny file-read* (subpath ~/.ssh))`. Deterministic: two calls with the
+    same `project_root` return byte-identical strings.
+
+    T-23-04: `project_root` is embedded verbatim inside a `(subpath "...")`
+    quote. This builder is invoked with argv lists, never through a shell,
+    so there is no shell-metacharacter surface — but a `project_root`
+    containing a literal `"` would still break the profile's SBPL quoting.
+    Hardening that edge case is a Phase-25 confine-runtime concern (this
+    builder is not wired to a live caller in this phase).
     """
-    raise NotImplementedError("implemented in plan 23-02/23-03")  # pragma: no cover
+    project = str(project_root)
+    return f"""(version 1)
+(allow default)
+(deny file-write*)
+(allow file-write*
+  (subpath "{project}")
+  (subpath "/private/tmp")
+  (subpath "/private/var/folders")
+  (subpath "/dev"))
+(deny file-read* (subpath "{Path.home() / ".ssh"}"))
+"""
 
 
 def build_linux_bwrap_args(project_root: Path) -> list[str]:
@@ -155,7 +182,7 @@ def build_linux_bwrap_args(project_root: Path) -> list[str]:
 
     Pure, I/O-free builder — implemented in plan 23-03.
     """
-    raise NotImplementedError("implemented in plan 23-02/23-03")  # pragma: no cover
+    raise NotImplementedError("implemented in plan 23-03")  # pragma: no cover
 
 
 def check_bwrap_available() -> bool:
@@ -163,7 +190,26 @@ def check_bwrap_available() -> bool:
 
     Implemented in plan 23-03.
     """
-    raise NotImplementedError("implemented in plan 23-02/23-03")  # pragma: no cover
+    raise NotImplementedError("implemented in plan 23-03")  # pragma: no cover
+
+
+def _find_sandbox_exec() -> str:
+    """Locate the `sandbox-exec` binary.
+
+    Resolution order (mirrors `flowstate/pack.py:_find_repomix`):
+    1. `FLOWSTATE_SANDBOX_EXEC_BIN` env var (must point to an existing file)
+    2. `shutil.which("sandbox-exec")` (PATH search)
+    3. Fallback `/usr/bin/sandbox-exec`
+    """
+    env_path = os.environ.get("FLOWSTATE_SANDBOX_EXEC_BIN")
+    if env_path and Path(env_path).is_file():
+        return env_path
+
+    found = shutil.which("sandbox-exec")
+    if found:
+        return found
+
+    return "/usr/bin/sandbox-exec"
 
 
 def _wrap_macos(
@@ -171,9 +217,16 @@ def _wrap_macos(
 ) -> tuple[list[str], dict[str, str]]:
     """Prefix `cmd` with `sandbox-exec` under the macOS confine profile.
 
-    Implemented in plan 23-02.
+    Writes `build_macos_profile(project_root)` to a temp `.sb` file
+    (`sandbox-exec` requires a file path, not stdin) and prefixes argv with
+    `sandbox-exec -f <profile-path>`. `env` is passed through unchanged.
     """
-    raise NotImplementedError("implemented in plan 23-02/23-03")  # pragma: no cover
+    profile = build_macos_profile(project_root)
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".sb", delete=False) as f:
+        f.write(profile)
+        profile_path = f.name
+    sbx = _find_sandbox_exec()
+    return [sbx, "-f", profile_path, *cmd], env
 
 
 def _wrap_linux(
@@ -183,4 +236,4 @@ def _wrap_linux(
 
     Implemented in plan 23-03.
     """
-    raise NotImplementedError("implemented in plan 23-02/23-03")  # pragma: no cover
+    raise NotImplementedError("implemented in plan 23-03")  # pragma: no cover

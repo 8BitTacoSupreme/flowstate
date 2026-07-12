@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from flowstate.sandbox import _scrub_env, wrap
+from flowstate.sandbox import (
+    _find_sandbox_exec,
+    _scrub_env,
+    _wrap_macos,
+    build_macos_profile,
+    wrap,
+)
 
 # ---------------------------------------------------------------------------
 # TestScrubEnv
@@ -107,3 +113,109 @@ class TestWrapObserve:
         argv, new_env = wrap(["echo", "hi"], "llm", Path("/tmp/p"), env, tier="confine")
         assert argv == ["echo", "hi"]
         assert new_env == _scrub_env(env)
+
+
+# ---------------------------------------------------------------------------
+# TestBuildMacosProfile
+# ---------------------------------------------------------------------------
+
+
+class TestBuildMacosProfile:
+    def test_matches_spike_proven_shape(self, tmp_path: Path):
+        profile = build_macos_profile(tmp_path)
+        assert profile == (
+            "(version 1)\n"
+            "(allow default)\n"
+            "(deny file-write*)\n"
+            "(allow file-write*\n"
+            f'  (subpath "{tmp_path}")\n'
+            '  (subpath "/private/tmp")\n'
+            '  (subpath "/private/var/folders")\n'
+            '  (subpath "/dev"))\n'
+            f'(deny file-read* (subpath "{Path.home() / ".ssh"}"))\n'
+        )
+
+    def test_deterministic_same_project_root_byte_identical(self, tmp_path: Path):
+        assert build_macos_profile(tmp_path) == build_macos_profile(tmp_path)
+
+    def test_contains_allow_default_baseline(self, tmp_path: Path):
+        assert "(allow default)" in build_macos_profile(tmp_path)
+
+    def test_contains_deny_file_write_baseline(self, tmp_path: Path):
+        assert "(deny file-write*)" in build_macos_profile(tmp_path)
+
+    def test_project_root_embedded_verbatim_in_subpath_quotes(self, tmp_path: Path):
+        # T-23-04: project_root is embedded as-is inside the subpath quotes;
+        # metacharacter hardening is a Phase-25 confine-runtime concern.
+        profile = build_macos_profile(tmp_path)
+        assert f'(subpath "{tmp_path}")' in profile
+
+    def test_denies_ssh_read(self, tmp_path: Path):
+        profile = build_macos_profile(tmp_path)
+        assert ".ssh" in profile
+        assert "(deny file-read*" in profile
+
+
+# ---------------------------------------------------------------------------
+# TestFindSandboxExec
+# ---------------------------------------------------------------------------
+
+
+class TestFindSandboxExec:
+    def test_env_override_returns_path_when_file_exists(self, tmp_path: Path, monkeypatch):
+        fake = tmp_path / "sandbox-exec-custom"
+        fake.write_text("#!/bin/sh\necho ok")
+        fake.chmod(0o755)
+
+        monkeypatch.setenv("FLOWSTATE_SANDBOX_EXEC_BIN", str(fake))
+        assert _find_sandbox_exec() == str(fake)
+
+    def test_env_override_ignored_when_file_missing(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("FLOWSTATE_SANDBOX_EXEC_BIN", str(tmp_path / "does-not-exist"))
+        monkeypatch.delenv("PATH", raising=False)
+        assert _find_sandbox_exec() == "/usr/bin/sandbox-exec"
+
+    def test_which_detection(self, tmp_path: Path, monkeypatch):
+        fake = tmp_path / "sandbox-exec"
+        fake.write_text("#!/bin/sh\necho ok")
+        fake.chmod(0o755)
+
+        monkeypatch.delenv("FLOWSTATE_SANDBOX_EXEC_BIN", raising=False)
+        monkeypatch.setenv("PATH", str(tmp_path))
+        assert _find_sandbox_exec() == str(fake)
+
+    def test_fallback_when_absent(self, monkeypatch):
+        monkeypatch.delenv("FLOWSTATE_SANDBOX_EXEC_BIN", raising=False)
+        monkeypatch.setenv("PATH", "")
+        assert _find_sandbox_exec() == "/usr/bin/sandbox-exec"
+
+
+# ---------------------------------------------------------------------------
+# TestWrapMacos
+# ---------------------------------------------------------------------------
+
+
+class TestWrapMacos:
+    def test_argv_prefixed_with_sandbox_exec_and_flag(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("FLOWSTATE_SANDBOX_EXEC_BIN", "/usr/bin/sandbox-exec")
+        cmd = ["claude", "--print"]
+        argv, _ = _wrap_macos(cmd, tmp_path, {"PATH": "/b"})
+        assert argv[0] == "/usr/bin/sandbox-exec"
+        assert argv[1] == "-f"
+
+    def test_argv_suffix_matches_original_cmd(self, tmp_path: Path):
+        cmd = ["claude", "--print"]
+        argv, _ = _wrap_macos(cmd, tmp_path, {"PATH": "/b"})
+        assert argv[3:] == cmd
+
+    def test_temp_profile_file_exists_and_matches_build_macos_profile(self, tmp_path: Path):
+        cmd = ["claude", "--print"]
+        argv, _ = _wrap_macos(cmd, tmp_path, {"PATH": "/b"})
+        profile_path = Path(argv[2])
+        assert profile_path.exists()
+        assert profile_path.read_text() == build_macos_profile(tmp_path)
+
+    def test_env_unchanged(self, tmp_path: Path):
+        env = {"PATH": "/b"}
+        _, new_env = _wrap_macos(["claude", "--print"], tmp_path, env)
+        assert new_env == {"PATH": "/b"}
