@@ -208,8 +208,8 @@ Plans:
 **Plans**: 4 plans in 2 waves
 
 **Wave 1**
-- [ ] 25-01-PLAN.md — SBX-06/D-01: fail-loud confine dispatch (SandboxUnavailableError + per-platform install hint) + WR-2 *_TOKEN scrub-limitation doc (D-04)
-- [ ] 25-02-PLAN.md — SBX-05/WR-09: bridge.py temp-profile (.sb) cleanup — try/finally unlink around the confined subprocess.run
+- [x] 25-01-PLAN.md — SBX-06/D-01: fail-loud confine dispatch (SandboxUnavailableError + per-platform install hint) + WR-2 *_TOKEN scrub-limitation doc (D-04)
+- [x] 25-02-PLAN.md — SBX-05/WR-09: bridge.py temp-profile (.sb) cleanup — try/finally unlink around the confined subprocess.run
 
 **Wave 2**
 - [ ] 25-03-PLAN.md — SBX-05/D-03: macOS confine denial E2E (skip-if-not-darwin; real sandbox-exec allow-inside/deny-outside/deny-~/.ssh + claude auth-survival subcheck) [depends on 25-02]

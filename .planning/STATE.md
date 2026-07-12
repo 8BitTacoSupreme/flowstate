@@ -4,8 +4,8 @@ milestone: v0.9.0
 milestone_name: Sandbox Guardrail
 status: executing
 stopped_at: Phase 25 context gathered
-last_updated: "2026-07-12T23:17:20.292Z"
-last_activity: 2026-07-12 -- Phase 25 planning complete
+last_updated: "2026-07-12T23:25:09.525Z"
+last_activity: 2026-07-12 -- Phase 25 execution started
 progress:
   total_phases: 7
   completed_phases: 5
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Phase 24 — Thread the Seam + Config
+**Current focus:** Phase 25 — confinement-verification
 
 ## Current Position
 
-Phase: 24 (Thread the Seam + Config) — EXECUTING
-Plan: 2 of 2
-Status: Ready to execute
-Last activity: 2026-07-12 -- Phase 25 planning complete
+Phase: 25 (confinement-verification) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 25
+Last activity: 2026-07-12 -- Phase 25 execution started
 
 **Parked from v0.8.0:** Phase 22 (The Verdict) code shipped; the 5×3 paid benchmark run is OWED (see Blockers). `.planning/phases/22-the-verdict/` retained intact; v0.8.0 not archived.
 
