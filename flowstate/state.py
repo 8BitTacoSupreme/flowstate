@@ -49,6 +49,10 @@ class ProjectPreferences(BaseModel):
     # Opt-in (D-05): when True, the orchestrator adds the semantic wiki layer to the
     # standard CAG prefix union. Default False keeps the prefix byte-identical to today.
     wiki_layer: bool = False
+    # Subprocess confinement level (SBX-04, D-03/D-04): "observe" (env-scrub only,
+    # default) or "confine" (platform confinement). Defaulted field — no
+    # _migrate_state change needed; old flowstate.json blobs load with "observe".
+    sandbox: str = "observe"
 
 
 class InstallEntry(BaseModel):

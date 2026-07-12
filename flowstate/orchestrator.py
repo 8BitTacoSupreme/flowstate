@@ -113,6 +113,8 @@ def _make_bridge(root: Path, dry_run: bool, preferences=None) -> ClaudeBridge:
             kwargs["effort"] = preferences.effort
         # Unconditional: False is meaningful (opt out of 1h cache TTL).
         kwargs["enable_prompt_caching_1h"] = preferences.enable_prompt_caching_1h
+        # Unconditional: mirrors enable_prompt_caching_1h above (SBX-04).
+        kwargs["sandbox"] = preferences.sandbox
     config = BridgeConfig(**kwargs)
     return ClaudeBridge(config=config, dry_run=dry_run)
 

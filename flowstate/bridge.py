@@ -138,6 +138,7 @@ class BridgeConfig:
     effort: str | None = None
     inject_canon: bool = True
     enable_prompt_caching_1h: bool = False
+    sandbox: str = "observe"
 
     def __post_init__(self):
         if self.claude_bin is None:
