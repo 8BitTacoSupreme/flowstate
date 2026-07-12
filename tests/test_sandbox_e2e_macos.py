@@ -6,20 +6,30 @@ dispatch and a real `subprocess.run()` invocation of `sandbox-exec`, allows a
 write inside `project_root` while denying a write outside it (under `$HOME`)
 and denying a read of `~/.ssh`.
 
+Task 2 (SBX-05 auth subcheck): proves the production `ClaudeBridge(sandbox=
+"confine")` path preserves macOS Keychain `claude` auth for a real confined
+`claude --print` call — the same wiring this test drives already carries the
+25-02 WR-09 temp-profile cleanup, so a successful run also implicitly proves
+that cleanup fires on the real path.
+
 Skip-gated on darwin — mirrors `tests/test_discipline.py`'s binary-presence
 `skipif` idiom, translated to a platform-presence gate — so this file is
-CI-runnable on macOS runners and skips cleanly everywhere else.
+CI-runnable on macOS runners and skips cleanly everywhere else. The auth
+subcheck is additionally gated on `claude` being available so the suite
+stays green on hosts without the CLI/credential.
 """
 
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
+from flowstate.bridge import BridgeConfig, ClaudeBridge
 from flowstate.sandbox import wrap
 
 # Genuine subprocess.run, captured before any monkeypatch (none in this file) —
@@ -27,6 +37,8 @@ from flowstate.sandbox import wrap
 _REAL_RUN = subprocess.run
 
 _not_darwin = sys.platform != "darwin"
+
+_claude_missing = shutil.which("claude") is None and not os.environ.get("FLOWSTATE_CLAUDE_BIN")
 
 
 def _run_confined(script: str, project_root: Path) -> subprocess.CompletedProcess:
@@ -82,3 +94,25 @@ class TestMacosConfineDenialE2E:
         assert result.returncode != 0
         # Directory read denied outright — no listing/content leaked to stdout.
         assert result.stdout.strip() == ""
+
+
+@pytest.mark.skipif(_not_darwin, reason="macOS sandbox-exec only")
+@pytest.mark.skipif(_claude_missing, reason="claude CLI/auth not available")
+class TestConfinedClaudeAuthSurvives:
+    """Task 2: confined `claude --print` succeeds — Keychain auth survives confinement."""
+
+    def test_confined_claude_print_succeeds(self, tmp_path: Path):
+        config = BridgeConfig(
+            project_root=tmp_path,
+            sandbox="confine",
+            inject_canon=False,
+            max_turns=1,
+            timeout=60,
+        )
+        bridge = ClaudeBridge(config=config)
+
+        result = bridge.run("reply with only the digit 4")
+
+        assert result.success, result.error
+        assert result.output.strip() != ""
+        assert "4" in result.output
