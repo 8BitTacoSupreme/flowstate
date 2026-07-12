@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Sandbox Guardrail
-status: verifying
+status: executing
 stopped_at: Phase 25 context gathered
-last_updated: "2026-07-12T22:36:15.121Z"
-last_activity: 2026-07-12
+last_updated: "2026-07-12T23:17:20.292Z"
+last_activity: 2026-07-12 -- Phase 25 planning complete
 progress:
   total_phases: 7
   completed_phases: 5
-  total_plans: 17
+  total_plans: 21
   completed_plans: 16
   percent: 71
 ---
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 Phase: 24 (Thread the Seam + Config) — EXECUTING
 Plan: 2 of 2
-Status: Phase complete — ready for verification
-Last activity: 2026-07-12
+Status: Ready to execute
+Last activity: 2026-07-12 -- Phase 25 planning complete
 
 **Parked from v0.8.0:** Phase 22 (The Verdict) code shipped; the 5×3 paid benchmark run is OWED (see Blockers). `.planning/phases/22-the-verdict/` retained intact; v0.8.0 not archived.
 
