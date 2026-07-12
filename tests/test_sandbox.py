@@ -347,6 +347,47 @@ class TestLandlockAvailable:
         # False rather than raise (never-raise degradation contract).
         assert _landlock_available() is False
 
+    # WR-05: the kernel-parsing and ctypes ABI-probe branches only run when
+    # sys.platform starts with "linux" — monkeypatch it (and the calls the
+    # branch makes) to exercise them from this Darwin dev machine, mirroring
+    # the pattern _wrap_linux's own tests already use.
+
+    def test_returns_false_below_minimum_kernel_version(self, monkeypatch):
+        monkeypatch.setattr("flowstate.sandbox.sys.platform", "linux")
+        monkeypatch.setattr("flowstate.sandbox.platform.release", lambda: "5.10.0-generic")
+        assert _landlock_available() is False
+
+    def test_returns_false_on_malformed_kernel_release_string(self, monkeypatch):
+        monkeypatch.setattr("flowstate.sandbox.sys.platform", "linux")
+        monkeypatch.setattr("flowstate.sandbox.platform.release", lambda: "not-a-version")
+        assert _landlock_available() is False
+
+    def test_returns_false_when_ctypes_cdll_raises(self, monkeypatch):
+        monkeypatch.setattr("flowstate.sandbox.sys.platform", "linux")
+        monkeypatch.setattr("flowstate.sandbox.platform.release", lambda: "6.8.0-generic")
+
+        def _raise(*_a, **_k):
+            raise OSError("no libc")
+
+        monkeypatch.setattr("flowstate.sandbox.ctypes.CDLL", _raise)
+        assert _landlock_available() is False
+
+    def test_returns_false_when_syscall_returns_non_positive_version(self, monkeypatch):
+        monkeypatch.setattr("flowstate.sandbox.sys.platform", "linux")
+        monkeypatch.setattr("flowstate.sandbox.platform.release", lambda: "6.8.0-generic")
+        fake_libc = mock.Mock()
+        fake_libc.syscall.return_value = -1
+        monkeypatch.setattr("flowstate.sandbox.ctypes.CDLL", lambda *a, **k: fake_libc)
+        assert _landlock_available() is False
+
+    def test_returns_true_when_kernel_and_abi_probe_succeed(self, monkeypatch):
+        monkeypatch.setattr("flowstate.sandbox.sys.platform", "linux")
+        monkeypatch.setattr("flowstate.sandbox.platform.release", lambda: "6.8.0-generic")
+        fake_libc = mock.Mock()
+        fake_libc.syscall.return_value = 6
+        monkeypatch.setattr("flowstate.sandbox.ctypes.CDLL", lambda *a, **k: fake_libc)
+        assert _landlock_available() is True
+
 
 # ---------------------------------------------------------------------------
 # TestApplyLandlock
