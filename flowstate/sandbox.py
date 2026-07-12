@@ -475,6 +475,15 @@ def _wrap_macos(
     Writes `build_macos_profile(project_root)` to a temp `.sb` file
     (`sandbox-exec` requires a file path, not stdin) and prefixes argv with
     `sandbox-exec -f <profile-path>`. `env` is passed through unchanged.
+
+    WR-09: `delete=False` is required — the file must outlive this call so
+    `sandbox-exec -f <path>` can read it while the child runs — but nothing
+    in this module ever unlinks it afterward. Because `wrap()` returns
+    before the caller spawns the child (D-04), this function cannot itself
+    know when it's safe to delete the profile. The CALLER (Phase 24/25) is
+    responsible for unlinking `argv[2]` (the returned `profile_path`, at
+    argv index 2) once the child process exits, or every `confine`-tier
+    macOS `wrap()` call leaks one `.sb` file into the OS temp directory.
     """
     profile = build_macos_profile(project_root)
     with tempfile.NamedTemporaryFile(mode="w", suffix=".sb", delete=False) as f:
