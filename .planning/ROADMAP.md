@@ -187,6 +187,14 @@ Plans:
   1. The agent-directed subprocess sites are routed through `wrap()` — at minimum `bridge.py:308` (the auth-load-bearing `claude --print` call) — and Keychain/API reachability is preserved on every wrapped call; internal git-read (`discipline.py`) and npm (`gsd_vendor.py`) sites are wrapped or left bare per an explicit, documented plan-time decision.
   2. `ProjectPreferences` gains a defaulted `sandbox` level field (`observe` / `confine`); load stays backward-compatible with no state migration, and the default is `observe`.
 
+**Plans**: 2 plans in 2 waves
+
+**Wave 1**
+- [ ] 24-01-PLAN.md — SBX-04 config field + SBX-03 auth-load-bearing llm sites (ProjectPreferences.sandbox/BridgeConfig.sandbox/_make_bridge; wrap bridge.py + distiller.py at surface "llm", auth preserved)
+
+**Wave 2** *(depends on 24-01)*
+- [ ] 24-02-PLAN.md — SBX-03 tool sites (wrap tools/base run_cmd, pack repomix, gsd_vendor npm+node at surface "tool") + deliberate discipline.py bare-git exclusion + full-suite no-regression proof
+
 ### Phase 25: Confinement + Verification
 
 **Goal**: The `confine` tier is real and proven — a live `claude --print` succeeds inside the kernel sandbox while writes outside the project root and reads of `~/.ssh` are denied, on both macOS and Linux — and a missing sandbox binary fails loud instead of silently running unconfined.
