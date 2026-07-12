@@ -341,6 +341,14 @@ def _apply_landlock_syscalls(
     os.close(ruleset_fd)
 
 
+def _find_bwrap() -> str:
+    """Locate the `bwrap` binary.
+
+    Implemented in plan 23-03.
+    """
+    raise NotImplementedError("implemented in plan 23-03")  # pragma: no cover
+
+
 def check_bwrap_available() -> bool:
     """Functional smoke test for `bwrap` availability (not a presence check).
 

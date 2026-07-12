@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
+from unittest import mock
 
 from flowstate.sandbox import (
     _apply_landlock,
+    _find_bwrap,
     _find_sandbox_exec,
     _landlock_available,
     _scrub_env,
+    _wrap_linux,
     _wrap_macos,
     build_linux_bwrap_args,
     build_macos_profile,
+    check_bwrap_available,
     wrap,
 )
 
@@ -297,3 +302,154 @@ class TestLandlockAvailable:
 class TestApplyLandlock:
     def test_noop_on_non_linux_returns_none_without_raising(self, tmp_path: Path):
         assert _apply_landlock(tmp_path) is None
+
+
+# ---------------------------------------------------------------------------
+# TestFindBwrap
+# ---------------------------------------------------------------------------
+
+
+class TestFindBwrap:
+    def test_env_override_returns_path_when_file_exists(self, tmp_path: Path, monkeypatch):
+        fake = tmp_path / "bwrap-custom"
+        fake.write_text("#!/bin/sh\necho ok")
+        fake.chmod(0o755)
+
+        monkeypatch.setenv("FLOWSTATE_BWRAP_BIN", str(fake))
+        assert _find_bwrap() == str(fake)
+
+    def test_env_override_ignored_when_file_missing(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("FLOWSTATE_BWRAP_BIN", str(tmp_path / "does-not-exist"))
+        monkeypatch.delenv("PATH", raising=False)
+        assert _find_bwrap() == ""
+
+    def test_which_detection(self, tmp_path: Path, monkeypatch):
+        fake = tmp_path / "bwrap"
+        fake.write_text("#!/bin/sh\necho ok")
+        fake.chmod(0o755)
+
+        monkeypatch.delenv("FLOWSTATE_BWRAP_BIN", raising=False)
+        monkeypatch.setenv("PATH", str(tmp_path))
+        assert _find_bwrap() == str(fake)
+
+    def test_fallback_empty_string_when_absent(self, monkeypatch):
+        monkeypatch.delenv("FLOWSTATE_BWRAP_BIN", raising=False)
+        monkeypatch.setenv("PATH", "")
+        assert _find_bwrap() == ""
+
+
+# ---------------------------------------------------------------------------
+# TestCheckBwrapAvailable
+# ---------------------------------------------------------------------------
+
+
+class TestCheckBwrapAvailable:
+    def test_check_bwrap_available_false_when_absent(self, monkeypatch):
+        monkeypatch.setattr("flowstate.sandbox.shutil.which", lambda name: None)
+        assert check_bwrap_available() is False
+
+    def test_true_when_smoke_test_returncode_zero(self, monkeypatch):
+        monkeypatch.setattr("flowstate.sandbox.shutil.which", lambda name: "/usr/bin/bwrap")
+        monkeypatch.setattr(
+            "flowstate.sandbox.subprocess.run",
+            lambda *a, **k: mock.Mock(returncode=0),
+        )
+        assert check_bwrap_available() is True
+
+    def test_false_when_smoke_test_nonzero_returncode(self, monkeypatch):
+        monkeypatch.setattr("flowstate.sandbox.shutil.which", lambda name: "/usr/bin/bwrap")
+        monkeypatch.setattr(
+            "flowstate.sandbox.subprocess.run",
+            lambda *a, **k: mock.Mock(returncode=1),
+        )
+        assert check_bwrap_available() is False
+
+    def test_false_on_oserror_never_raises(self, monkeypatch):
+        monkeypatch.setattr("flowstate.sandbox.shutil.which", lambda name: "/usr/bin/bwrap")
+
+        def _raise(*a, **k):
+            raise OSError("boom")
+
+        monkeypatch.setattr("flowstate.sandbox.subprocess.run", _raise)
+        assert check_bwrap_available() is False
+
+    def test_false_on_timeout_never_raises(self, monkeypatch):
+        monkeypatch.setattr("flowstate.sandbox.shutil.which", lambda name: "/usr/bin/bwrap")
+
+        def _raise(*a, **k):
+            raise subprocess.TimeoutExpired(cmd="bwrap", timeout=5)
+
+        monkeypatch.setattr("flowstate.sandbox.subprocess.run", _raise)
+        assert check_bwrap_available() is False
+
+    def test_smoke_test_invokes_ro_bind_bin_true(self, monkeypatch):
+        captured: dict[str, list[str]] = {}
+
+        def _fake_run(cmd, **kwargs):
+            captured["cmd"] = cmd
+            return mock.Mock(returncode=0)
+
+        monkeypatch.setattr("flowstate.sandbox.shutil.which", lambda name: "/usr/bin/bwrap")
+        monkeypatch.setattr("flowstate.sandbox.subprocess.run", _fake_run)
+        check_bwrap_available()
+        assert captured["cmd"] == ["bwrap", "--ro-bind", "/", "/", "--", "/bin/true"]
+
+
+# ---------------------------------------------------------------------------
+# TestWrapLinux
+# ---------------------------------------------------------------------------
+
+
+class TestWrapLinux:
+    def test_wrap_linux_full_confine(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setattr("flowstate.sandbox.check_bwrap_available", lambda: True)
+        monkeypatch.setattr("flowstate.sandbox._landlock_available", lambda: True)
+        monkeypatch.setattr("flowstate.sandbox._find_bwrap", lambda: "/usr/bin/bwrap")
+        cmd = ["claude", "--print"]
+        argv, env = _wrap_linux(cmd, tmp_path, {"PATH": "/b"})
+
+        assert argv[0] == "/usr/bin/bwrap"
+        assert argv.count("--") == 2  # bwrap's separator + the landlock shim's separator
+        assert "--apply-landlock" in argv
+        assert str(tmp_path) in argv
+        assert argv[-len(cmd) :] == cmd
+        assert env == {"PATH": "/b"}
+
+    def test_wrap_linux_bwrap_only(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setattr("flowstate.sandbox.check_bwrap_available", lambda: True)
+        monkeypatch.setattr("flowstate.sandbox._landlock_available", lambda: False)
+        monkeypatch.setattr("flowstate.sandbox._find_bwrap", lambda: "/usr/bin/bwrap")
+        cmd = ["claude", "--print"]
+        argv, env = _wrap_linux(cmd, tmp_path, {"PATH": "/b"})
+
+        assert argv[0] == "/usr/bin/bwrap"
+        assert argv.count("--") == 1
+        assert "--apply-landlock" not in argv
+        assert argv[-len(cmd) :] == cmd
+        assert env == {"PATH": "/b"}
+
+    def test_wrap_linux_falls_back_to_observe(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setattr("flowstate.sandbox.check_bwrap_available", lambda: False)
+        cmd = ["claude", "--print"]
+        env = {"PATH": "/b"}
+        argv, new_env = _wrap_linux(cmd, tmp_path, env)
+
+        assert argv == cmd
+        assert new_env == env
+
+    def test_wrap_linux_observe_fallback_never_raises(self, tmp_path: Path):
+        with mock.patch("flowstate.sandbox.check_bwrap_available", return_value=False):
+            argv, env = _wrap_linux(["claude"], tmp_path, {"X": "1"})
+        assert argv == ["claude"]
+        assert env == {"X": "1"}
+
+    def test_wrap_linux_observe_fallback_emits_one_time_warning(
+        self, tmp_path: Path, monkeypatch, capsys
+    ):
+        import flowstate.sandbox as sandbox_module
+
+        monkeypatch.setattr(sandbox_module, "check_bwrap_available", lambda: False)
+        monkeypatch.setattr(sandbox_module, "_bwrap_warning_emitted", False)
+        sandbox_module._wrap_linux(["claude"], tmp_path, {})
+        captured = capsys.readouterr()
+        assert "bwrap unavailable" in captured.err
