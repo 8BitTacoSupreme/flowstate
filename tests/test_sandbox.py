@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 from unittest import mock
 
@@ -548,3 +549,55 @@ class TestWrapLinux:
         sandbox_module._wrap_linux(["claude"], tmp_path, {})
         captured = capsys.readouterr()
         assert "bwrap unavailable" in captured.err
+
+
+# ---------------------------------------------------------------------------
+# TestMainShim
+# ---------------------------------------------------------------------------
+
+
+class TestMainShim:
+    # WR-06: the __main__ shim is the actual RUNG-1 code path that applies
+    # Landlock before exec-ing the real target inside the confined child —
+    # the single most security-critical path in the module, previously
+    # untested. `_apply_landlock` no-ops on non-Linux, so invoking the shim
+    # as a real subprocess is portable to this (non-Linux) dev machine.
+
+    def test_apply_landlock_shim_execs_target_command(self, tmp_path: Path):
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "flowstate.sandbox",
+                "--apply-landlock",
+                str(tmp_path),
+                "--",
+                sys.executable,
+                "-c",
+                "print('ok')",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert result.returncode == 0
+        assert result.stdout.strip() == "ok"
+
+    def test_apply_landlock_shim_propagates_target_exit_code(self, tmp_path: Path):
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "flowstate.sandbox",
+                "--apply-landlock",
+                str(tmp_path),
+                "--",
+                sys.executable,
+                "-c",
+                "import sys; sys.exit(7)",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert result.returncode == 7
