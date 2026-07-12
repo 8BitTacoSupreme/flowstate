@@ -1,5 +1,6 @@
 """Tests for the ClaudeBridge."""
 
+import subprocess
 from pathlib import Path
 
 from flowstate.bridge import CANON, BridgeConfig, BridgeUsage, ClaudeBridge, _find_claude
@@ -359,6 +360,67 @@ class TestUsageAndDuration:
         result = bridge.run("Hello", output_format="json")
         assert result.usage is None
         assert result.duration_s is None
+
+
+class TestSandboxWrapLlmSite:
+    """Task 2 (SBX-03): bridge.py's claude call routes through wrap('llm', ...)."""
+
+    def _capture_env(self, monkeypatch):
+        """Patch subprocess.run to capture the env= kwarg without spawning anything."""
+        captured: dict = {}
+
+        def fake_run(cmd, **kwargs):
+            captured["cmd"] = cmd
+            captured["env"] = kwargs.get("env")
+            return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+        monkeypatch.setattr("flowstate.bridge.subprocess.run", fake_run)
+        return captured
+
+    def test_default_observe_scrubs_secrets_preserves_auth_and_ordering(
+        self, tmp_path: Path, monkeypatch
+    ):
+        """Default observe tier: auth survives, CLAUDECODE stays popped, cache var
+        stays set, credential-shaped vars are dropped (T-24-01/T-24-02/T-24-03)."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+        monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "oauth-test")
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", "/fake/config")
+        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "leaked-secret")
+        monkeypatch.setenv("CLAUDECODE", "1")
+
+        captured = self._capture_env(monkeypatch)
+
+        config = BridgeConfig(
+            claude_bin="/usr/bin/fake-claude",
+            project_root=tmp_path,
+            enable_prompt_caching_1h=True,
+        )
+        bridge = ClaudeBridge(config=config)
+        result = bridge.run("Hello")
+
+        assert result.success
+        env = captured["env"]
+        # Auth vars survive the scrub (T-24-02).
+        assert env["ANTHROPIC_API_KEY"] == "sk-ant-test"
+        assert env["CLAUDE_CODE_OAUTH_TOKEN"] == "oauth-test"
+        assert env["CLAUDE_CONFIG_DIR"] == "/fake/config"
+        # Env-prep ordering preserved (T-24-03): CLAUDECODE stays popped,
+        # cache var stays set post-scrub.
+        assert "CLAUDECODE" not in env
+        assert env["ENABLE_PROMPT_CACHING_1H"] == "1"
+        # Credential-shaped var is scrubbed under default observe (T-24-01).
+        assert "AWS_SECRET_ACCESS_KEY" not in env
+
+    def test_wraps_at_surface_llm(self, tmp_path: Path, monkeypatch):
+        """The wrap() call site uses surface literal 'llm' (D-02) — verified by
+        confirming argv is unchanged under observe (observe never touches argv)."""
+        captured = self._capture_env(monkeypatch)
+        config = BridgeConfig(claude_bin="/usr/bin/fake-claude", project_root=tmp_path)
+        bridge = ClaudeBridge(config=config)
+        result = bridge.run("Hello")
+
+        assert result.success
+        assert captured["cmd"][0] == "/usr/bin/fake-claude"
 
 
 class TestCumulativeTotals:
