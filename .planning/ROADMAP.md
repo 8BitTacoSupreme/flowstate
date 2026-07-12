@@ -205,6 +205,16 @@ Plans:
   1. The `confine` tier ships the allow-default + selective-deny macOS SBPL profile and the Linux bwrap equivalent; an end-to-end test confirms a real `claude --print` succeeds confined (auth survives, API reachable) while a write outside `project_root` and a read of `~/.ssh` are denied.
   2. Under `confine`, a missing platform sandbox binary (`sandbox-exec` / `bwrap`) fails loud with an install hint — the guardrail never silently runs a command unconfined when confinement was requested.
 
+**Plans**: 4 plans in 2 waves
+
+**Wave 1**
+- [ ] 25-01-PLAN.md — SBX-06/D-01: fail-loud confine dispatch (SandboxUnavailableError + per-platform install hint) + WR-2 *_TOKEN scrub-limitation doc (D-04)
+- [ ] 25-02-PLAN.md — SBX-05/WR-09: bridge.py temp-profile (.sb) cleanup — try/finally unlink around the confined subprocess.run
+
+**Wave 2**
+- [ ] 25-03-PLAN.md — SBX-05/D-03: macOS confine denial E2E (skip-if-not-darwin; real sandbox-exec allow-inside/deny-outside/deny-~/.ssh + claude auth-survival subcheck) [depends on 25-02]
+- [ ] 25-04-PLAN.md — SBX-05/D-02+D-03: shared Linux Docker re-probe (exact shipped bwrap argv + file credential) + denial E2E + committed 25-SPIKE-LINUX-REPROBE.md; human-gated credential [depends on 25-01]
+
 <details>
 <summary>📋 v0.7.0 Retrieval Benchmark Rigor (deferred behind v0.6.1 — renumbers to 16-21 on start)</summary>
 
