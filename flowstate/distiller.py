@@ -21,12 +21,15 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 from flowstate.bridge import _find_claude
 from flowstate.memory import MemoryKind, MemoryStore
+from flowstate.sandbox import wrap
+from flowstate.state import load_state
 
 _WIKI_CORPUS_REL = ".planning/codebase/wiki"  # matches context_prefix._WIKI_CORPUS_DIR
 _DISTILL_TIMEOUT = 300
@@ -76,7 +79,9 @@ def _render_article(kind: MemoryKind, entries: list) -> str:
     return "\n".join(lines)
 
 
-def _densify(article_text: str, claude: str, model: str) -> str:
+def _densify(
+    article_text: str, claude: str, model: str, root: Path, *, tier: str = "observe"
+) -> str:
     """Run one bounded claude densification pass. Returns original text on any failure."""
     cmd = [
         claude,
@@ -88,8 +93,11 @@ def _densify(article_text: str, claude: str, model: str) -> str:
         "--",
         PROMPT_HEADER + article_text,
     ]
+    cmd, env = wrap(cmd, "llm", root, {**os.environ}, tier=tier)
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=_DISTILL_TIMEOUT)
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=_DISTILL_TIMEOUT, env=env
+        )
     except Exception:
         return article_text
     if proc.returncode == 0 and proc.stdout.strip():
@@ -205,13 +213,17 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
 
+    # Resolve the sandbox level once from saved preferences (SBX-03/SBX-04);
+    # defaults to "observe" on a fresh root with no flowstate.json.
+    tier = load_state(root).preferences.sandbox
+
     # 5. Render (+ optionally densify) each article. Build in-memory first so a
     #    mid-loop failure never leaves a half-written corpus on disk.
     written: dict[str, str] = {}
     for index, (kind, entries) in enumerate(non_empty.items(), start=1):
         article = _render_article(kind, entries)
         if args.llm and claude is not None:
-            article = _densify(article, claude, args.model)
+            article = _densify(article, claude, args.model, root, tier=tier)
         written[_article_filename(index, kind)] = article
 
     # Honor the "Never raises" contract on the standalone __main__ path: a
