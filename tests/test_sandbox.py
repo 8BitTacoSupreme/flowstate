@@ -82,6 +82,28 @@ class TestScrubEnv:
         result = _scrub_env(original)
         assert result is not original
 
+    def test_case_insensitive_prefix_match_lowercase(self):
+        # WR-08: lower/mixed-case credential-shaped vars must still be
+        # caught by the denylist, not silently bypass it.
+        env = _scrub_env({"aws_secret_access_key": "x"})
+        assert "aws_secret_access_key" not in env
+
+    def test_case_insensitive_suffix_match_mixed_case(self):
+        env = _scrub_env({"Foo_Api_Key": "x"})
+        assert "Foo_Api_Key" not in env
+
+    def test_case_insensitive_exact_match(self):
+        env = _scrub_env({"password": "x"})
+        assert "password" not in env
+
+    def test_lowercase_variant_of_exempt_name_is_not_exempted(self):
+        # WR-08 fix note: _AUTH_EXEMPT matching stays exact-case (only the
+        # canonical uppercase env var names claude/FlowState actually use
+        # are exempted) — a lowercase variant is not the real auth var and
+        # correctly falls through to the (now case-insensitive) denylist.
+        env = _scrub_env({"anthropic_api_key": "leak"})
+        assert "anthropic_api_key" not in env
+
 
 # ---------------------------------------------------------------------------
 # TestWrapObserve

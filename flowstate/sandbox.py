@@ -108,18 +108,23 @@ def _scrub_env(env: dict[str, str]) -> dict[str, str]:
     Denylist, not allowlist (D-01): unmatched vars pass through untouched so
     a scrubbed environment never starves a subprocess (`git`/`npx`/`repomix`)
     of vars it legitimately needs. `_AUTH_EXEMPT` names always survive,
-    checked before any prefix/suffix/exact match. Never mutates `env`.
+    checked exact-case before any prefix/suffix/exact match. WR-08: the
+    denylist match itself is case-insensitive (matched against `key.upper()`)
+    so a lower/mixed-case credential-shaped var (e.g. `aws_secret_access_key`)
+    is still caught — only the exemption check stays exact-case. Never
+    mutates `env`.
     """
     scrubbed: dict[str, str] = {}
     for key, value in env.items():
         if key in _AUTH_EXEMPT:
             scrubbed[key] = value
             continue
-        if key.startswith(_DENY_PREFIXES):
-            continue
-        if key.endswith(_DENY_SUFFIXES):
-            continue
-        if key in _DENY_EXACT:
+        upper_key = key.upper()
+        if (
+            upper_key.startswith(_DENY_PREFIXES)
+            or upper_key.endswith(_DENY_SUFFIXES)
+            or upper_key in _DENY_EXACT
+        ):
             continue
         scrubbed[key] = value
     return scrubbed
