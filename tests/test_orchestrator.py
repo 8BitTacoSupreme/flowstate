@@ -194,6 +194,19 @@ class TestMakeBridgeAllowedTools:
         bridge = _make_bridge(tmp_path, dry_run=True)
         assert bridge.config.enable_prompt_caching_1h is False
 
+    def test_sandbox_confine_threads_into_bridge(self, tmp_path: Path):
+        """preferences.sandbox='confine' is reflected in bridge config (SBX-04)."""
+        state = FlowStateModel()
+        state.preferences.sandbox = "confine"
+
+        bridge = _make_bridge(tmp_path, dry_run=True, preferences=state.preferences)
+        assert bridge.config.sandbox == "confine"
+
+    def test_no_preferences_leaves_bridge_sandbox_default_observe(self, tmp_path: Path):
+        """_make_bridge with no preferences leaves BridgeConfig.sandbox at its default 'observe'."""
+        bridge = _make_bridge(tmp_path, dry_run=True)
+        assert bridge.config.sandbox == "observe"
+
 
 def test_build_context_prefix_called_once_and_byte_identical_across_adapters(
     tmp_path: Path, monkeypatch

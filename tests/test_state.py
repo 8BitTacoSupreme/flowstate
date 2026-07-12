@@ -214,6 +214,52 @@ def test_load_state_without_caching_field_defaults_true(tmp_path: Path):
     assert loaded.preferences.enable_prompt_caching_1h is True
 
 
+def test_preferences_sandbox_default_observe():
+    """sandbox defaults to 'observe' (SBX-04, D-03/D-04)."""
+    from flowstate.state import ProjectPreferences
+
+    assert ProjectPreferences().sandbox == "observe"
+    assert FlowStateModel().preferences.sandbox == "observe"
+
+
+def test_preferences_sandbox_roundtrip_confine(tmp_path: Path):
+    """sandbox='confine' survives save/load."""
+    state = FlowStateModel()
+    state.preferences.sandbox = "confine"
+    save_state(state, tmp_path)
+
+    loaded = load_state(tmp_path)
+    assert loaded.preferences.sandbox == "confine"
+
+
+def test_load_state_without_sandbox_field_defaults_observe(tmp_path: Path):
+    """Existing flowstate.json without a sandbox key loads with default 'observe' and no
+    migration bump (backward-compatible defaulted-field load, SBX-04)."""
+    raw = {
+        "version": "0.4.0",
+        "preferences": {
+            "project_name": "legacy-proj",
+            "dry_run": False,
+            "auto_branch_on_hardening": True,
+            "model": "",
+            "max_budget_usd": None,
+            "effort": "",
+            # sandbox intentionally absent
+        },
+        "tools": {
+            "research": {"status": "ready"},
+            "strategy": {"status": "ready"},
+            "gsd": {"status": "ready"},
+            "discipline": {"status": "ready"},
+        },
+        "install_manifest": [],
+    }
+    (tmp_path / "flowstate.json").write_text(json.dumps(raw))
+    loaded = load_state(tmp_path)
+    assert loaded.preferences.sandbox == "observe"
+    assert loaded.version == "0.4.0"
+
+
 def test_load_v010_state_file(tmp_path: Path):
     """Loading a v0.1.0 state file should migrate it transparently."""
     old_state = {
