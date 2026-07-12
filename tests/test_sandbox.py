@@ -8,6 +8,7 @@ from unittest import mock
 
 from flowstate.sandbox import (
     _apply_landlock,
+    _escape_sbpl_string,
     _find_bwrap,
     _find_sandbox_exec,
     _landlock_available,
@@ -166,8 +167,10 @@ class TestBuildMacosProfile:
         assert "(deny file-write*)" in build_macos_profile(tmp_path)
 
     def test_project_root_embedded_verbatim_in_subpath_quotes(self, tmp_path: Path):
-        # T-23-04: project_root is embedded as-is inside the subpath quotes;
-        # metacharacter hardening is a Phase-25 confine-runtime concern.
+        # T-23-04: an ordinary path (no SBPL metacharacters) has nothing to
+        # escape, so it still appears verbatim inside the subpath quotes.
+        # See test_project_root_with_quote_is_escaped_not_injected for the
+        # hostile-path case (WR-02).
         profile = build_macos_profile(tmp_path)
         assert f'(subpath "{tmp_path}")' in profile
 
@@ -175,6 +178,22 @@ class TestBuildMacosProfile:
         profile = build_macos_profile(tmp_path)
         assert ".ssh" in profile
         assert "(deny file-read*" in profile
+
+    def test_project_root_with_quote_is_escaped_not_injected(self):
+        # WR-02: a project_root containing a literal `"` must not terminate
+        # the SBPL string early / inject additional clauses.
+        hostile = Path('/tmp/evil") (allow file-write* (subpath "/')
+        profile = build_macos_profile(hostile)
+        escaped = _escape_sbpl_string(str(hostile))
+        assert f'(subpath "{escaped}")' in profile
+        # The raw, unescaped hostile string must not appear quoted verbatim.
+        assert f'(subpath "{hostile}")' not in profile
+
+    def test_project_root_with_backslash_is_escaped(self):
+        hostile = Path("/tmp/weird\\path")
+        profile = build_macos_profile(hostile)
+        escaped = _escape_sbpl_string(str(hostile))
+        assert f'(subpath "{escaped}")' in profile
 
 
 # ---------------------------------------------------------------------------

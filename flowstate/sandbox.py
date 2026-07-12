@@ -158,6 +158,19 @@ def wrap(
 # ---------------------------------------------------------------------------
 
 
+def _escape_sbpl_string(raw: str) -> str:
+    """Escape `raw` for safe embedding inside an SBPL double-quoted string.
+
+    WR-02: SBPL is parsed as an S-expression; a literal `"` in an
+    interpolated value would terminate the quoted string early and let the
+    remainder be interpreted as SBPL syntax (profile corruption at best,
+    injected `(allow ...)` clauses at worst). Escapes backslashes first
+    (so an escaped backslash isn't re-escaped by the quote pass), then
+    double quotes.
+    """
+    return raw.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def build_macos_profile(project_root: Path) -> str:
     """Build the macOS Seatbelt (SBPL) profile string for `project_root`.
 
@@ -167,14 +180,13 @@ def build_macos_profile(project_root: Path) -> str:
     `(deny file-read* (subpath ~/.ssh))`. Deterministic: two calls with the
     same `project_root` return byte-identical strings.
 
-    T-23-04: `project_root` is embedded verbatim inside a `(subpath "...")`
-    quote. This builder is invoked with argv lists, never through a shell,
-    so there is no shell-metacharacter surface — but a `project_root`
-    containing a literal `"` would still break the profile's SBPL quoting.
-    Hardening that edge case is a Phase-25 confine-runtime concern (this
-    builder is not wired to a live caller in this phase).
+    T-23-04 / WR-02: `project_root` is embedded inside a `(subpath "...")`
+    quote via `_escape_sbpl_string`, so a literal `"` or `\\` in the path no
+    longer breaks or injects into the generated profile. This builder is
+    invoked with argv lists, never through a shell, so there is no
+    shell-metacharacter surface separately from this SBPL-quoting concern.
     """
-    project = str(project_root)
+    project = _escape_sbpl_string(str(project_root))
     return f"""(version 1)
 (allow default)
 (deny file-write*)
