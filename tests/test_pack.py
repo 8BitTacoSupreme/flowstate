@@ -119,6 +119,31 @@ class TestRunPack:
         result = run_pack(tmp_path)
         assert result.success is False
 
+    def test_repomix_env_scrubbed_at_default_observe(self, tmp_path: Path, monkeypatch):
+        """run_pack routes repomix through wrap("tool") — credential-shaped var dropped, PATH kept."""
+        fake = _write_fake_repomix(tmp_path)
+        monkeypatch.setenv("FLOWSTATE_REPOMIX_BIN", str(fake))
+        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "leaked-secret")
+        monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+        captured: dict = {}
+        import subprocess as subprocess_module
+
+        real_run = subprocess_module.run
+
+        def _spy_run(cmd, **kwargs):
+            captured["env"] = kwargs.get("env")
+            return real_run(cmd, **kwargs)
+
+        monkeypatch.setattr("flowstate.pack.subprocess.run", _spy_run)
+
+        result = run_pack(tmp_path)
+
+        assert result.success is True
+        assert captured["env"] is not None
+        assert "AWS_SECRET_ACCESS_KEY" not in captured["env"]
+        assert captured["env"].get("PATH") == "/usr/bin:/bin"
+
     def test_compress_flag_included_in_argv(self, tmp_path: Path, monkeypatch):
         """run_pack(compress=True) should pass --compress to repomix."""
         # Write a repomix that records its argv to a file

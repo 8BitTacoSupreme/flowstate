@@ -543,7 +543,7 @@ class TestKickoffCommand:
 
         pack_calls: list = []
 
-        def fake_pack(root, *, compress=False):
+        def fake_pack(root, *, compress=False, sandbox="observe"):
             pack_calls.append(root)
             return PackResult(
                 success=True,

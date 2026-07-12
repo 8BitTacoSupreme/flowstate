@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import flowstate
+from flowstate.sandbox import wrap
 
 # Canonical constants — single source of truth shared with VENDORING.md / 15-01.
 NPM_PACKAGE = "get-shit-done-cc"
@@ -322,7 +323,14 @@ def refresh(
             "--no-fund",
         ]
         try:
-            proc = subprocess.run(cmd, cwd=scratch, capture_output=True, text=True, timeout=timeout)
+            # SBX-03/D-02: default observe tier — refresh() is NOT project-scoped
+            # (its only caller, `gsd_version --refresh`, has no `root`/resolve_root()
+            # call), so no ProjectPreferences.sandbox is threaded here; Path.cwd() is
+            # the correct placeholder since observe ignores project_root.
+            cmd, env = wrap(cmd, "tool", Path.cwd(), {**os.environ})
+            proc = subprocess.run(
+                cmd, cwd=scratch, capture_output=True, text=True, timeout=timeout, env=env
+            )
         except subprocess.TimeoutExpired:
             return RefreshResult(
                 success=False,
@@ -373,12 +381,21 @@ def refresh(
                 error=f"gsd-sdk.js missing from freshly installed {NPM_PACKAGE}",
             )
         try:
-            parity = subprocess.run(
+            # SBX-03/D-02: default observe tier — same rationale as the npm install
+            # site above; refresh() is not project-scoped.
+            parity_cmd, parity_env = wrap(
                 [node_bin, str(gsd_sdk), "query", "roadmap.get-phase", str(parity_phase)],
+                "tool",
+                Path.cwd(),
+                {**os.environ},
+            )
+            parity = subprocess.run(
+                parity_cmd,
                 cwd=str(parity_cwd or Path.cwd()),
                 capture_output=True,
                 text=True,
                 timeout=60,
+                env=parity_env,
             )
         except subprocess.TimeoutExpired:
             return RefreshResult(

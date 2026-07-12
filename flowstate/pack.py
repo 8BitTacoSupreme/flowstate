@@ -15,6 +15,8 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from flowstate.sandbox import wrap
+
 
 def _find_repomix() -> str:
     """Locate the repomix CLI binary.
@@ -72,13 +74,15 @@ class PackConfig:
             self.output_path = self.project_root / ".planning" / "codebase" / "repomix-pack.xml"
 
 
-def run_pack(root: Path, *, compress: bool = False) -> PackResult:
+def run_pack(root: Path, *, compress: bool = False, sandbox: str = "observe") -> PackResult:
     """Locate repomix, invoke it, register the pack artifact, and return PackResult.
 
     Args:
         root: Project root directory. The pack is written to
               <root>/.planning/codebase/repomix-pack.xml.
         compress: Pass --compress to repomix (reduces token count in the pack).
+        sandbox: Confinement tier passed to the repomix confinement seam (SBX-03/SBX-04).
+            Default "observe" (env-scrub only).
 
     Returns:
         PackResult with success=True and output_path set on success, or
@@ -112,12 +116,14 @@ def run_pack(root: Path, *, compress: bool = False) -> PackResult:
     cmd.append(str(root))
 
     try:
+        cmd, env = wrap(cmd, "tool", root, {**os.environ}, tier=sandbox)
         result = subprocess.run(
             cmd,
             cwd=root,
             capture_output=True,
             text=True,
             timeout=config.timeout,
+            env=env,
         )
         if result.returncode != 0:
             return PackResult(

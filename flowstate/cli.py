@@ -143,7 +143,7 @@ def kickoff(root: Path | None, skip_interview: bool):
     created = write_context_files(state, root)
     install_skills(root, dry_run=False, state=state)
 
-    pack_result = run_pack(root)
+    pack_result = run_pack(root, sandbox=state.preferences.sandbox)
     if pack_result.success:
         rel = pack_result.output_path.relative_to(root)
         console.print(f"[green]Pack written:[/green] {rel}")
@@ -784,7 +784,7 @@ def pack(root: Path | None, compress: bool, force: bool):
         console.print("[dim]Pack up to date; skipping (use --force to repack).[/dim]")
         return
 
-    result = run_pack(root, compress=compress)
+    result = run_pack(root, compress=compress, sandbox=state.preferences.sandbox)
     if result.success:
         rel = result.output_path.relative_to(root)
         console.print(f"[green]Pack written:[/green] {rel}")

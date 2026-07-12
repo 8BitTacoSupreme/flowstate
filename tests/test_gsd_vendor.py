@@ -258,6 +258,45 @@ class TestRefreshProcedure:
         # Vendored tree replaced with the freshly-installed lean tree.
         assert (vendor / "node_modules" / "get-shit-done-cc" / "bin" / "gsd-sdk.js").is_file()
 
+    def test_npm_and_node_receive_scrubbed_env(self, tmp_path: Path, monkeypatch):
+        """refresh() routes both subprocess sites through wrap("tool") — credential-shaped
+        vars dropped, PATH kept, at the default observe tier (no sandbox param on refresh)."""
+        vendor = _make_fake_vendor(tmp_path, version="1.42.3")
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        npm = _write_fake_npm(bin_dir)
+        node = _write_fake_node(bin_dir)
+        scratch = tmp_path / "scratch"
+
+        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "leaked-secret")
+        monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+        captured: list[dict] = []
+        import subprocess as subprocess_module
+
+        real_run = subprocess_module.run
+
+        def _spy_run(cmd, **kwargs):
+            captured.append(kwargs.get("env"))
+            return real_run(cmd, **kwargs)
+
+        monkeypatch.setattr("flowstate.gsd_vendor.subprocess.run", _spy_run)
+
+        result = refresh(
+            "1.43.0",
+            vendor_dir=vendor,
+            npm_bin=str(npm),
+            node_bin=str(node),
+            scratch_dir=scratch,
+            parity_cwd=tmp_path,
+        )
+        assert result.success is True, result.error
+        assert len(captured) == 2  # npm install + node parity
+        for env in captured:
+            assert env is not None
+            assert "AWS_SECRET_ACCESS_KEY" not in env
+            assert env.get("PATH") == "/usr/bin:/bin"
+
     def test_refresh_fails_on_oversize_installed_file(self, tmp_path: Path):
         vendor = _make_fake_vendor(tmp_path)
         bin_dir = tmp_path / "bin"
