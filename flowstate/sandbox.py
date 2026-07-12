@@ -32,6 +32,9 @@ stubs for plans 23-02 (macOS) and 23-03 (Linux) to implement.
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 # ---------------------------------------------------------------------------
 # Env-scrub denylist (D-01) — see 23-RESEARCH.md Pitfall 1 for the auth
 # carve-out rationale. Deliberately does NOT include a bare "ANTHROPIC_"
@@ -100,3 +103,84 @@ def _scrub_env(env: dict[str, str]) -> dict[str, str]:
             continue
         scrubbed[key] = value
     return scrubbed
+
+
+# ---------------------------------------------------------------------------
+# wrap() seam (D-04)
+# ---------------------------------------------------------------------------
+
+
+def wrap(
+    cmd: list[str],
+    surface: str,
+    project_root: Path,
+    env: dict[str, str],
+    *,
+    tier: str = "observe",
+) -> tuple[list[str], dict[str, str]]:
+    """Transform `(cmd, env)` for subprocess confinement. Never spawns a process.
+
+    `surface` is reserved for per-surface policy (Phase 24/25); the
+    `observe` tier ignores it. `tier` defaults to `"observe"` — env-scrub
+    only, argv untouched, and this call never fails hard regardless of
+    platform or tier value.
+    """
+    scrubbed_env = _scrub_env(env)
+    if tier == "observe":
+        return cmd, scrubbed_env
+    # tier == "confine" — platform dispatch, profile builders below.
+    if sys.platform == "darwin":
+        return _wrap_macos(cmd, project_root, scrubbed_env)
+    if sys.platform.startswith("linux"):
+        return _wrap_linux(cmd, project_root, scrubbed_env)
+    # Unsupported platform: env-scrub only, never hard-fail (D-03 posture).
+    return cmd, scrubbed_env
+
+
+# ---------------------------------------------------------------------------
+# Confine-path contract stubs (implemented in plans 23-02/23-03)
+# ---------------------------------------------------------------------------
+
+
+def build_macos_profile(project_root: Path) -> str:
+    """Build the macOS Seatbelt (SBPL) profile string for `project_root`.
+
+    Pure, I/O-free builder — implemented in plan 23-02.
+    """
+    raise NotImplementedError("implemented in plan 23-02/23-03")  # pragma: no cover
+
+
+def build_linux_bwrap_args(project_root: Path) -> list[str]:
+    """Build the `bwrap` argv prefix confining writes to `project_root`.
+
+    Pure, I/O-free builder — implemented in plan 23-03.
+    """
+    raise NotImplementedError("implemented in plan 23-02/23-03")  # pragma: no cover
+
+
+def check_bwrap_available() -> bool:
+    """Functional smoke test for `bwrap` availability (not a presence check).
+
+    Implemented in plan 23-03.
+    """
+    raise NotImplementedError("implemented in plan 23-02/23-03")  # pragma: no cover
+
+
+def _wrap_macos(
+    cmd: list[str], project_root: Path, env: dict[str, str]
+) -> tuple[list[str], dict[str, str]]:
+    """Prefix `cmd` with `sandbox-exec` under the macOS confine profile.
+
+    Implemented in plan 23-02.
+    """
+    raise NotImplementedError("implemented in plan 23-02/23-03")  # pragma: no cover
+
+
+def _wrap_linux(
+    cmd: list[str], project_root: Path, env: dict[str, str]
+) -> tuple[list[str], dict[str, str]]:
+    """Prefix `cmd` with `bwrap` + apply landlock rules under Linux confine.
+
+    Implemented in plan 23-03.
+    """
+    raise NotImplementedError("implemented in plan 23-02/23-03")  # pragma: no cover
