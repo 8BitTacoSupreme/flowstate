@@ -7,7 +7,10 @@ import sys
 from pathlib import Path
 from unittest import mock
 
+import pytest
+
 from flowstate.sandbox import (
+    SandboxUnavailableError,
     _apply_landlock,
     _escape_sbpl_string,
     _find_bwrap,
@@ -139,10 +142,12 @@ class TestWrapObserve:
         wrap(argv, "llm", Path("/tmp/p"), {"PATH": "/usr/bin"})
         assert argv == original
 
-    def test_unsupported_platform_confine_returns_scrubbed(self, monkeypatch):
+    def test_unsupported_platform_observe_still_returns_scrubbed(self, monkeypatch):
+        # D-01/SBX-06 (Phase 25): the observe tier is untouched — it must
+        # still never raise, even on a platform with no confine mechanism.
         monkeypatch.setattr("flowstate.sandbox.sys.platform", "sunos5")
         env = {"PATH": "/usr/bin", "AWS_SECRET_ACCESS_KEY": "leak"}
-        argv, new_env = wrap(["echo", "hi"], "llm", Path("/tmp/p"), env, tier="confine")
+        argv, new_env = wrap(["echo", "hi"], "llm", Path("/tmp/p"), env, tier="observe")
         assert argv == ["echo", "hi"]
         assert new_env == _scrub_env(env)
 
@@ -158,6 +163,56 @@ class TestWrapObserve:
         new_argv, new_env = wrap(argv, "llm", Path("/tmp/p"), env, tier="Confine")
         assert new_argv == argv
         assert new_env == _scrub_env(env)
+
+
+# ---------------------------------------------------------------------------
+# TestWrapConfineFailLoud (D-01/SBX-06)
+# ---------------------------------------------------------------------------
+
+
+class TestWrapConfineFailLoud:
+    def test_confine_raises_on_unsupported_platform(self, monkeypatch):
+        monkeypatch.setattr("flowstate.sandbox.sys.platform", "sunos5")
+        with pytest.raises(SandboxUnavailableError):
+            wrap(["echo", "hi"], "llm", Path("/tmp/p"), {"PATH": "/usr/bin"}, tier="confine")
+
+    def test_confine_raises_on_linux_when_bwrap_unavailable(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setattr("flowstate.sandbox.sys.platform", "linux")
+        monkeypatch.setattr("flowstate.sandbox.check_bwrap_available", lambda: False)
+        with pytest.raises(SandboxUnavailableError) as exc_info:
+            wrap(["echo", "hi"], "llm", tmp_path, {"PATH": "/usr/bin"}, tier="confine")
+        assert "bwrap" in str(exc_info.value)
+        assert "FLOWSTATE_BWRAP_BIN" in str(exc_info.value)
+
+    def test_confine_raises_on_darwin_when_sandbox_exec_missing(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setattr("flowstate.sandbox.sys.platform", "darwin")
+        monkeypatch.setattr(
+            "flowstate.sandbox._find_sandbox_exec", lambda: str(tmp_path / "no-such-binary")
+        )
+        with pytest.raises(SandboxUnavailableError) as exc_info:
+            wrap(["echo", "hi"], "llm", tmp_path, {"PATH": "/usr/bin"}, tier="confine")
+        assert "sandbox-exec" in str(exc_info.value)
+        assert "FLOWSTATE_SANDBOX_EXEC_BIN" in str(exc_info.value)
+
+    def test_confine_does_not_raise_on_linux_bwrap_only_partial_capability(
+        self, tmp_path: Path, monkeypatch
+    ):
+        # Partial capability (bwrap present, landlock absent) still degrades
+        # WITHIN confinement (RUNG-1 -> RUNG-2) — must NOT raise.
+        monkeypatch.setattr("flowstate.sandbox.sys.platform", "linux")
+        monkeypatch.setattr("flowstate.sandbox.check_bwrap_available", lambda: True)
+        monkeypatch.setattr("flowstate.sandbox._landlock_available", lambda: False)
+        monkeypatch.setattr("flowstate.sandbox._find_bwrap", lambda: "/usr/bin/bwrap")
+        argv, env = wrap(["claude", "--print"], "llm", tmp_path, {"PATH": "/b"}, tier="confine")
+        assert argv[0] == "/usr/bin/bwrap"
+        assert env == {"PATH": "/b"}
+
+    def test_observe_never_raises_on_unsupported_platform_regression_guard(self, monkeypatch):
+        monkeypatch.setattr("flowstate.sandbox.sys.platform", "sunos5")
+        argv, _env = wrap(
+            ["echo", "hi"], "llm", Path("/tmp/p"), {"PATH": "/usr/bin"}, tier="observe"
+        )
+        assert argv == ["echo", "hi"]
 
 
 # ---------------------------------------------------------------------------
@@ -524,31 +579,25 @@ class TestWrapLinux:
         assert argv[-len(cmd) :] == cmd
         assert env == {"PATH": "/b"}
 
-    def test_wrap_linux_falls_back_to_observe(self, tmp_path: Path, monkeypatch):
+    def test_wrap_linux_raises_when_bwrap_unavailable(self, tmp_path: Path, monkeypatch):
+        # D-01/SBX-06 (Phase 25): RUNG-3 (bwrap fully unavailable) now fails
+        # loud instead of degrading to a silent observe passthrough — this
+        # replaces the retired test_wrap_linux_falls_back_to_observe.
         monkeypatch.setattr("flowstate.sandbox.check_bwrap_available", lambda: False)
         cmd = ["claude", "--print"]
         env = {"PATH": "/b"}
-        argv, new_env = _wrap_linux(cmd, tmp_path, env)
+        with pytest.raises(SandboxUnavailableError) as exc_info:
+            _wrap_linux(cmd, tmp_path, env)
+        assert "bwrap" in str(exc_info.value)
+        assert "FLOWSTATE_BWRAP_BIN" in str(exc_info.value)
 
-        assert argv == cmd
-        assert new_env == env
-
-    def test_wrap_linux_observe_fallback_never_raises(self, tmp_path: Path):
-        with mock.patch("flowstate.sandbox.check_bwrap_available", return_value=False):
-            argv, env = _wrap_linux(["claude"], tmp_path, {"X": "1"})
-        assert argv == ["claude"]
-        assert env == {"X": "1"}
-
-    def test_wrap_linux_observe_fallback_emits_one_time_warning(
-        self, tmp_path: Path, monkeypatch, capsys
-    ):
-        import flowstate.sandbox as sandbox_module
-
-        monkeypatch.setattr(sandbox_module, "check_bwrap_available", lambda: False)
-        monkeypatch.setattr(sandbox_module, "_bwrap_warning_emitted", False)
-        sandbox_module._wrap_linux(["claude"], tmp_path, {})
-        captured = capsys.readouterr()
-        assert "bwrap unavailable" in captured.err
+    def test_wrap_linux_raise_message_mentions_install_hint(self, tmp_path: Path):
+        with (
+            mock.patch("flowstate.sandbox.check_bwrap_available", return_value=False),
+            pytest.raises(SandboxUnavailableError) as exc_info,
+        ):
+            _wrap_linux(["claude"], tmp_path, {"X": "1"})
+        assert "not found" in str(exc_info.value)
 
 
 # ---------------------------------------------------------------------------

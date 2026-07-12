@@ -3,13 +3,27 @@
 Exposes a graceful-degradation seam: importing this module NEVER requires
 `bwrap`/Landlock/`sandbox-exec` to be present, and the `observe` tier never
 blocks or fails a subprocess call — it is pure env hygiene, not hard
-confinement (D-01). `wrap()` never spawns the *target* `cmd` itself; it
-transforms `(argv, env)` for the caller to pass to `subprocess.run()`
-unchanged (D-04). WR-04: this does NOT mean `wrap()` is side-effect-free on
-every path — the Linux `confine` tier's `check_bwrap_available()` runs a
-real, short-lived `bwrap ... /bin/true` availability probe on every call
-(Research Pattern 3); that probe subprocess is not the target `cmd`, but
-callers should not assume `wrap()` never spawns anything at all.
+confinement (23-CONTEXT.md D-01). `wrap()` never spawns the *target* `cmd`
+itself; it transforms `(argv, env)` for the caller to pass to
+`subprocess.run()` unchanged (23-CONTEXT.md D-04). WR-04: this does NOT mean
+`wrap()` is side-effect-free on every path — the Linux `confine` tier's
+`check_bwrap_available()` runs a real, short-lived `bwrap ... /bin/true`
+availability probe on every call (Research Pattern 3); that probe subprocess
+is not the target `cmd`, but callers should not assume `wrap()` never spawns
+anything at all.
+
+CONTRACT CHANGE (Phase 25, 25-CONTEXT.md D-01/SBX-06): the "never blocks or
+fails" guarantee above is scoped to the `observe` tier and to the
+availability *probes* (`check_bwrap_available`, `_landlock_available`)
+ONLY. The `confine` tier now RAISES `SandboxUnavailableError` when NO
+confinement at all is achievable — the platform is neither darwin nor
+linux, the located `sandbox-exec` binary does not actually exist on darwin,
+or `check_bwrap_available()` is False on linux. A requested `confine` that
+cannot be delivered must be loud, never a silent unconfined passthrough —
+that would be exactly the confine-bypass this guardrail exists to prevent.
+Partial capability still degrades WITHIN confinement without raising:
+Linux "bwrap present, landlock unavailable" still steps RUNG-1 -> RUNG-2
+(bwrap-only) — that is still real confinement, so it does not fail loud.
 
 Public API::
 
@@ -25,22 +39,30 @@ Decision cross-references (see .planning/phases/23-linux-parity-core-seam/23-CON
           namespace (implemented in plans 23-02/23-03, stubbed here).
     D-03: Asymmetric degrade — a failed Linux confinement path falls back
           to a warned observe-only posture rather than blocking the tier
-          (implemented in plans 23-02/23-03).
+          (implemented in plans 23-02/23-03). Phase 25 (25-CONTEXT.md
+          D-01/SBX-06) TIGHTENS this for the bwrap-fully-unavailable rung:
+          what was RUNG-3 (silent observe fallback) now raises
+          `SandboxUnavailableError` instead. The RUNG-1 -> RUNG-2
+          (landlock-unavailable) degrade this decision describes is
+          untouched — that rung still applies without raising.
     D-04: `wrap()` returns a transformed `(argv, env)` tuple; it never
           executes the target `cmd` itself (though the Linux confine path's
           `check_bwrap_available()` availability probe does spawn a
           short-lived `bwrap ... /bin/true` smoke-test subprocess — WR-04).
 
+See also .planning/phases/25-confinement-verification/25-CONTEXT.md D-01
+(SBX-06 fail-loud) for the confine-tier contract change summarized above.
+
 Phase 23-01 built the `observe` path and the env-scrub denylist. Plan
 23-02 implements the macOS SBPL profile builder (`build_macos_profile`),
 its confine wiring (`_wrap_macos`), and the Linux bwrap mount-namespace
-argv builder (`build_linux_bwrap_args`) — pure, golden-tested builders,
-not yet wired to any live caller (Phase 24) and not yet shipping real
-production confinement (Phase 25). Plan 23-03 completes the Linux path:
-the Landlock ctypes helper (`_apply_landlock`/`_landlock_available`), the
-functional `check_bwrap_available` smoke test, and `_wrap_linux`'s D-03
-two-rung degradation ladder (bwrap+landlock -> bwrap-only -> observe).
-None of this is wired to a live caller yet (Phase 24/25).
+argv builder (`build_linux_bwrap_args`) — pure, golden-tested builders.
+Plan 23-03 completes the Linux path: the Landlock ctypes helper
+(`_apply_landlock`/`_landlock_available`), the functional
+`check_bwrap_available` smoke test, and `_wrap_linux`'s degradation
+ladder (bwrap+landlock -> bwrap-only -> [Phase 25: raise, was observe]).
+Phase 25 wires this seam for real production use and tightens the final
+rung to fail loud (SBX-06) — see the CONTRACT CHANGE note above.
 """
 
 from __future__ import annotations
@@ -54,6 +76,17 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+
+class SandboxUnavailableError(RuntimeError):
+    """Raised when `tier="confine"` is requested but no confinement is achievable.
+
+    D-01/SBX-06 (25-CONTEXT.md): a deliberate, narrow exception to this
+    module's default graceful-degradation posture. `observe` and the
+    availability probes never raise; only the confine dispatch's
+    no-confinement-achievable paths raise this.
+    """
+
 
 # ---------------------------------------------------------------------------
 # Env-scrub denylist (D-01) — see 23-RESEARCH.md Pitfall 1 for the auth
@@ -113,6 +146,13 @@ def _scrub_env(env: dict[str, str]) -> dict[str, str]:
     so a lower/mixed-case credential-shaped var (e.g. `aws_secret_access_key`)
     is still caught — only the exemption check stays exact-case. Never
     mutates `env`.
+
+    WR-2 (25-CONTEXT.md D-04): the `_TOKEN` suffix in `_DENY_SUFFIXES`
+    deliberately catches tool-auth vars too (e.g. `NPM_TOKEN`), which can
+    break a private npm registry's `.npmrc` `_authToken` auth under
+    `observe` (see `flowstate/gsd_vendor.py`'s wrap-site comments). This is
+    NOT exempted — widening the exemption set would weaken the scrub's
+    core secret-shaped-var guarantee for every other caller of `observe`.
     """
     scrubbed: dict[str, str] = {}
     for key, value in env.items():
@@ -153,8 +193,10 @@ def wrap(
 
     `surface` is reserved for per-surface policy (Phase 24/25); the
     `observe` tier ignores it. `tier` defaults to `"observe"` — env-scrub
-    only, argv untouched, and this call never fails hard regardless of
-    platform or tier value.
+    only, argv untouched, and `observe` never fails hard regardless of
+    platform. `tier="confine"` CAN raise `SandboxUnavailableError`
+    (25-CONTEXT.md D-01/SBX-06) when no confinement is achievable on this
+    platform/host — see the module docstring's CONTRACT CHANGE note.
     """
     scrubbed_env = _scrub_env(env)
     if tier not in ("observe", "confine"):
@@ -166,8 +208,13 @@ def wrap(
         return _wrap_macos(cmd, project_root, scrubbed_env)
     if sys.platform.startswith("linux"):
         return _wrap_linux(cmd, project_root, scrubbed_env)
-    # Unsupported platform: env-scrub only, never hard-fail (D-03 posture).
-    return cmd, scrubbed_env
+    # D-01/SBX-06: no confinement mechanism exists on this platform at all —
+    # fail loud rather than silently running `cmd` unconfined under the
+    # explicit confine tier (`observe`, above, is untouched and never raises).
+    raise SandboxUnavailableError(
+        f"sandbox confinement is not supported on this platform ({sys.platform!r}). "
+        "confine tier requires darwin or linux."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -484,16 +531,23 @@ def _wrap_macos(
     responsible for unlinking `argv[2]` (the returned `profile_path`, at
     argv index 2) once the child process exits, or every `confine`-tier
     macOS `wrap()` call leaks one `.sb` file into the OS temp directory.
+
+    D-01/SBX-06: raises `SandboxUnavailableError` if the located
+    `_find_sandbox_exec()` path does not actually exist on disk — its
+    `/usr/bin/sandbox-exec` fallback is a guess, not a guarantee, so the
+    guess is verified here before dispatch rather than trusted blindly.
     """
+    sbx = _find_sandbox_exec()
+    if not Path(sbx).is_file():
+        raise SandboxUnavailableError(
+            "sandbox-exec not found. Install Xcode Command Line Tools or set "
+            "FLOWSTATE_SANDBOX_EXEC_BIN to the binary path."
+        )
     profile = build_macos_profile(project_root)
     with tempfile.NamedTemporaryFile(mode="w", suffix=".sb", delete=False) as f:
         f.write(profile)
         profile_path = f.name
-    sbx = _find_sandbox_exec()
     return [sbx, "-f", profile_path, *cmd], env
-
-
-_bwrap_warning_emitted = False
 
 
 def _wrap_linux(
@@ -501,22 +555,24 @@ def _wrap_linux(
 ) -> tuple[list[str], dict[str, str]]:
     """Prefix `cmd` with `bwrap` (+ a Landlock-applying shim) under Linux confine.
 
-    Implements exactly D-03's TWO-rung degradation ladder:
+    Implements a TWO-rung degradation ladder, with the third rung tightened
+    to fail loud by Phase 25 (D-01/SBX-06):
       RUNG 1 (bwrap + landlock): `check_bwrap_available()` True AND
         `_landlock_available()` True -> bwrap-prefixed argv whose target is
         a self-invoking `python -m flowstate.sandbox --apply-landlock ...`
         shim that applies `_apply_landlock` before exec-ing `cmd`.
       RUNG 2 (bwrap-only): `check_bwrap_available()` True, landlock
         unavailable -> bwrap-prefixed argv, `cmd` unchanged as the target.
-      RUNG 3 (observe fallback): `check_bwrap_available()` False -> `cmd`
-        and `env` returned unchanged, with a one-time stderr warning.
+        This is still real confinement (mount-namespace isolation without
+        Landlock), so it does NOT raise (D-01's partial-capability carve-out).
+      RUNG 3 (fail loud): `check_bwrap_available()` False -> NO confinement
+        at all is achievable, so this raises `SandboxUnavailableError`
+        instead of the Phase-23 silent observe fallback (D-01/SBX-06).
 
     REJECTED rung (23-RESEARCH.md Open Question #1 / D-03): a Landlock-only
     rung (bwrap absent, landlock present — FS enforcement with no namespace
-    isolation) is deliberately NOT implemented. D-03's wording names exactly
-    two fallback rungs; the invented Landlock-only rung is a documented
-    future refinement, not silently added here. bwrap-absent always
-    collapses straight to RUNG 3 (observe), never to a bare-landlock rung.
+    isolation) is deliberately NOT implemented. bwrap-absent always
+    collapses straight to RUNG 3 (now a raise), never to a bare-landlock rung.
 
     Phase 23 builds and golden-tests the argv SHAPE only — the shim actually
     executing `_apply_landlock` before the real target process spawns is
@@ -525,19 +581,17 @@ def _wrap_linux(
     D-04). WR-04: `check_bwrap_available()` (called by this function on
     every invocation) DOES spawn a short-lived `bwrap ... /bin/true`
     availability-probe subprocess — that's a probe, not the target `cmd`,
-    but it means this function is not literally subprocess-free. Never
-    raises regardless of which rung fires (T-23-11).
+    but it means this function is not literally subprocess-free. Raises
+    ONLY on RUNG 3 (T-23-11 updated by D-01/SBX-06); RUNG 1/2 never raise.
     """
     if not check_bwrap_available():
-        global _bwrap_warning_emitted
-        if not _bwrap_warning_emitted:
-            print(
-                "bwrap unavailable — falling back to observe (env-scrub only); "
-                "kernel confinement pending",
-                file=sys.stderr,
-            )
-            _bwrap_warning_emitted = True
-        return cmd, env
+        # D-01/SBX-06: bwrap absent/non-functional under the explicitly
+        # requested confine tier — no confinement at all is achievable, so
+        # fail loud instead of silently degrading to observe (replaces the
+        # Phase-23 RUNG-3 print-and-degrade fallback).
+        raise SandboxUnavailableError(
+            "bwrap not found. Install bubblewrap or set FLOWSTATE_BWRAP_BIN to the binary path."
+        )
 
     bwrap_prefix = [_find_bwrap(), *build_linux_bwrap_args(project_root), "--"]
 
