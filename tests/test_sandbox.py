@@ -579,31 +579,25 @@ class TestWrapLinux:
         assert argv[-len(cmd) :] == cmd
         assert env == {"PATH": "/b"}
 
-    def test_wrap_linux_falls_back_to_observe(self, tmp_path: Path, monkeypatch):
+    def test_wrap_linux_raises_when_bwrap_unavailable(self, tmp_path: Path, monkeypatch):
+        # D-01/SBX-06 (Phase 25): RUNG-3 (bwrap fully unavailable) now fails
+        # loud instead of degrading to a silent observe passthrough — this
+        # replaces the retired test_wrap_linux_falls_back_to_observe.
         monkeypatch.setattr("flowstate.sandbox.check_bwrap_available", lambda: False)
         cmd = ["claude", "--print"]
         env = {"PATH": "/b"}
-        argv, new_env = _wrap_linux(cmd, tmp_path, env)
+        with pytest.raises(SandboxUnavailableError) as exc_info:
+            _wrap_linux(cmd, tmp_path, env)
+        assert "bwrap" in str(exc_info.value)
+        assert "FLOWSTATE_BWRAP_BIN" in str(exc_info.value)
 
-        assert argv == cmd
-        assert new_env == env
-
-    def test_wrap_linux_observe_fallback_never_raises(self, tmp_path: Path):
-        with mock.patch("flowstate.sandbox.check_bwrap_available", return_value=False):
-            argv, env = _wrap_linux(["claude"], tmp_path, {"X": "1"})
-        assert argv == ["claude"]
-        assert env == {"X": "1"}
-
-    def test_wrap_linux_observe_fallback_emits_one_time_warning(
-        self, tmp_path: Path, monkeypatch, capsys
-    ):
-        import flowstate.sandbox as sandbox_module
-
-        monkeypatch.setattr(sandbox_module, "check_bwrap_available", lambda: False)
-        monkeypatch.setattr(sandbox_module, "_bwrap_warning_emitted", False)
-        sandbox_module._wrap_linux(["claude"], tmp_path, {})
-        captured = capsys.readouterr()
-        assert "bwrap unavailable" in captured.err
+    def test_wrap_linux_raise_message_mentions_install_hint(self, tmp_path: Path):
+        with (
+            mock.patch("flowstate.sandbox.check_bwrap_available", return_value=False),
+            pytest.raises(SandboxUnavailableError) as exc_info,
+        ):
+            _wrap_linux(["claude"], tmp_path, {"X": "1"})
+        assert "not found" in str(exc_info.value)
 
 
 # ---------------------------------------------------------------------------
