@@ -454,3 +454,100 @@ class TestCumulativeTotals:
         assert bridge.total_tokens_out == 0
         assert bridge.total_cache_read == 0
         assert bridge.total_wall_clock_s == (result.duration_s or 0.0)
+
+
+class TestConfineTempProfileCleanup:
+    """Task 2 (WR-09/SBX-05): confine-tier .sb temp profile unlinked on every exit path.
+
+    `wrap()` dispatches to `sandbox._wrap_macos` when `tier == "confine"` on darwin,
+    which writes a real `NamedTemporaryFile(delete=False, suffix=".sb")` to disk and
+    returns argv shaped `[sandbox-exec, "-f", <path>, *cmd]`. These tests force that
+    dispatch (monkeypatching `sys.platform` in both modules so this passes on any
+    host OS) and stub `subprocess.run` so no real `sandbox-exec`/`claude` is spawned —
+    fully offline and deterministic — then assert the real temp file left on disk by
+    `_wrap_macos` is gone after `bridge.run()` returns, on both the success and the
+    error paths.
+    """
+
+    def _confine_config(self, tmp_path: Path) -> BridgeConfig:
+        fake_claude = tmp_path / "claude"
+        fake_claude.write_text("#!/bin/sh\necho ok")
+        fake_claude.chmod(0o755)
+        return BridgeConfig(claude_bin=str(fake_claude), project_root=tmp_path, sandbox="confine")
+
+    def _force_darwin(self, monkeypatch):
+        """Force the confine->macOS dispatch regardless of the host OS running pytest."""
+        monkeypatch.setattr("flowstate.bridge.sys.platform", "darwin")
+        monkeypatch.setattr("flowstate.sandbox.sys.platform", "darwin")
+
+    def test_success_path_removes_temp_profile(self, tmp_path: Path, monkeypatch):
+        self._force_darwin(monkeypatch)
+        captured: dict = {}
+
+        def fake_run(cmd, **kwargs):
+            captured["cmd"] = cmd
+            return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+        monkeypatch.setattr("flowstate.bridge.subprocess.run", fake_run)
+
+        bridge = ClaudeBridge(config=self._confine_config(tmp_path))
+        result = bridge.run("Hello")
+
+        assert result.success
+        assert captured["cmd"][0:2] == [captured["cmd"][0], "-f"]
+        profile_path = Path(captured["cmd"][2])
+        assert not profile_path.exists(), "temp .sb profile must be unlinked after run() succeeds"
+
+    def test_timeout_path_still_removes_temp_profile(self, tmp_path: Path, monkeypatch):
+        self._force_darwin(monkeypatch)
+        captured: dict = {}
+
+        def fake_run_raises(cmd, **kwargs):
+            captured["cmd"] = cmd
+            raise subprocess.TimeoutExpired(cmd=cmd, timeout=1)
+
+        monkeypatch.setattr("flowstate.bridge.subprocess.run", fake_run_raises)
+
+        bridge = ClaudeBridge(config=self._confine_config(tmp_path))
+        result = bridge.run("Hello")
+
+        assert not result.success
+        profile_path = Path(captured["cmd"][2])
+        assert not profile_path.exists(), (
+            "temp .sb profile must be unlinked even when the subprocess times out"
+        )
+
+    def test_file_not_found_path_still_removes_temp_profile(self, tmp_path: Path, monkeypatch):
+        self._force_darwin(monkeypatch)
+        captured: dict = {}
+
+        def fake_run_raises(cmd, **kwargs):
+            captured["cmd"] = cmd
+            raise FileNotFoundError()
+
+        monkeypatch.setattr("flowstate.bridge.subprocess.run", fake_run_raises)
+
+        bridge = ClaudeBridge(config=self._confine_config(tmp_path))
+        result = bridge.run("Hello")
+
+        assert not result.success
+        profile_path = Path(captured["cmd"][2])
+        assert not profile_path.exists(), (
+            "temp .sb profile must be unlinked even on FileNotFoundError"
+        )
+
+    def test_observe_tier_does_not_attempt_unlink(self, tmp_path: Path, monkeypatch):
+        """Regression: default observe-tier run() never treats argv[2] as a profile
+        to unlink, and does not error even though observe leaves argv untouched
+        (so argv[2] is ordinary claude CLI content, not a real file path)."""
+        self._force_darwin(monkeypatch)
+        fake_claude = tmp_path / "claude"
+        fake_claude.write_text("#!/bin/sh\necho ok")
+        fake_claude.chmod(0o755)
+        config = BridgeConfig(claude_bin=str(fake_claude), project_root=tmp_path)
+        assert config.sandbox == "observe"
+
+        result = ClaudeBridge(config=config).run("Hello")
+
+        assert result.success
+        assert "ok" in result.output
