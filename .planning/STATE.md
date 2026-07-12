@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.8.0
-milestone_name: Harness Tax & Value
-status: executing
-stopped_at: "Phase 22 PAUSED — verdict driver + research-grounding fix shipped (quick 260711-research-grounding-fix); OWED: gated re-verify probe -> full 5x3 real run on floxybot2 (subscription, ~5-7hr). Then v0.9.0 sandbox (SEED-003) ready to start."
+milestone: v0.9.0
+milestone_name: Sandbox Guardrail
+status: planning
+stopped_at: "v0.9.0 opened (SEED-003, phases 23-25). Discussing Phase 23. PARKED DEBT: v0.8.0 Phase 22 verdict — 5x3 paid run owed (see Blockers)."
 last_updated: "2026-07-11T22:54:31.413Z"
 last_activity: 2026-07-11
 progress:
-  total_phases: 4
-  completed_phases: 3
-  total_plans: 11
-  completed_plans: 10
-  percent: 75
+  total_phases: 3
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,14 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Phase 22 — the-verdict
+**Current focus:** Phase 23 — Linux Parity + Core Seam (v0.9.0 Sandbox Guardrail)
 
 ## Current Position
 
-Phase: 22 (the-verdict) — EXECUTING
-Plan: 3 of 3
-Status: Ready to execute
-Last activity: 2026-07-11
+Phase: 23 (linux-parity-core-seam) — DISCUSSING
+Plan: —
+Status: Gathering phase context
+Last activity: 2026-07-11 — v0.9.0 Sandbox Guardrail opened (SEED-003)
+
+**Parked from v0.8.0:** Phase 22 (The Verdict) code shipped; the 5×3 paid benchmark run is OWED (see Blockers). `.planning/phases/22-the-verdict/` retained intact; v0.8.0 not archived.
 
 ## Performance Metrics
 
@@ -136,6 +138,7 @@ None yet.
 
 ### Blockers/Concerns
 
+- **OWED — v0.8.0 Phase 22 verdict run (parked 2026-07-11):** the pre-registered paired-design **5×3 real benchmark run (~5–7 hr, subscription, on a floxybot2 copy)** has NOT executed. Code shipped (verdict driver, pre-registration, research-grounding fix); resume with the gated one-trial re-verify probe → full run → apply the frozen Holm-gated rule → then archive v0.8.0. `.planning/phases/22-the-verdict/` is retained intact. Do NOT run `phases.clear` or `milestone.complete` on v0.8.0 until the verdict is recorded. Full resume detail in memory `flowstate-v08-phase22-paused` and `22-PREREGISTRATION.md`.
 - **SECURITY (carried forward, unresolved):** an `OPENAI_API_KEY` was pasted into a chat session during the v0.6.0-era benchmark work. Rotate it if that has not already been done. Tracked here so the milestone reset does not erase it.
 - **Benchmark integrity:** `bench/BENCHMARK_HANDOFF.md` §4 records that `_READER_INSTRUCTION` is a measured QA regression that is still the default reader prompt. Out of scope for v0.7.0 (retrieval-only), but no QA number should be quoted until it is addressed.
 

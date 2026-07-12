@@ -18,9 +18,6 @@
 - [x] **Phase 20: Evaluator Independence** - Judge-model ≠ producer-model enforced in code, with multi-judge averaging — completed 2026-07-11
 - [x] **Phase 21: Activate the Wiki** - Promote the memory→wiki distiller to production and fire the dormant semantic wiki layer — completed 2026-07-11
 - [ ] **Phase 22: The Verdict** - Pre-registered, paired-design run on a real repo measuring quality and tax per context-layer arm — ⏸ PAUSED (code shipped; 5×3 paid run owed)
-
-### v0.9.0 Sandbox Guardrail (Phases 23–25, SEED-003)
-
 - [ ] **Phase 23: Linux Parity + Core Seam** - Retire the bwrap+landlock unknown on Linux (mirror the passed macOS spike); build `flowstate/sandbox.py` with the `wrap(cmd, surface, project_root, env)` seam + per-platform profile builders + the non-blocking `observe` env-scrub tier (SBX-01, SBX-02)
 - [ ] **Phase 24: Thread the Seam + Config** - Route the agent-directed subprocess sites through `wrap()` (auth preserved), add the defaulted `ProjectPreferences.sandbox` field (no migration); env-scrub live by default, confinement opt-in (SBX-03, SBX-04)
 - [ ] **Phase 25: Confinement + Verification** - Ship the allow-default+selective-deny macOS SBPL + bwrap Linux profiles behind `confine`; E2E-prove a real `claude --print` succeeds confined while writes outside `project_root` and `~/.ssh` reads are denied; fail loud on a missing sandbox binary (SBX-05, SBX-06)
@@ -162,6 +159,36 @@ Plans:
 - [ ] 22-03-PLAN.md — Gated paid --mode real run on floxybot2 + write 22-VERDICT.md applying the pre-registered rules (VERD-02/03)
 
 **Note**: expensive — live LLM runs across 5 arms × multiple trials × multiple runs (compounding curve); smoke at reduced trials/runs before scaling per the SEED's cost-reality note.
+
+### Phase 23: Linux Parity + Core Seam
+
+**Goal**: The Linux confinement unknown is retired (bwrap+landlock either preserves `claude` auth under an allow-default profile, mirroring the passed macOS Seatbelt spike, or the gap is honestly documented), and `flowstate/sandbox.py` exists with the single `wrap(cmd, surface, project_root, env)` seam and a non-blocking `observe` tier — the foundation every later phase threads through.
+**Depends on**: SEED-003 (macOS Seatbelt spike already passed; sandflox is the reference design). Nothing upstream is unbuilt.
+**Requirements**: SBX-01, SBX-02
+**Success Criteria** (what must be TRUE):
+
+  1. A Linux `bwrap`+landlock spike demonstrates an allow-default + selective-deny profile that preserves `claude` auth and API reachability (mirroring the macOS finding), OR the parity gap is documented with its consequence for phases 24–25 — a failed spike is a recorded outcome, not a silent skip.
+  2. `flowstate/sandbox.py` exposes `wrap(cmd, surface, project_root, env)` with per-platform profile builders; the default `observe` tier is env-scrub only and never blocks a command (unit-tested against a fake command; profile emission golden-tested).
+
+### Phase 24: Thread the Seam + Config
+
+**Goal**: The agent-directed subprocess sites actually run through `wrap()` with auth intact, and a user can choose their posture via a defaulted `ProjectPreferences.sandbox` field — env-scrub live by default, confinement opt-in — with no state migration.
+**Depends on**: Phase 23 (the `wrap()` seam and `observe` tier must exist before anything routes through them).
+**Requirements**: SBX-03, SBX-04
+**Success Criteria** (what must be TRUE):
+
+  1. The agent-directed subprocess sites are routed through `wrap()` — at minimum `bridge.py:308` (the auth-load-bearing `claude --print` call) — and Keychain/API reachability is preserved on every wrapped call; internal git-read (`discipline.py`) and npm (`gsd_vendor.py`) sites are wrapped or left bare per an explicit, documented plan-time decision.
+  2. `ProjectPreferences` gains a defaulted `sandbox` level field (`observe` / `confine`); load stays backward-compatible with no state migration, and the default is `observe`.
+
+### Phase 25: Confinement + Verification
+
+**Goal**: The `confine` tier is real and proven — a live `claude --print` succeeds inside the kernel sandbox while writes outside the project root and reads of `~/.ssh` are denied, on both macOS and Linux — and a missing sandbox binary fails loud instead of silently running unconfined.
+**Depends on**: Phase 23 (profile builders) and Phase 24 (the seam + config field the `confine` level toggles).
+**Requirements**: SBX-05, SBX-06
+**Success Criteria** (what must be TRUE):
+
+  1. The `confine` tier ships the allow-default + selective-deny macOS SBPL profile and the Linux bwrap equivalent; an end-to-end test confirms a real `claude --print` succeeds confined (auth survives, API reachable) while a write outside `project_root` and a read of `~/.ssh` are denied.
+  2. Under `confine`, a missing platform sandbox binary (`sandbox-exec` / `bwrap`) fails loud with an install hint — the guardrail never silently runs a command unconfined when confinement was requested.
 
 <details>
 <summary>📋 v0.7.0 Retrieval Benchmark Rigor (deferred behind v0.6.1 — renumbers to 16-21 on start)</summary>
