@@ -28,6 +28,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -308,61 +309,79 @@ class ClaudeBridge:
 
         cmd, env = wrap(cmd, "llm", self.config.project_root, env, tier=self.config.sandbox)
 
+        # WR-09/SBX-05: on a confine-tier macOS call, `wrap()` returns
+        # `[sandbox-exec, "-f", <temp .sb profile>, *cmd]` (see
+        # `sandbox.py:_wrap_macos`) — the profile file is written with
+        # `delete=False` so `sandbox-exec` can read it, and nothing else
+        # unlinks it. Capture the path here (only for that exact shape) so
+        # the `finally` below can remove it once the child exits, regardless
+        # of outcome. Non-confine / non-macOS calls leave this None.
+        profile_path: str | None = None
+        if self.config.sandbox == "confine" and sys.platform == "darwin" and len(cmd) > 2:
+            profile_path = cmd[2]
+
         try:
-            start = time.monotonic()
-            result = subprocess.run(
-                cmd,
-                cwd=self.config.project_root,
-                capture_output=True,
-                text=True,
-                timeout=self.config.timeout,
-                env=env,
-            )
-            duration_s = time.monotonic() - start
+            try:
+                start = time.monotonic()
+                result = subprocess.run(
+                    cmd,
+                    cwd=self.config.project_root,
+                    capture_output=True,
+                    text=True,
+                    timeout=self.config.timeout,
+                    env=env,
+                )
+                duration_s = time.monotonic() - start
 
-            output = result.stdout
-            usage: BridgeUsage | None = None
-            if output_format == "json":
-                # Never raise: malformed/absent `result` → usage=None, keep raw stdout.
-                try:
-                    parsed = json.loads(result.stdout)
-                    if isinstance(parsed, dict) and isinstance(parsed.get("result"), str):
-                        output = parsed["result"]
-                        raw_usage = parsed.get("usage")
-                        raw_usage = raw_usage if isinstance(raw_usage, dict) else {}
-                        usage = BridgeUsage(
-                            tokens_in=int(raw_usage.get("input_tokens") or 0),
-                            tokens_out=int(raw_usage.get("output_tokens") or 0),
-                            cache_read=int(raw_usage.get("cache_read_input_tokens") or 0),
-                        )
-                except (json.JSONDecodeError, ValueError, TypeError, AttributeError):
-                    output = result.stdout
-                    usage = None
+                output = result.stdout
+                usage: BridgeUsage | None = None
+                if output_format == "json":
+                    # Never raise: malformed/absent `result` → usage=None, keep raw stdout.
+                    try:
+                        parsed = json.loads(result.stdout)
+                        if isinstance(parsed, dict) and isinstance(parsed.get("result"), str):
+                            output = parsed["result"]
+                            raw_usage = parsed.get("usage")
+                            raw_usage = raw_usage if isinstance(raw_usage, dict) else {}
+                            usage = BridgeUsage(
+                                tokens_in=int(raw_usage.get("input_tokens") or 0),
+                                tokens_out=int(raw_usage.get("output_tokens") or 0),
+                                cache_read=int(raw_usage.get("cache_read_input_tokens") or 0),
+                            )
+                    except (json.JSONDecodeError, ValueError, TypeError, AttributeError):
+                        output = result.stdout
+                        usage = None
 
-            bridge_result = BridgeResult(
-                success=result.returncode == 0,
-                output=output,
-                exit_code=result.returncode,
-                error=result.stderr if result.returncode != 0 else None,
-                usage=usage,
-                duration_s=duration_s,
-            )
-            self._accumulate(bridge_result)
-            return bridge_result
-        except subprocess.TimeoutExpired:
-            return BridgeResult(
-                success=False,
-                output="",
-                exit_code=-1,
-                error=f"claude CLI timed out after {self.config.timeout}s",
-            )
-        except FileNotFoundError:
-            return BridgeResult(
-                success=False,
-                output="",
-                exit_code=-1,
-                error=f"claude CLI not found at: {self.config.claude_bin}",
-            )
+                bridge_result = BridgeResult(
+                    success=result.returncode == 0,
+                    output=output,
+                    exit_code=result.returncode,
+                    error=result.stderr if result.returncode != 0 else None,
+                    usage=usage,
+                    duration_s=duration_s,
+                )
+                self._accumulate(bridge_result)
+                return bridge_result
+            except subprocess.TimeoutExpired:
+                return BridgeResult(
+                    success=False,
+                    output="",
+                    exit_code=-1,
+                    error=f"claude CLI timed out after {self.config.timeout}s",
+                )
+            except FileNotFoundError:
+                return BridgeResult(
+                    success=False,
+                    output="",
+                    exit_code=-1,
+                    error=f"claude CLI not found at: {self.config.claude_bin}",
+                )
+        finally:
+            # WR-09/SBX-05: unlink the temp .sb profile on every exit path
+            # (success, timeout, FileNotFoundError). missing_ok=True keeps
+            # this a no-op for non-confine calls and already-removed files.
+            if profile_path is not None:
+                Path(profile_path).unlink(missing_ok=True)
 
     def invoke_skill(self, skill: str, args: str = "") -> BridgeResult:
         """Invoke a Claude Code skill (e.g., 'gsd:new-project').
