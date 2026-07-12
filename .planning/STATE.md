@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Sandbox Guardrail
-status: verifying
+status: executing
 stopped_at: Phase 24 planned (2 plans, verified after 1 revision)
-last_updated: "2026-07-12T21:32:57.946Z"
-last_activity: 2026-07-12
+last_updated: "2026-07-12T21:34:55.651Z"
+last_activity: 2026-07-12 -- Phase 24 execution started
 progress:
   total_phases: 7
   completed_phases: 4
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Phase 23 — Linux Parity + Core Seam
+**Current focus:** Phase 24 — Thread the Seam + Config
 
 ## Current Position
 
-Phase: 23 (Linux Parity + Core Seam) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
-Last activity: 2026-07-12
+Phase: 24 (Thread the Seam + Config) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 24
+Last activity: 2026-07-12 -- Phase 24 execution started
 
 **Parked from v0.8.0:** Phase 22 (The Verdict) code shipped; the 5×3 paid benchmark run is OWED (see Blockers). `.planning/phases/22-the-verdict/` retained intact; v0.8.0 not archived.
 
