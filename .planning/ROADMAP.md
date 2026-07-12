@@ -18,7 +18,7 @@
 - [x] **Phase 20: Evaluator Independence** - Judge-model ≠ producer-model enforced in code, with multi-judge averaging — completed 2026-07-11
 - [x] **Phase 21: Activate the Wiki** - Promote the memory→wiki distiller to production and fire the dormant semantic wiki layer — completed 2026-07-11
 - [ ] **Phase 22: The Verdict** - Pre-registered, paired-design run on a real repo measuring quality and tax per context-layer arm — ⏸ PAUSED (code shipped; 5×3 paid run owed)
-- [ ] **Phase 23: Linux Parity + Core Seam** - Retire the bwrap+landlock unknown on Linux (mirror the passed macOS spike); build `flowstate/sandbox.py` with the `wrap(cmd, surface, project_root, env)` seam + per-platform profile builders + the non-blocking `observe` env-scrub tier (SBX-01, SBX-02)
+- [x] **Phase 23: Linux Parity + Core Seam** - `flowstate/sandbox.py` seam + observe/denylist + macOS SBPL & Linux bwrap+landlock builders shipped (SBX-02); Linux spike **PARITY PROVEN** (SBX-01) — completed 2026-07-12
 - [ ] **Phase 24: Thread the Seam + Config** - Route the agent-directed subprocess sites through `wrap()` (auth preserved), add the defaulted `ProjectPreferences.sandbox` field (no migration); env-scrub live by default, confinement opt-in (SBX-03, SBX-04)
 - [ ] **Phase 25: Confinement + Verification** - Ship the allow-default+selective-deny macOS SBPL + bwrap Linux profiles behind `confine`; E2E-prove a real `claude --print` succeeds confined while writes outside `project_root` and `~/.ssh` reads are denied; fail loud on a missing sandbox binary (SBX-05, SBX-06)
 

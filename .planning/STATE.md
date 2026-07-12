@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Sandbox Guardrail
-status: verifying
-stopped_at: Completed 23-03-PLAN.md
+status: phase-complete
+stopped_at: "Phase 23 COMPLETE + verified (SBX-01 PARITY PROVEN, SBX-02 shipped; code review Critical+8 warnings fixed). Next: Phase 24 (thread seam + config). Parked: v0.8.0 Phase-22 verdict run still owed."
 last_updated: "2026-07-12T19:46:43.519Z"
 last_activity: 2026-07-12
 progress:
-  total_phases: 7
-  completed_phases: 4
-  total_plans: 15
-  completed_plans: 14
-  percent: 57
+  total_phases: 3
+  completed_phases: 1
+  total_plans: 4
+  completed_plans: 4
+  percent: 33
 ---
 
 # Project State
