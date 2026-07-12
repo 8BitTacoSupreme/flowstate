@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Sandbox Guardrail
-status: phase-complete
-stopped_at: "Phase 24 COMPLETE + verified (SBX-03/04; 6 sites wrapped, config field, env-scrub live; review 0 Critical, WR-1 fixed, WR-2 recorded for P25). Next: Phase 25 (confine profiles + E2E denial proof + WR-03 confirms). Parked: v0.8.0 Phase-22 verdict run still owed."
-last_updated: "2026-07-12T21:54:24.921Z"
+status: verifying
+stopped_at: Phase 25 context gathered
+last_updated: "2026-07-12T22:36:15.121Z"
 last_activity: 2026-07-12
 progress:
-  total_phases: 3
-  completed_phases: 2
-  total_plans: 6
-  completed_plans: 6
-  percent: 67
+  total_phases: 7
+  completed_phases: 5
+  total_plans: 17
+  completed_plans: 16
+  percent: 71
 ---
 
 # Project State
@@ -179,8 +179,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-12T21:54:24.918Z
-Stopped at: Completed 24-02-PLAN.md
+Last session: 2026-07-12T22:36:15.114Z
+Stopped at: Phase 25 context gathered
 
 **Why v0.8.0 exists (SEED-001, verified prior session):**
 
