@@ -8,10 +8,11 @@ production module's public surface. Task 2 appends is_wiki_stale coverage.
 
 from __future__ import annotations
 
+import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from flowstate.distiller import _WIKI_CORPUS_REL, is_wiki_stale, main
+from flowstate.distiller import _WIKI_CORPUS_REL, _densify, is_wiki_stale, main
 from flowstate.memory import MemoryEntry, MemoryKind, MemoryStore
 from flowstate.state import FlowStateModel, InstallEntry
 
@@ -163,6 +164,65 @@ def test_is_wiki_stale_empty_corpus_dir_is_stale_despite_fresh_entry(tmp_path):
     corpus_dir = tmp_path / _WIKI_CORPUS_REL
     corpus_dir.mkdir(parents=True)  # present but empty (no article files)
     assert is_wiki_stale(tmp_path, state) is True
+
+
+# ---------------------------------------------------------------------------
+# Task 3: _densify routes through wrap("llm") (SBX-03) + main resolves tier
+# ---------------------------------------------------------------------------
+
+
+class TestDensifySandboxWrap:
+    """distiller.py's claude densify call routes through wrap('llm') (SBX-03)."""
+
+    def test_densify_scrubs_secrets_preserves_auth(self, tmp_path, monkeypatch):
+        """Explicit scrubbed env: auth vars survive, credential-shaped vars dropped."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "leaked-secret")
+
+        captured = {}
+
+        def fake_run(cmd, **kwargs):
+            captured["env"] = kwargs.get("env")
+            return subprocess.CompletedProcess(cmd, 0, stdout="densified\n", stderr="")
+
+        monkeypatch.setattr("flowstate.distiller.subprocess.run", fake_run)
+
+        result = _densify("article text", "claude", "opus", root=tmp_path, tier="observe")
+
+        assert result == "densified\n"
+        env = captured["env"]
+        assert env is not None
+        assert env["ANTHROPIC_API_KEY"] == "sk-ant-test"
+        assert "AWS_SECRET_ACCESS_KEY" not in env
+
+    def test_densify_subprocess_failure_returns_original_text(self, tmp_path, monkeypatch):
+        """Degradation contract intact: any subprocess failure -> original text unchanged."""
+
+        def _boom(*a, **k):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr("flowstate.distiller.subprocess.run", _boom)
+        result = _densify("original text", "claude", "opus", root=tmp_path, tier="observe")
+        assert result == "original text"
+
+
+def test_distill_main_resolves_tier_from_saved_preferences(tmp_path, monkeypatch):
+    """distill main resolves tier from load_state(root).preferences.sandbox
+    (defaults to 'observe' on a fresh root with no flowstate.json)."""
+    _seed(tmp_path, [MemoryKind.DECISION])
+    monkeypatch.setattr("flowstate.distiller._locate_claude", lambda: "/bin/claude")
+
+    captured_tier = {}
+
+    def fake_densify(article_text, claude, model, root, *, tier="observe"):
+        captured_tier["tier"] = tier
+        return article_text
+
+    monkeypatch.setattr("flowstate.distiller._densify", fake_densify)
+
+    rc = main(["--root", str(tmp_path), "--llm"])
+    assert rc == 0
+    assert captured_tier["tier"] == "observe"
 
 
 def test_register_wiki_directory_path_does_not_raise(tmp_path):
