@@ -13,8 +13,8 @@
 
 ### Thread the Seam + Config
 
-- [ ] **SBX-03**: the agent-directed subprocess sites are routed through `wrap()` (at minimum `bridge.py:308`, the auth-load-bearing `claude --print` call), and Keychain/API reachability is preserved on every wrapped call. Internal git-read (`discipline.py`) and npm (`gsd_vendor.py`) sites are wrapped or left bare per an explicit plan-time decision.
-- [ ] **SBX-04**: `ProjectPreferences` (`flowstate/state.py`) gains a defaulted `sandbox` level field (`observe` / `confine`); load stays backward-compatible with **no state migration** (defaulted field), and the default is `observe`.
+- [x] **SBX-03**: the agent-directed subprocess sites are routed through `wrap()` (at minimum `bridge.py:308`, the auth-load-bearing `claude --print` call), and Keychain/API reachability is preserved on every wrapped call. Internal git-read (`discipline.py`) and npm (`gsd_vendor.py`) sites are wrapped or left bare per an explicit plan-time decision.
+- [x] **SBX-04**: `ProjectPreferences` (`flowstate/state.py`) gains a defaulted `sandbox` level field (`observe` / `confine`); load stays backward-compatible with **no state migration** (defaulted field), and the default is `observe`.
 
 ### Confinement + Verification
 
@@ -27,8 +27,8 @@
 |-------------|-------|--------|
 | SBX-01 | Phase 23 | Complete |
 | SBX-02 | Phase 23 | Complete |
-| SBX-03 | Phase 24 | Pending |
-| SBX-04 | Phase 24 | Pending |
+| SBX-03 | Phase 24 | Complete |
+| SBX-04 | Phase 24 | Complete |
 | SBX-05 | Phase 25 | Pending |
 | SBX-06 | Phase 25 | Pending |
 

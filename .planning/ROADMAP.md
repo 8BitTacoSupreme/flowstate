@@ -190,7 +190,7 @@ Plans:
 **Plans**: 2 plans in 2 waves
 
 **Wave 1**
-- [ ] 24-01-PLAN.md — SBX-04 config field + SBX-03 auth-load-bearing llm sites (ProjectPreferences.sandbox/BridgeConfig.sandbox/_make_bridge; wrap bridge.py + distiller.py at surface "llm", auth preserved)
+- [x] 24-01-PLAN.md — SBX-04 config field + SBX-03 auth-load-bearing llm sites (ProjectPreferences.sandbox/BridgeConfig.sandbox/_make_bridge; wrap bridge.py + distiller.py at surface "llm", auth preserved)
 
 **Wave 2** *(depends on 24-01)*
 - [ ] 24-02-PLAN.md — SBX-03 tool sites (wrap tools/base run_cmd, pack repomix, gsd_vendor npm+node at surface "tool") + deliberate discipline.py bare-git exclusion + full-suite no-regression proof

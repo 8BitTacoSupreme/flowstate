@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Sandbox Guardrail
 status: executing
-stopped_at: Phase 24 planned (2 plans, verified after 1 revision)
-last_updated: "2026-07-12T21:34:55.651Z"
-last_activity: 2026-07-12 -- Phase 24 execution started
+stopped_at: Completed 24-01-PLAN.md
+last_updated: "2026-07-12T21:44:03.460Z"
+last_activity: 2026-07-12
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 17
-  completed_plans: 14
+  completed_plans: 15
   percent: 57
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 ## Current Position
 
 Phase: 24 (Thread the Seam + Config) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 24
-Last activity: 2026-07-12 -- Phase 24 execution started
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-07-12
 
 **Parked from v0.8.0:** Phase 22 (The Verdict) code shipped; the 5×3 paid benchmark run is OWED (see Blockers). `.planning/phases/22-the-verdict/` retained intact; v0.8.0 not archived.
 
@@ -92,6 +92,7 @@ Last activity: 2026-07-12 -- Phase 24 execution started
 | Phase 23 P02 | 9min | 2 tasks | 2 files |
 | Phase 23 P03 | 25min | 2 tasks | 2 files |
 | Phase 23 P04 | 25min | 3 tasks | 2 files |
+| Phase 24-thread-the-seam-config P01 | 20min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -138,6 +139,8 @@ Recent decisions affecting current work:
 - [Phase ?]: 23-01: Denylist pattern set finalized per RESEARCH.md Pitfall 1 with _AUTH_EXEMPT checked before any prefix/suffix/exact match; deliberately no bare ANTHROPIC_ prefix block
 - [Phase ?]: 23-02: build_macos_profile/build_linux_bwrap_args are pure golden-tested builders (args-only convention for bwrap, no binary/--/cmd); neither wired to a live caller (Phase 24) or shipped for production confinement (Phase 25)
 - [Phase ?]: SBX-01 retired: Linux bwrap+landlock spike VERDICT = PARITY PROVEN — Linux confine ships in Phase 25 (not degraded to observe-only). Real-kernel evidence: filesystem confinement (EACCES/EROFS) + confined claude --print auth-preservation (exit 0, real model output) both demonstrated on kernel 6.12.76 aarch64, Landlock ABI v6.
+- [Phase 24-01]: Extended tests/test_orchestrator.py (beyond Task 1's declared files) to test the _make_bridge sandbox mapping, mirroring the existing enable_prompt_caching_1h test pair
+- [Phase 24-01]: distiller._densify takes a required (no-default) root: Path param since wrap() needs project_root at every call and the sole call site already has root in scope
 
 ### Pending Todos
 
@@ -173,8 +176,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-12T21:32:57.943Z
-Stopped at: Phase 24 planned (2 plans, verified after 1 revision)
+Last session: 2026-07-12T21:44:03.456Z
+Stopped at: Completed 24-01-PLAN.md
 
 **Why v0.8.0 exists (SEED-001, verified prior session):**
 
