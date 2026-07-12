@@ -122,6 +122,19 @@ class TestWrapObserve:
         assert argv == ["echo", "hi"]
         assert new_env == _scrub_env(env)
 
+    def test_unrecognized_tier_value_degrades_to_observe(self, monkeypatch):
+        # WR-01: a typo'd/unrecognized tier string must fail SAFE to observe,
+        # not fall through into real confinement dispatch. Force the platform
+        # branch to darwin so a bug here would be caught even on this dev
+        # machine (a mis-dispatch would try to build a real sandbox-exec
+        # profile instead of returning the plain passthrough).
+        monkeypatch.setattr("flowstate.sandbox.sys.platform", "darwin")
+        argv = ["echo", "hi"]
+        env = {"PATH": "/usr/bin", "AWS_SECRET_ACCESS_KEY": "leak"}
+        new_argv, new_env = wrap(argv, "llm", Path("/tmp/p"), env, tier="Confine")
+        assert new_argv == argv
+        assert new_env == _scrub_env(env)
+
 
 # ---------------------------------------------------------------------------
 # TestBuildMacosProfile

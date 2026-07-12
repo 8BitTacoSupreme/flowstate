@@ -140,6 +140,8 @@ def wrap(
     platform or tier value.
     """
     scrubbed_env = _scrub_env(env)
+    if tier not in ("observe", "confine"):
+        tier = "observe"  # WR-01: unknown tier value fails safe to the non-blocking default
     if tier == "observe":
         return cmd, scrubbed_env
     # tier == "confine" — platform dispatch, profile builders below.
