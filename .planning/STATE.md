@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Sandbox Guardrail
-status: executing
-stopped_at: Completed 24-01-PLAN.md
-last_updated: "2026-07-12T21:44:03.460Z"
+status: verifying
+stopped_at: Completed 24-02-PLAN.md
+last_updated: "2026-07-12T21:54:24.921Z"
 last_activity: 2026-07-12
 progress:
   total_phases: 7
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 17
-  completed_plans: 15
-  percent: 57
+  completed_plans: 16
+  percent: 71
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 Phase: 24 (Thread the Seam + Config) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-12
 
 **Parked from v0.8.0:** Phase 22 (The Verdict) code shipped; the 5×3 paid benchmark run is OWED (see Blockers). `.planning/phases/22-the-verdict/` retained intact; v0.8.0 not archived.
@@ -93,6 +93,7 @@ Last activity: 2026-07-12
 | Phase 23 P03 | 25min | 2 tasks | 2 files |
 | Phase 23 P04 | 25min | 3 tasks | 2 files |
 | Phase 24-thread-the-seam-config P01 | 20min | 3 tasks | 8 files |
+| Phase 24-thread-the-seam-config P02 | 25min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -141,6 +142,8 @@ Recent decisions affecting current work:
 - [Phase ?]: SBX-01 retired: Linux bwrap+landlock spike VERDICT = PARITY PROVEN — Linux confine ships in Phase 25 (not degraded to observe-only). Real-kernel evidence: filesystem confinement (EACCES/EROFS) + confined claude --print auth-preservation (exit 0, real model output) both demonstrated on kernel 6.12.76 aarch64, Landlock ABI v6.
 - [Phase 24-01]: Extended tests/test_orchestrator.py (beyond Task 1's declared files) to test the _make_bridge sandbox mapping, mirroring the existing enable_prompt_caching_1h test pair
 - [Phase 24-01]: distiller._densify takes a required (no-default) root: Path param since wrap() needs project_root at every call and the sole call site already has root in scope
+- [Phase ?]: [Phase 24-02]: gsd_vendor.refresh() wraps both subprocess sites at the hardcoded default observe tier (no sandbox param added) — refresh is not project-scoped (gsd_version --refresh has no root/resolve_root())
+- [Phase ?]: [Phase 24-02]: discipline.py's four bare git/pytest subprocess.run calls stay un-wrapped with a sourced SBX-03/D-01 comment at both physical locations, per the phase's locked D-01 decision
 
 ### Pending Todos
 
@@ -176,8 +179,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-12T21:44:03.456Z
-Stopped at: Completed 24-01-PLAN.md
+Last session: 2026-07-12T21:54:24.918Z
+Stopped at: Completed 24-02-PLAN.md
 
 **Why v0.8.0 exists (SEED-001, verified prior session):**
 
