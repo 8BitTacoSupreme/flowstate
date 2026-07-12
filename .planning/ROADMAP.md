@@ -8,7 +8,8 @@
 - ✅ **v0.6.0 Semantic Retrieval** — Phases 9-11 (shipped 2026-07-10)
 - ✅ **v0.6.1 Make the Names Real** — Phases 12-15, 15 plans (shipped 2026-07-11) — [archive](./milestones/v0.6.1-ROADMAP.md)
 - ✅ **v0.6.2 Make the Harness Real** — eval harness runs E2E and fails loud (SEED-002; phases 16-18, shipped 2026-07-11) — [archive](./milestones/v0.6.2-ROADMAP.md)
-- 🚧 **v0.8.0 Harness Tax & Value** — measure the tax, activate the wiki, decouple the evaluator (SEED-001; next, phases 19-22)
+- 🚧 **v0.8.0 Harness Tax & Value** — measure the tax, activate the wiki, decouple the evaluator (SEED-001; phases 19-22). Phases 19-21 shipped; **Phase 22 (The Verdict) PAUSED — 5×3 paid benchmark run owed.**
+- 🚧 **v0.9.0 Sandbox Guardrail** — OS-level blast-radius boundary on every agent subprocess (SEED-003; phases 23-25). Scoped in parallel with the owed v0.8.0 verdict run; shares no files with `bench/`.
 - 📋 **v0.7.0 Retrieval Benchmark Rigor** — deferred to Backlog; the deterministic retrieval track, does not gate v0.8.0 (spec: `deferred/v0.7.0-REQUIREMENTS.md`)
 
 ## Phases
@@ -16,7 +17,13 @@
 - [x] **Phase 19: The Tax** - Real token/cost/latency accounting through `BridgeResult`, `RunSnapshot`, and `bench/report.py` — completed 2026-07-11
 - [x] **Phase 20: Evaluator Independence** - Judge-model ≠ producer-model enforced in code, with multi-judge averaging — completed 2026-07-11
 - [x] **Phase 21: Activate the Wiki** - Promote the memory→wiki distiller to production and fire the dormant semantic wiki layer — completed 2026-07-11
-- [ ] **Phase 22: The Verdict** - Pre-registered, paired-design run on a real repo measuring quality and tax per context-layer arm
+- [ ] **Phase 22: The Verdict** - Pre-registered, paired-design run on a real repo measuring quality and tax per context-layer arm — ⏸ PAUSED (code shipped; 5×3 paid run owed)
+
+### v0.9.0 Sandbox Guardrail (Phases 23–25, SEED-003)
+
+- [ ] **Phase 23: Linux Parity + Core Seam** - Retire the bwrap+landlock unknown on Linux (mirror the passed macOS spike); build `flowstate/sandbox.py` with the `wrap(cmd, surface, project_root, env)` seam + per-platform profile builders + the non-blocking `observe` env-scrub tier (SBX-01, SBX-02)
+- [ ] **Phase 24: Thread the Seam + Config** - Route the agent-directed subprocess sites through `wrap()` (auth preserved), add the defaulted `ProjectPreferences.sandbox` field (no migration); env-scrub live by default, confinement opt-in (SBX-03, SBX-04)
+- [ ] **Phase 25: Confinement + Verification** - Ship the allow-default+selective-deny macOS SBPL + bwrap Linux profiles behind `confine`; E2E-prove a real `claude --print` succeeds confined while writes outside `project_root` and `~/.ssh` reads are denied; fail loud on a missing sandbox binary (SBX-05, SBX-06)
 
 <details>
 <summary>✅ v0.3.0 v2 Pivot + Operate-Safely (Phases 1-2) — SHIPPED 2026-06-06</summary>

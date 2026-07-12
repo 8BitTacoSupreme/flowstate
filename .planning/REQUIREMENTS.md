@@ -1,4 +1,54 @@
-# Requirements: v0.8.0 Harness Tax & Value
+# Requirements: v0.9.0 Sandbox Guardrail
+
+**Goal:** Put an OS-level blast-radius boundary between FlowState's subprocess calls and the machine. FlowState shells out to `claude --print`, `repomix`, `npx`, and `git` with `env={**os.environ}` and no filesystem confinement; a prompt-injected agent call can currently write outside the project root or read arbitrary secrets. Add a native `flowstate/sandbox.py` seam (macOS Seatbelt / Linux bwrap+landlock + an env-scrub tier) that confines each agent-directed subprocess. Source: [`seeds/SEED-003-sandbox-guardrail.md`](./seeds/SEED-003-sandbox-guardrail.md). Modeled on the maintainer's own **sandflox** as a reference design, not a runtime dependency.
+
+**Integrity rules (milestone-wide):** the guardrail is a **blast-radius reducer, not an egress firewall** (`sandbox-exec`/`bwrap` are all-or-nothing on network — no per-host filtering; claude-spawning surfaces run net-ALLOWED). Default posture is **non-blocking** (`observe` = env-scrub only) so it ships without breaking a single existing run; confinement is opt-in. **Auth must survive confinement** — `claude` on this machine auths via the macOS Keychain, so an allow-default+selective-deny profile is the load-bearing baseline (a deny-default profile breaks auth). The macOS mechanism is spike-proven; **Linux bwrap parity is the milestone's gating unknown** (SBX-01) — a failed spike is a valid outcome that reshapes later phases, not a blocker to hide.
+
+## v0.9.0 Requirements
+
+### Sandbox Core (Linux parity + the seam)
+
+- [ ] **SBX-01**: a Linux `bwrap`+landlock spike proves an allow-default + selective-deny profile preserves `claude` auth and API reachability (mirroring the passed macOS Seatbelt spike), or honestly documents the parity gap and its consequence for later phases. A failed spike is a recorded outcome, not a silent skip.
+- [ ] **SBX-02**: `flowstate/sandbox.py` exposes a single `wrap(cmd, surface, project_root, env)` seam with per-platform profile builders; the default `observe` tier is **env-scrub only and never blocks** a command. Unit-tested against a fake command; profile emission golden-tested.
+
+### Thread the Seam + Config
+
+- [ ] **SBX-03**: the agent-directed subprocess sites are routed through `wrap()` (at minimum `bridge.py:308`, the auth-load-bearing `claude --print` call), and Keychain/API reachability is preserved on every wrapped call. Internal git-read (`discipline.py`) and npm (`gsd_vendor.py`) sites are wrapped or left bare per an explicit plan-time decision.
+- [ ] **SBX-04**: `ProjectPreferences` (`flowstate/state.py`) gains a defaulted `sandbox` level field (`observe` / `confine`); load stays backward-compatible with **no state migration** (defaulted field), and the default is `observe`.
+
+### Confinement + Verification
+
+- [ ] **SBX-05**: the `confine` tier ships the allow-default + selective-deny **macOS SBPL** profile and the **Linux bwrap** equivalent; an end-to-end test confirms a real `claude --print` succeeds confined (auth survives, API reachable) while a write outside `project_root` and a read of `~/.ssh` are **denied**.
+- [ ] **SBX-06**: under `confine`, a missing platform sandbox binary (`sandbox-exec` / `bwrap`) **fails loud** with an install hint — the guardrail never silently runs a command unconfined when confinement was requested.
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| SBX-01 | Phase 23 | Pending |
+| SBX-02 | Phase 23 | Pending |
+| SBX-03 | Phase 24 | Pending |
+| SBX-04 | Phase 24 | Pending |
+| SBX-05 | Phase 25 | Pending |
+| SBX-06 | Phase 25 | Pending |
+
+## Future Requirements (deferred)
+
+- **SBX-F1 — network egress allowlisting**: per-host filtering is impossible with `sandbox-exec`/`bwrap` alone; revisit only if a userspace proxy (e.g. an mitm egress gateway) is justified.
+- **SBX-F2 — Windows tier**: no equivalent kernel primitive; deferred until a Windows user asks.
+
+## Out of Scope
+
+- **Egress firewall / network confinement** — the network paradox: kernel sandboxes are all-or-nothing on network, and every `claude`-spawning surface needs the network, so this milestone confines filesystem + environment only.
+- **sandflox as a runtime dependency** — sandflox (`env.go`/`sbpl.go`/`agent-sbx`) is the reference design, reimplemented natively in Python; FlowState does not shell out to or import it.
+- **Windows sandbox tier** — macOS + Linux only.
+- **Blocking-by-default confinement** — `observe` (env-scrub, non-blocking) is the default so the guardrail ships without regressing any existing run; `confine` is opt-in.
+
+---
+
+# Carried: v0.8.0 Harness Tax & Value — VERDICT RUN OWED
+
+> **Status:** v0.8.0 is the ledger-active milestone; phases 19–21 shipped and are Validated. **Phase 22 (The Verdict) is paused** — the code (driver, pre-registration, grounding fix) shipped, but the paired-design **5×3 real benchmark run (~5–7 hr, paid) on floxybot2 has not been executed**. VERD-01..03 are marked `[x]` below optimistically; the run + recorded verdict is the outstanding debt. v0.9.0 was scoped in parallel (SEED-003) because it shares no files with `bench/`. Do not archive v0.8.0 until the verdict run completes.
 
 **Goal:** Now that the eval harness is trustworthy (v0.6.2), answer the question v0.7.0 deliberately doesn't — **does FlowState's context stack improve output quality enough to justify its token and latency cost?** Measure the tax, decouple the evaluator, activate the dormant wiki layer in production, then run a pre-registered paired-design verdict on a real repo. Source: [`seeds/SEED-001-harness-tax-and-value.md`](./seeds/SEED-001-harness-tax-and-value.md). The bench-side halves shipped in v0.6.2; this milestone is the production + measurement-science half.
 

@@ -192,7 +192,13 @@ Data: `data/longmemeval_s_cleaned.json` (265MB) + `data/locomo10.json` present; 
 
 ## Operator Next Steps
 
-- Run `/gsd-plan-phase 19` to begin Phase 19: The Tax
+**Two tracks are live (frontmatter stays v0.8.0 — it is not yet shipped):**
+
+- **v0.9.0 Sandbox Guardrail (active scoping, SEED-003, phases 23–25)** — scoped 2026-07-11. Requirements SBX-01..06 in REQUIREMENTS.md, phases 23–25 in ROADMAP.md, decisions in PROJECT.md. Start with `/gsd-discuss-phase 23` (or `/gsd-plan-phase 23`) — Phase 23 "Linux Parity + Core Seam" (`flowstate/sandbox.py` + the `wrap()` seam; Linux bwrap spike is the gating unknown).
+- **v0.8.0 Phase 22 (The Verdict) — OWED, parked** — code shipped; the 5×3 real paired-design benchmark run (~5–7 hr, paid, on a floxybot2 copy) has NOT executed. Resume with the gated one-trial re-verify probe, then the full run, then archive v0.8.0. Do **not** run `phases.clear`/`milestone.complete` on v0.8.0 until the verdict is recorded.
+
+*(Historical: Phase 19 "The Tax" already shipped — the `/gsd-plan-phase 19` line below is stale.)*
+- ~~Run `/gsd-plan-phase 19` to begin Phase 19: The Tax~~
 
 </content>
 
