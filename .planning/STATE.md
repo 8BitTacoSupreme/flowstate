@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Sandbox Guardrail
-status: planning
-stopped_at: "v0.9.0 opened (SEED-003, phases 23-25). Discussing Phase 23. PARKED DEBT: v0.8.0 Phase 22 verdict — 5x3 paid run owed (see Blockers)."
-last_updated: "2026-07-11T22:54:31.413Z"
-last_activity: 2026-07-11
+status: Gathering phase context
+stopped_at: Phase 23 context gathered
+last_updated: "2026-07-12T13:22:12.928Z"
+last_activity: 2026-07-11 — v0.9.0 Sandbox Guardrail opened (SEED-003)
 progress:
-  total_phases: 3
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_phases: 7
+  completed_phases: 3
+  total_plans: 11
+  completed_plans: 10
+  percent: 43
 ---
 
 # Project State
@@ -166,8 +166,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-11T22:54:31.410Z
-Stopped at: Phase 22 PAUSED — verdict driver + research-grounding fix shipped (quick 260711-research-grounding-fix); OWED: gated re-verify probe -> full 5x3 real run on floxybot2 (subscription, ~5-7hr). Then v0.9.0 sandbox (SEED-003) ready to start.
+Last session: 2026-07-12T13:22:12.922Z
+Stopped at: Phase 23 context gathered
 
 **Why v0.8.0 exists (SEED-001, verified prior session):**
 
@@ -201,6 +201,7 @@ Data: `data/longmemeval_s_cleaned.json` (265MB) + `data/locomo10.json` present; 
 - **v0.8.0 Phase 22 (The Verdict) — OWED, parked** — code shipped; the 5×3 real paired-design benchmark run (~5–7 hr, paid, on a floxybot2 copy) has NOT executed. Resume with the gated one-trial re-verify probe, then the full run, then archive v0.8.0. Do **not** run `phases.clear`/`milestone.complete` on v0.8.0 until the verdict is recorded.
 
 *(Historical: Phase 19 "The Tax" already shipped — the `/gsd-plan-phase 19` line below is stale.)*
+
 - ~~Run `/gsd-plan-phase 19` to begin Phase 19: The Tax~~
 
 </content>
