@@ -32,6 +32,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from flowstate.sandbox import wrap
+
 CANON = """\
 # CLAUDE.md
 
@@ -303,6 +305,8 @@ class ClaudeBridge:
         # Opt-in: raise cache TTL from 5 min to 1 h for eligible API-key accounts
         if self.config.enable_prompt_caching_1h:
             env["ENABLE_PROMPT_CACHING_1H"] = "1"
+
+        cmd, env = wrap(cmd, "llm", self.config.project_root, env, tier=self.config.sandbox)
 
         try:
             start = time.monotonic()
