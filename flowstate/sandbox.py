@@ -3,9 +3,13 @@
 Exposes a graceful-degradation seam: importing this module NEVER requires
 `bwrap`/Landlock/`sandbox-exec` to be present, and the `observe` tier never
 blocks or fails a subprocess call — it is pure env hygiene, not hard
-confinement (D-01). `wrap()` never spawns a process itself; it only
+confinement (D-01). `wrap()` never spawns the *target* `cmd` itself; it
 transforms `(argv, env)` for the caller to pass to `subprocess.run()`
-unchanged (D-04).
+unchanged (D-04). WR-04: this does NOT mean `wrap()` is side-effect-free on
+every path — the Linux `confine` tier's `check_bwrap_available()` runs a
+real, short-lived `bwrap ... /bin/true` availability probe on every call
+(Research Pattern 3); that probe subprocess is not the target `cmd`, but
+callers should not assume `wrap()` never spawns anything at all.
 
 Public API::
 
@@ -23,7 +27,9 @@ Decision cross-references (see .planning/phases/23-linux-parity-core-seam/23-CON
           to a warned observe-only posture rather than blocking the tier
           (implemented in plans 23-02/23-03).
     D-04: `wrap()` returns a transformed `(argv, env)` tuple; it never
-          executes anything.
+          executes the target `cmd` itself (though the Linux confine path's
+          `check_bwrap_available()` availability probe does spawn a
+          short-lived `bwrap ... /bin/true` smoke-test subprocess — WR-04).
 
 Phase 23-01 built the `observe` path and the env-scrub denylist. Plan
 23-02 implements the macOS SBPL profile builder (`build_macos_profile`),
@@ -132,7 +138,13 @@ def wrap(
     *,
     tier: str = "observe",
 ) -> tuple[list[str], dict[str, str]]:
-    """Transform `(cmd, env)` for subprocess confinement. Never spawns a process.
+    """Transform `(cmd, env)` for subprocess confinement.
+
+    Never spawns the target `cmd`. WR-04: the Linux `confine` tier does
+    spawn a short-lived `bwrap ... /bin/true` availability-probe subprocess
+    on every call (see module docstring / `check_bwrap_available()`) — that
+    probe is not the target `cmd`, but this call is not perfectly
+    side-effect-free on that one path.
 
     `surface` is reserved for per-surface policy (Phase 24/25); the
     `observe` tier ignores it. `tier` defaults to `"observe"` — env-scrub
@@ -484,8 +496,12 @@ def _wrap_linux(
     Phase 23 builds and golden-tests the argv SHAPE only — the shim actually
     executing `_apply_landlock` before the real target process spawns is
     exercised by the caller's `subprocess.run()` (Phase 25 wires the live
-    spawn path; nothing here calls `subprocess.run`, D-04). Never raises
-    regardless of which rung fires (T-23-11).
+    spawn path; nothing here calls `subprocess.run()` on the TARGET `cmd`,
+    D-04). WR-04: `check_bwrap_available()` (called by this function on
+    every invocation) DOES spawn a short-lived `bwrap ... /bin/true`
+    availability-probe subprocess — that's a probe, not the target `cmd`,
+    but it means this function is not literally subprocess-free. Never
+    raises regardless of which rung fires (T-23-11).
     """
     if not check_bwrap_available():
         global _bwrap_warning_emitted
