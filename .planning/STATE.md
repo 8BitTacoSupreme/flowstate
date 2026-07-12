@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Sandbox Guardrail
 status: executing
-stopped_at: Phase 23 planned (4 plans, verified)
-last_updated: "2026-07-12T16:41:40.125Z"
-last_activity: 2026-07-12 -- Phase 23 execution started
+stopped_at: Completed 23-01-PLAN.md
+last_updated: "2026-07-12T16:49:43.026Z"
+last_activity: 2026-07-12
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 15
-  completed_plans: 10
+  completed_plans: 11
   percent: 43
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 ## Current Position
 
 Phase: 23 (Linux Parity + Core Seam) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 23
-Last activity: 2026-07-12 -- Phase 23 execution started
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-07-12
 
 **Parked from v0.8.0:** Phase 22 (The Verdict) code shipped; the 5×3 paid benchmark run is OWED (see Blockers). `.planning/phases/22-the-verdict/` retained intact; v0.8.0 not archived.
 
@@ -88,6 +88,7 @@ Last activity: 2026-07-12 -- Phase 23 execution started
 | Phase 21 P03 | ~12 min | 1 tasks | 2 files |
 | Phase 22 P01 | 120 | 1 tasks | 1 files |
 | Phase 22 P02 | 35min | 3 tasks | 3 files |
+| Phase 23 P01 | 9min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -131,6 +132,7 @@ Recent decisions affecting current work:
 - [Phase ?]: 21-02: opt-in wiki_layer flag wires the Phase-11 semantic wiki layer into production; default off byte-identical; [semantic]-absent is a one-time warning
 - [Phase 21]: 21-03 dogfood test proves the wiki layer fires end-to-end (WIKI-06); real-memory dogfood skips on the empty checkout memory.db while a synthetic guard fires green
 - [Phase ?]: [Phase 22-01 / VERD-01]: froze the verdict pre-registration in 22-PREREGISTRATION.md and committed it (a1f09aa) before any --mode real run (D-04); three-part GATING win rule (CI-excludes-0 AND Cohen's d>=0.8 AND survives-Holm), seed pinned 20260711 (D-08); bench/verdict.py (Plan 02) must implement this verbatim
+- [Phase ?]: 23-01: Denylist pattern set finalized per RESEARCH.md Pitfall 1 with _AUTH_EXEMPT checked before any prefix/suffix/exact match; deliberately no bare ANTHROPIC_ prefix block
 
 ### Pending Todos
 
@@ -166,8 +168,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-12T16:33:56.828Z
-Stopped at: Phase 23 planned (4 plans, verified)
+Last session: 2026-07-12T16:49:43.023Z
+Stopped at: Completed 23-01-PLAN.md
 
 **Why v0.8.0 exists (SEED-001, verified prior session):**
 

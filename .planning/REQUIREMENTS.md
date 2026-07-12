@@ -9,7 +9,7 @@
 ### Sandbox Core (Linux parity + the seam)
 
 - [ ] **SBX-01**: a Linux `bwrap`+landlock spike proves an allow-default + selective-deny profile preserves `claude` auth and API reachability (mirroring the passed macOS Seatbelt spike), or honestly documents the parity gap and its consequence for later phases. A failed spike is a recorded outcome, not a silent skip.
-- [ ] **SBX-02**: `flowstate/sandbox.py` exposes a single `wrap(cmd, surface, project_root, env)` seam with per-platform profile builders; the default `observe` tier is **env-scrub only and never blocks** a command. Unit-tested against a fake command; profile emission golden-tested.
+- [x] **SBX-02**: `flowstate/sandbox.py` exposes a single `wrap(cmd, surface, project_root, env)` seam with per-platform profile builders; the default `observe` tier is **env-scrub only and never blocks** a command. Unit-tested against a fake command; profile emission golden-tested.
 
 ### Thread the Seam + Config
 
@@ -26,7 +26,7 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | SBX-01 | Phase 23 | Pending |
-| SBX-02 | Phase 23 | Pending |
+| SBX-02 | Phase 23 | Complete |
 | SBX-03 | Phase 24 | Pending |
 | SBX-04 | Phase 24 | Pending |
 | SBX-05 | Phase 25 | Pending |
