@@ -297,6 +297,11 @@ def _landlock_available() -> bool:
         if (major, minor) < (5, 13):
             return False
         libc = ctypes.CDLL(None, use_errno=True)
+        # WR-07: syscall(2)'s C prototype returns `long`; ctypes defaults to
+        # a 32-bit c_int return-type guess for undeclared foreign functions,
+        # which could truncate/sign-flip a real ABI version on some
+        # platform/libc combination. Declare it explicitly.
+        libc.syscall.restype = ctypes.c_long
         version = libc.syscall(
             _LANDLOCK_NR_CREATE_RULESET, None, 0, _LANDLOCK_CREATE_RULESET_VERSION
         )
@@ -341,6 +346,12 @@ def _apply_landlock_syscalls(
     (raise), not to decide how the caller degrades.
     """
     libc = ctypes.CDLL(None, use_errno=True)
+    # WR-07: syscall(2) returns `long` in C; prctl(2) returns `int`. ctypes
+    # guesses c_int for both when undeclared — correct by accident for
+    # prctl, but a real truncation/sign-flip risk for syscall's fd/rc
+    # values on some platform/libc combination. Declare both explicitly.
+    libc.syscall.restype = ctypes.c_long
+    libc.prctl.restype = ctypes.c_int
 
     ruleset_attr = struct.pack(
         "QQ", _LANDLOCK_FULL_ACCESS, 0
