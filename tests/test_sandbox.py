@@ -5,7 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from flowstate.sandbox import (
+    _apply_landlock,
     _find_sandbox_exec,
+    _landlock_available,
     _scrub_env,
     _wrap_macos,
     build_linux_bwrap_args,
@@ -273,3 +275,25 @@ class TestBuildLinuxBwrapArgs:
         args = build_linux_bwrap_args(tmp_path)
         assert "bwrap" not in args
         assert "--" not in args
+
+
+# ---------------------------------------------------------------------------
+# TestLandlockAvailable
+# ---------------------------------------------------------------------------
+
+
+class TestLandlockAvailable:
+    def test_returns_false_on_non_linux_without_raising(self):
+        # This suite runs on Darwin — _landlock_available() must degrade to
+        # False rather than raise (never-raise degradation contract).
+        assert _landlock_available() is False
+
+
+# ---------------------------------------------------------------------------
+# TestApplyLandlock
+# ---------------------------------------------------------------------------
+
+
+class TestApplyLandlock:
+    def test_noop_on_non_linux_returns_none_without_raising(self, tmp_path: Path):
+        assert _apply_landlock(tmp_path) is None
