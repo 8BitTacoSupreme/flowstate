@@ -146,6 +146,13 @@ def _scrub_env(env: dict[str, str]) -> dict[str, str]:
     so a lower/mixed-case credential-shaped var (e.g. `aws_secret_access_key`)
     is still caught — only the exemption check stays exact-case. Never
     mutates `env`.
+
+    WR-2 (25-CONTEXT.md D-04): the `_TOKEN` suffix in `_DENY_SUFFIXES`
+    deliberately catches tool-auth vars too (e.g. `NPM_TOKEN`), which can
+    break a private npm registry's `.npmrc` `_authToken` auth under
+    `observe` (see `flowstate/gsd_vendor.py`'s wrap-site comments). This is
+    NOT exempted — widening the exemption set would weaken the scrub's
+    core secret-shaped-var guarantee for every other caller of `observe`.
     """
     scrubbed: dict[str, str] = {}
     for key, value in env.items():

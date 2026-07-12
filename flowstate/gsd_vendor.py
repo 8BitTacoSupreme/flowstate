@@ -327,6 +327,15 @@ def refresh(
             # (its only caller, `gsd_version --refresh`, has no `root`/resolve_root()
             # call), so no ProjectPreferences.sandbox is threaded here; Path.cwd() is
             # the correct placeholder since observe ignores project_root.
+            #
+            # WR-2 (25-CONTEXT.md D-04, documented not fixed): observe's denylist
+            # strips any `*_TOKEN`-suffixed var, including `NPM_TOKEN`. A private
+            # registry `.npmrc` using `//registry/:_authToken=${NPM_TOKEN}` would
+            # fail here with a 401/403 that looks like npm rejecting auth, not a
+            # scrubbed-env signal. This is FlowState's public-`get-shit-done-cc`-
+            # from-public-npm path, so it's accepted as-is; a private-registry
+            # user must point FLOWSTATE_NPM_BIN at a pre-authenticated npm config
+            # rather than relying on an env var this scrub deliberately removes.
             cmd, env = wrap(cmd, "tool", Path.cwd(), {**os.environ})
             proc = subprocess.run(
                 cmd, cwd=scratch, capture_output=True, text=True, timeout=timeout, env=env
@@ -383,6 +392,10 @@ def refresh(
         try:
             # SBX-03/D-02: default observe tier — same rationale as the npm install
             # site above; refresh() is not project-scoped.
+            #
+            # WR-2 (25-CONTEXT.md D-04, documented not fixed): same NPM_TOKEN /
+            # *_TOKEN scrub limitation as the npm install site above applies
+            # here too — see that comment for the full rationale.
             parity_cmd, parity_env = wrap(
                 [node_bin, str(gsd_sdk), "query", "roadmap.get-phase", str(parity_phase)],
                 "tool",
