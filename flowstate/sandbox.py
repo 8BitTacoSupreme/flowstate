@@ -30,10 +30,10 @@ Phase 23-01 built the `observe` path and the env-scrub denylist. Plan
 its confine wiring (`_wrap_macos`), and the Linux bwrap mount-namespace
 argv builder (`build_linux_bwrap_args`) — pure, golden-tested builders,
 not yet wired to any live caller (Phase 24) and not yet shipping real
-production confinement (Phase 25). Plan 23-03 adds the Landlock ctypes
-helper (`_apply_landlock`/`_landlock_available`, import-guarded on
-`sys.platform`); `check_bwrap_available`/`_wrap_linux` remain contract
-stubs until this plan's second task wires the D-03 degradation ladder.
+production confinement (Phase 25). Plan 23-03 completes the Linux path:
+the Landlock ctypes helper (`_apply_landlock`/`_landlock_available`), the
+functional `check_bwrap_available` smoke test, and `_wrap_linux`'s D-03
+two-rung degradation ladder (bwrap+landlock -> bwrap-only -> observe).
 None of this is wired to a live caller yet (Phase 24/25).
 """
 
@@ -44,6 +44,7 @@ import os
 import platform
 import shutil
 import struct
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -344,17 +345,43 @@ def _apply_landlock_syscalls(
 def _find_bwrap() -> str:
     """Locate the `bwrap` binary.
 
-    Implemented in plan 23-03.
+    Resolution order (mirrors `flowstate/pack.py:_find_repomix`):
+    1. `FLOWSTATE_BWRAP_BIN` env var (must point to an existing file)
+    2. `shutil.which("bwrap")` (PATH search)
+    3. `""` — not found; `check_bwrap_available()` already gates on this.
     """
-    raise NotImplementedError("implemented in plan 23-03")  # pragma: no cover
+    env_path = os.environ.get("FLOWSTATE_BWRAP_BIN")
+    if env_path and Path(env_path).is_file():
+        return env_path
+
+    found = shutil.which("bwrap")
+    if found:
+        return found
+
+    return ""
 
 
 def check_bwrap_available() -> bool:
     """Functional smoke test for `bwrap` availability (not a presence check).
 
-    Implemented in plan 23-03.
+    T-23-08: `shutil.which("bwrap")` alone is insufficient — a modern
+    Ubuntu 24.04+ host can have `bwrap` on PATH yet fail via AppArmor's
+    `apparmor_restrict_unprivileged_userns=1` (23-RESEARCH.md Pitfall 3).
+    Runs a real `bwrap --ro-bind / / -- /bin/true` invocation and checks its
+    exit code; never raises (OSError / TimeoutExpired both degrade to
+    False).
     """
-    raise NotImplementedError("implemented in plan 23-03")  # pragma: no cover
+    if shutil.which("bwrap") is None:
+        return False
+    try:
+        result = subprocess.run(
+            ["bwrap", "--ro-bind", "/", "/", "--", "/bin/true"],
+            capture_output=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
 
 
 def _find_sandbox_exec() -> str:
@@ -393,11 +420,80 @@ def _wrap_macos(
     return [sbx, "-f", profile_path, *cmd], env
 
 
+_bwrap_warning_emitted = False
+
+
 def _wrap_linux(
     cmd: list[str], project_root: Path, env: dict[str, str]
 ) -> tuple[list[str], dict[str, str]]:
-    """Prefix `cmd` with `bwrap` + apply landlock rules under Linux confine.
+    """Prefix `cmd` with `bwrap` (+ a Landlock-applying shim) under Linux confine.
 
-    Implemented in plan 23-03.
+    Implements exactly D-03's TWO-rung degradation ladder:
+      RUNG 1 (bwrap + landlock): `check_bwrap_available()` True AND
+        `_landlock_available()` True -> bwrap-prefixed argv whose target is
+        a self-invoking `python -m flowstate.sandbox --apply-landlock ...`
+        shim that applies `_apply_landlock` before exec-ing `cmd`.
+      RUNG 2 (bwrap-only): `check_bwrap_available()` True, landlock
+        unavailable -> bwrap-prefixed argv, `cmd` unchanged as the target.
+      RUNG 3 (observe fallback): `check_bwrap_available()` False -> `cmd`
+        and `env` returned unchanged, with a one-time stderr warning.
+
+    REJECTED rung (23-RESEARCH.md Open Question #1 / D-03): a Landlock-only
+    rung (bwrap absent, landlock present — FS enforcement with no namespace
+    isolation) is deliberately NOT implemented. D-03's wording names exactly
+    two fallback rungs; the invented Landlock-only rung is a documented
+    future refinement, not silently added here. bwrap-absent always
+    collapses straight to RUNG 3 (observe), never to a bare-landlock rung.
+
+    Phase 23 builds and golden-tests the argv SHAPE only — the shim actually
+    executing `_apply_landlock` before the real target process spawns is
+    exercised by the caller's `subprocess.run()` (Phase 25 wires the live
+    spawn path; nothing here calls `subprocess.run`, D-04). Never raises
+    regardless of which rung fires (T-23-11).
     """
-    raise NotImplementedError("implemented in plan 23-03")  # pragma: no cover
+    if not check_bwrap_available():
+        global _bwrap_warning_emitted
+        if not _bwrap_warning_emitted:
+            print(
+                "bwrap unavailable — falling back to observe (env-scrub only); "
+                "kernel confinement pending",
+                file=sys.stderr,
+            )
+            _bwrap_warning_emitted = True
+        return cmd, env
+
+    bwrap_prefix = [_find_bwrap(), *build_linux_bwrap_args(project_root), "--"]
+
+    if _landlock_available():
+        # RUNG 1: bwrap + landlock shim.
+        target = [
+            sys.executable,
+            "-m",
+            "flowstate.sandbox",
+            "--apply-landlock",
+            str(project_root),
+            "--",
+            *cmd,
+        ]
+    else:
+        # RUNG 2: bwrap-only.
+        target = list(cmd)
+
+    return bwrap_prefix + target, env
+
+
+if (
+    __name__ == "__main__"
+):  # pragma: no cover -- exercised only inside the confined child; live spawn wiring is Phase 25
+    import argparse
+
+    parser = argparse.ArgumentParser(prog="python -m flowstate.sandbox")
+    parser.add_argument("--apply-landlock", required=True, metavar="PROJECT_ROOT")
+    parser.add_argument("child_cmd", nargs=argparse.REMAINDER)
+    args = parser.parse_args()
+
+    remainder = (
+        args.child_cmd[1:] if args.child_cmd and args.child_cmd[0] == "--" else args.child_cmd
+    )
+    _apply_landlock(Path(args.apply_landlock))
+    os.execvp(remainder[0], remainder)
