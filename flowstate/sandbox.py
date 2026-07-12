@@ -297,6 +297,18 @@ def _apply_landlock(project_root: Path) -> None:
 def _apply_landlock_syscalls(
     project_root: Path,
 ) -> None:  # pragma: no cover -- Linux-only; behavior-verified against the SBX-01 spike (plan 23-04), not exercised on this Darwin dev machine
+    """Apply the Landlock ruleset via raw syscalls. Raises `OSError` on any failure.
+
+    CR-01: every syscall return code is checked. A failed `landlock_add_rule`,
+    a failed `prctl(PR_SET_NO_NEW_PRIVS)`, or a failed `landlock_restrict_self`
+    now raises instead of silently returning as if confinement had applied —
+    a `landlock_restrict_self` return value is a normal `c_long`, not a Python
+    exception, so it must be checked explicitly rather than relying on
+    `_apply_landlock`'s `except Exception` to catch it. `_apply_landlock`
+    (the caller) still catches this and no-ops, per D-03 asymmetric-degrade
+    posture — this function's job is only to make failure *observable*
+    (raise), not to decide how the caller degrades.
+    """
     libc = ctypes.CDLL(None, use_errno=True)
 
     ruleset_attr = struct.pack(
@@ -307,25 +319,31 @@ def _apply_landlock_syscalls(
         _LANDLOCK_NR_CREATE_RULESET, ctypes.byref(ruleset_buf), len(ruleset_attr), 0
     )
     if ruleset_fd < 0:
-        return
+        raise OSError("landlock_create_ruleset failed")
+
+    all_ok = True
 
     def _add_rule(path: Path, access: int) -> None:
+        nonlocal all_ok
         try:
             fd = os.open(str(path), os.O_PATH | os.O_CLOEXEC)
         except OSError:
+            all_ok = False
             return
         try:
             # 16-byte padded struct.landlock_path_beneath_attr (Pitfall 4):
             # the trailing "I" is 4 explicit padding bytes, not real data.
             attr = struct.pack("QiI", access, fd, 0)
             attr_buf = ctypes.create_string_buffer(attr, len(attr))
-            libc.syscall(
+            rc = libc.syscall(
                 _LANDLOCK_NR_ADD_RULE,
                 ruleset_fd,
                 _LANDLOCK_RULE_PATH_BENEATH,
                 ctypes.byref(attr_buf),
                 0,
             )
+            if rc != 0:
+                all_ok = False
         finally:
             os.close(fd)
 
@@ -337,9 +355,13 @@ def _apply_landlock_syscalls(
         Path.home() / ".claude", _LANDLOCK_READ_ACCESS
     )  # claude .credentials.json stays readable
 
-    libc.prctl(38, 1, 0, 0, 0)  # PR_SET_NO_NEW_PRIVS, MUST precede restrict_self (Pitfall 5)
-    libc.syscall(_LANDLOCK_NR_RESTRICT_SELF, ruleset_fd, 0)
+    # PR_SET_NO_NEW_PRIVS, MUST precede restrict_self (Pitfall 5)
+    if libc.prctl(38, 1, 0, 0, 0) != 0:
+        all_ok = False
+    rc = libc.syscall(_LANDLOCK_NR_RESTRICT_SELF, ruleset_fd, 0)
     os.close(ruleset_fd)
+    if rc != 0 or not all_ok:
+        raise OSError("landlock ruleset application failed — restriction was not fully applied")
 
 
 def _find_bwrap() -> str:
