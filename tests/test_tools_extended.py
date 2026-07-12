@@ -74,6 +74,31 @@ class TestToolAdapterBase:
         assert not result.success
         assert "not found" in result.error.lower()
 
+    def test_run_cmd_env_scrubbed_at_default_observe(self, tmp_path: Path, monkeypatch):
+        """run_cmd routes through wrap("tool") — credential-shaped vars dropped, PATH kept."""
+        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "leaked-secret")
+        monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+        captured: dict = {}
+        import subprocess as subprocess_module
+
+        real_run = subprocess_module.run
+
+        def _spy_run(cmd, **kwargs):
+            captured["env"] = kwargs.get("env")
+            return real_run(cmd, **kwargs)
+
+        monkeypatch.setattr("flowstate.tools.base.subprocess.run", _spy_run)
+
+        adapter = ToolAdapter(root=tmp_path, dry_run=False)
+        assert adapter.sandbox == "observe"
+        result = adapter.run_cmd(["echo", "hello"])
+
+        assert result.success
+        assert captured["env"] is not None
+        assert "AWS_SECRET_ACCESS_KEY" not in captured["env"]
+        assert captured["env"].get("PATH") == "/usr/bin:/bin"
+
     def test_bridge_auto_created(self, tmp_path: Path):
         adapter = ToolAdapter(root=tmp_path, dry_run=True)
         bridge = adapter.bridge

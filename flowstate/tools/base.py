@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from flowstate.bridge import BridgeConfig, BridgeResult, ClaudeBridge
+from flowstate.sandbox import wrap
 
 if TYPE_CHECKING:
     from flowstate.memory import MemoryStore
@@ -31,6 +33,7 @@ class ToolAdapter:
         bridge: ClaudeBridge | None = None,
         memory: MemoryStore | None = None,
         prior_knowledge: str | None = None,
+        sandbox: str = "observe",
     ):
         self.root = root
         self.dry_run = dry_run
@@ -41,6 +44,8 @@ class ToolAdapter:
         # coerce with `or ""` at use time. get_memory_context() remains as the
         # escape hatch for callers needing a query-specific slice.
         self.prior_knowledge = prior_knowledge
+        # SBX-03/SBX-04: confinement tier for run_cmd's wrap("tool") call.
+        self.sandbox = sandbox
 
     @property
     def bridge(self) -> ClaudeBridge:
@@ -70,12 +75,14 @@ class ToolAdapter:
                 output=f"[dry-run] Would execute: {' '.join(cmd)}",
             )
         try:
+            cmd, env = wrap(cmd, "tool", self.root, {**os.environ}, tier=self.sandbox)
             result = subprocess.run(
                 cmd,
                 cwd=self.root,
                 capture_output=capture,
                 text=True,
                 timeout=300,
+                env=env,
             )
             return ToolResult(
                 success=result.returncode == 0,

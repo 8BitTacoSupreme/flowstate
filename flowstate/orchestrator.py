@@ -268,6 +268,7 @@ def run_pipeline(state: FlowStateModel, root: Path) -> FlowStateModel:
         bridge=bridge,
         memory=memory,
         prior_knowledge=prior_knowledge,
+        sandbox=state.preferences.sandbox,
     )
     result = _run_step(
         state,
@@ -289,6 +290,7 @@ def run_pipeline(state: FlowStateModel, root: Path) -> FlowStateModel:
         bridge=bridge,
         memory=memory,
         prior_knowledge=prior_knowledge,
+        sandbox=state.preferences.sandbox,
     )
     result = _run_step(
         state,
