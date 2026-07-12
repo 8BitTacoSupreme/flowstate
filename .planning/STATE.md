@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Sandbox Guardrail
-status: Gathering phase context
+status: executing
 stopped_at: Phase 23 planned (4 plans, verified)
-last_updated: "2026-07-12T16:33:56.840Z"
-last_activity: 2026-07-11 — v0.9.0 Sandbox Guardrail opened (SEED-003)
+last_updated: "2026-07-12T16:41:40.125Z"
+last_activity: 2026-07-12 -- Phase 23 execution started
 progress:
   total_phases: 7
   completed_phases: 3
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Phase 23 — Linux Parity + Core Seam (v0.9.0 Sandbox Guardrail)
+**Current focus:** Phase 23 — Linux Parity + Core Seam
 
 ## Current Position
 
-Phase: 23 (linux-parity-core-seam) — DISCUSSING
-Plan: —
-Status: Gathering phase context
-Last activity: 2026-07-11 — v0.9.0 Sandbox Guardrail opened (SEED-003)
+Phase: 23 (Linux Parity + Core Seam) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 23
+Last activity: 2026-07-12 -- Phase 23 execution started
 
 **Parked from v0.8.0:** Phase 22 (The Verdict) code shipped; the 5×3 paid benchmark run is OWED (see Blockers). `.planning/phases/22-the-verdict/` retained intact; v0.8.0 not archived.
 
