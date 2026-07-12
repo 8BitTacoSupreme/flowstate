@@ -212,7 +212,7 @@ Plans:
 - [x] 25-02-PLAN.md — SBX-05/WR-09: bridge.py temp-profile (.sb) cleanup — try/finally unlink around the confined subprocess.run
 
 **Wave 2**
-- [ ] 25-03-PLAN.md — SBX-05/D-03: macOS confine denial E2E (skip-if-not-darwin; real sandbox-exec allow-inside/deny-outside/deny-~/.ssh + claude auth-survival subcheck) [depends on 25-02]
+- [x] 25-03-PLAN.md — SBX-05/D-03: macOS confine denial E2E (skip-if-not-darwin; real sandbox-exec allow-inside/deny-outside/deny-~/.ssh + claude auth-survival subcheck) [depends on 25-02]
 - [ ] 25-04-PLAN.md — SBX-05/D-02+D-03: shared Linux Docker re-probe (exact shipped bwrap argv + file credential) + denial E2E + committed 25-SPIKE-LINUX-REPROBE.md; human-gated credential [depends on 25-01]
 
 <details>
