@@ -17,6 +17,7 @@ A CLI-first orchestrator that runs a deterministic 5-step pipeline — **Context
 - **State:** Pydantic-validated `flowstate.json` — tool status, artifacts, interview answers, preferences
 - **Memory:** SQLite + FTS5 (`memory.db`) with BM25 ranking; auto-injected into subsequent runs as `## Prior Knowledge`
 - **Bridge:** Non-interactive `claude --print` subprocess with `--allowed-tools`, `--max-budget-usd`, `--model`, `--effort` overrides
+- **Sandbox:** `sandbox.py` `wrap(cmd, surface, project_root, env, *, tier)` seam wraps every agent subprocess. Default `observe` tier = non-blocking env-scrub (secret-shaped vars stripped, Claude auth vars carved out); opt-in `confine` tier = macOS Seatbelt/SBPL + Linux bwrap+Landlock (denies writes outside `project_root` + `~/.ssh` reads, auth survives), fails loud with `SandboxUnavailableError` if no confinement is achievable. Set via `ProjectPreferences.sandbox` (default `observe`). Blast-radius reducer, not egress control.
 - **Events:** Synchronous `EventBus` (`StepCompleted` / `StepFailed`) drives memory handlers and audit hooks
 - **Test coverage:** 80% enforced (`pytest --cov-fail-under=80`)
 - **Tooling:** Flox for reproducible env · ruff + pre-commit · pytest + pytest-cov

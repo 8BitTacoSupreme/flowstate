@@ -49,6 +49,8 @@ Generator  Adapter    Adapter   Adapter     Audit
 
 **Memory:** Research findings, strategy decisions, and failure context are stored in `memory.db` (SQLite FTS5, with optional `sqlite-vec` semantic retrieval) and automatically injected into subsequent pipeline runs. See [Persistent Memory](#persistent-memory) below.
 
+**Sandboxing:** Every agent-directed subprocess (the `claude --print` bridge and tool surfaces) runs through a `wrap()` seam in `sandbox.py`. The default `observe` tier scrubs secret-shaped env vars without ever blocking a call; the opt-in `confine` tier adds a real kernel sandbox (macOS Seatbelt/SBPL, Linux bwrap+Landlock) that denies writes outside the project root and reads of `~/.ssh` while Claude's auth survives. See [Subprocess sandboxing](#subprocess-sandboxing-observe--confine) below.
+
 ## Prerequisites
 
 - **[Flox](https://flox.dev)** (recommended) — handles everything below automatically
@@ -282,6 +284,14 @@ flowstate/
 
 FlowState auto-detects `claude` on your PATH and in common install locations (`~/.local/bin/claude`, `/usr/local/bin/claude`, `/opt/homebrew/bin/claude`).
 
+**Sandboxing.** Agent subprocess calls run through the `sandbox.py` seam (see [Subprocess sandboxing](#subprocess-sandboxing-observe--confine)). The tier lives in `ProjectPreferences.sandbox`, persisted under `preferences` in `flowstate.json` and defaulting to `observe`. There is no dedicated CLI flag yet; to opt into kernel confinement, set the field directly:
+
+```json
+{ "preferences": { "sandbox": "confine" } }
+```
+
+`observe` (default) scrubs secret-shaped env vars without ever blocking; `confine` adds a macOS Seatbelt / Linux bwrap+Landlock sandbox and fails loud (`SandboxUnavailableError`) if the platform sandbox binary is missing.
+
 ## Running tests
 
 ```bash
@@ -310,6 +320,17 @@ Wraps `claude --print` (non-interactive mode) with:
 - `--allowedTools` for scoped tool permissions per adapter
 - `--max-turns` to bound agentic execution
 - `CLAUDECODE` env var removal to allow subprocess invocation from within a Claude session
+
+### Subprocess sandboxing (`observe` / `confine`)
+
+Every agent-directed subprocess FlowState launches — the `claude --print` bridge, the memory distiller, tool adapters, `flowstate pack` — passes through a single `wrap(cmd, surface, project_root, env, *, tier)` seam in `sandbox.py` that returns a transformed `(argv, env)` for the caller to run unchanged. `wrap()` never spawns the target command itself; it only rewrites how the caller will.
+
+Two tiers, set per project via the `sandbox` preference (default `observe`):
+
+- **`observe` (default, non-blocking).** Pure env hygiene: strips secret-shaped variables from the child's environment via a case-insensitive denylist, with an explicit carve-out for the vars Claude Code needs (`ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_CONFIG_DIR`). It never blocks and never fails a call — hygiene, not confinement.
+- **`confine` (opt-in, kernel-enforced).** Wraps the child in a real OS sandbox: on **macOS** an allow-default + selective-deny Seatbelt (SBPL) profile via `sandbox-exec`; on **Linux** a `bwrap` mount namespace with Landlock LSM rules. Writes outside `project_root` and reads of `~/.ssh` are denied, while Claude's auth survives (macOS Keychain, Linux file credential) and the API stays reachable. If `confine` is requested but no confinement is achievable — the platform sandbox binary is absent, or the platform is neither macOS nor Linux — `wrap()` raises `SandboxUnavailableError` with an install hint: it **fails loud, never silently runs unconfined**. Partial capability still degrades within confinement (e.g. Linux bwrap without Landlock) without failing.
+
+This is a blast-radius reducer, not a network egress firewall — `confine` restricts filesystem and environment reach, not outbound connections. Both tiers are covered by `tests/test_sandbox.py` and a real, `skip-if-not-darwin` end-to-end test (`tests/test_sandbox_e2e_macos.py`); the Linux `confine` path is verified via a committed Docker artifact (privileged Docker is off-CI by design).
 
 ### State persistence
 
