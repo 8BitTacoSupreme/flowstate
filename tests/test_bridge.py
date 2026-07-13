@@ -411,6 +411,29 @@ class TestSandboxWrapLlmSite:
         # Credential-shaped var is scrubbed under default observe (T-24-01).
         assert "AWS_SECRET_ACCESS_KEY" not in env
 
+    def test_sandbox_unavailable_error_degrades_to_failed_result(self, tmp_path: Path, monkeypatch):
+        """CR-01: a confine-tier wrap() raising SandboxUnavailableError must not
+        crash run() — it degrades to BridgeResult(success=False, ...) carrying
+        the install-hint message, and never falls back to running unconfined."""
+        from flowstate.sandbox import SandboxUnavailableError
+
+        def fake_wrap(*args, **kwargs):
+            raise SandboxUnavailableError("bwrap not found. Install bubblewrap.")
+
+        monkeypatch.setattr("flowstate.bridge.wrap", fake_wrap)
+
+        def fail_if_called(*args, **kwargs):
+            raise AssertionError("subprocess.run must not be called when wrap() raises")
+
+        monkeypatch.setattr("flowstate.bridge.subprocess.run", fail_if_called)
+
+        config = BridgeConfig(claude_bin="/usr/bin/fake-claude", project_root=tmp_path)
+        bridge = ClaudeBridge(config=config)
+        result = bridge.run("Hello")
+
+        assert result.success is False
+        assert "bwrap not found" in result.error
+
     def test_wraps_at_surface_llm(self, tmp_path: Path, monkeypatch):
         """The wrap() call site uses surface literal 'llm' (D-02) — verified by
         confirming argv is unchanged under observe (observe never touches argv)."""

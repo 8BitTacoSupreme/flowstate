@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from flowstate.bridge import BridgeConfig, BridgeResult, ClaudeBridge
-from flowstate.sandbox import wrap
+from flowstate.sandbox import SandboxUnavailableError, wrap
 
 if TYPE_CHECKING:
     from flowstate.memory import MemoryStore
@@ -105,3 +105,5 @@ class ToolAdapter:
                 output="",
                 error=f"Command timed out after 300s: {' '.join(cmd)}",
             )
+        except SandboxUnavailableError as exc:
+            return ToolResult(success=False, output="", error=str(exc))

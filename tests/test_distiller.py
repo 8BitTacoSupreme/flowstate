@@ -205,6 +205,19 @@ class TestDensifySandboxWrap:
         result = _densify("original text", "claude", "opus", root=tmp_path, tier="observe")
         assert result == "original text"
 
+    def test_densify_sandbox_unavailable_error_returns_original_text(self, tmp_path, monkeypatch):
+        """CR-01: a confine-tier wrap() raising SandboxUnavailableError must honor
+        the "Never raises" __main__ contract — degrade to original_text unchanged,
+        same as any other subprocess failure."""
+        from flowstate.sandbox import SandboxUnavailableError
+
+        def fake_wrap(*a, **k):
+            raise SandboxUnavailableError("bwrap not found. Install bubblewrap.")
+
+        monkeypatch.setattr("flowstate.distiller.wrap", fake_wrap)
+        result = _densify("original text", "claude", "opus", root=tmp_path, tier="confine")
+        assert result == "original text"
+
 
 def test_distill_main_resolves_tier_from_saved_preferences(tmp_path, monkeypatch):
     """distill main resolves tier from load_state(root).preferences.sandbox

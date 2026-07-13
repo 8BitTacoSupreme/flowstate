@@ -15,7 +15,7 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from flowstate.sandbox import wrap
+from flowstate.sandbox import SandboxUnavailableError, wrap
 
 
 def _find_repomix() -> str:
@@ -143,6 +143,8 @@ def run_pack(root: Path, *, compress: bool = False, sandbox: str = "observe") ->
             exit_code=-1,
             error=f"repomix not found at: {config.repomix_bin}",
         )
+    except SandboxUnavailableError as exc:
+        return PackResult(success=False, exit_code=-1, error=str(exc))
 
     # Register the pack artifact on install_manifest
     from flowstate.context import _register

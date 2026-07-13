@@ -89,6 +89,25 @@ def test_research_passes_model_to_bridge(tmp_path: Path, monkeypatch):
     assert call_kwargs["model"] == "sonnet"
 
 
+def test_run_cmd_sandbox_unavailable_error_degrades_to_failed_result(tmp_path: Path, monkeypatch):
+    """CR-01: a confine-tier wrap() raising SandboxUnavailableError inside
+    ToolAdapter.run_cmd() must not crash — it degrades to
+    ToolResult(success=False, ...) carrying the install-hint message."""
+    from flowstate.sandbox import SandboxUnavailableError
+    from flowstate.tools.base import ToolAdapter
+
+    def fake_wrap(*args, **kwargs):
+        raise SandboxUnavailableError("bwrap not found. Install bubblewrap.")
+
+    monkeypatch.setattr("flowstate.tools.base.wrap", fake_wrap)
+
+    adapter = ToolAdapter(root=tmp_path, sandbox="confine")
+    result = adapter.run_cmd(["echo", "hi"])
+
+    assert result.success is False
+    assert "bwrap not found" in result.error
+
+
 def test_lazy_bridge_threads_sandbox_tier(tmp_path: Path):
     """SBX-03: the lazily-built .bridge inherits the adapter's confinement tier,
     so a caller on this path is not silently downgraded to observe."""

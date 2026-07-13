@@ -93,12 +93,15 @@ def _densify(
         "--",
         PROMPT_HEADER + article_text,
     ]
-    cmd, env = wrap(cmd, "llm", root, {**os.environ}, tier=tier)
     try:
+        cmd, env = wrap(cmd, "llm", root, {**os.environ}, tier=tier)
         proc = subprocess.run(
             cmd, capture_output=True, text=True, timeout=_DISTILL_TIMEOUT, env=env
         )
     except Exception:
+        # Never raises (module contract, see __main__ below): a
+        # SandboxUnavailableError from wrap() or any subprocess failure
+        # degrades to the deterministic article text, same as before.
         return article_text
     if proc.returncode == 0 and proc.stdout.strip():
         return proc.stdout

@@ -33,7 +33,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from flowstate.sandbox import wrap
+from flowstate.sandbox import SandboxUnavailableError, wrap
 
 CANON = """\
 # CLAUDE.md
@@ -307,7 +307,10 @@ class ClaudeBridge:
         if self.config.enable_prompt_caching_1h:
             env["ENABLE_PROMPT_CACHING_1H"] = "1"
 
-        cmd, env = wrap(cmd, "llm", self.config.project_root, env, tier=self.config.sandbox)
+        try:
+            cmd, env = wrap(cmd, "llm", self.config.project_root, env, tier=self.config.sandbox)
+        except SandboxUnavailableError as exc:
+            return BridgeResult(success=False, output="", exit_code=-1, error=str(exc))
 
         # WR-09/SBX-05: on a confine-tier macOS call, `wrap()` returns
         # `[sandbox-exec, "-f", <temp .sb profile>, *cmd]` (see

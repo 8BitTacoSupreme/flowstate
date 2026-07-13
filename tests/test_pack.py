@@ -144,6 +144,25 @@ class TestRunPack:
         assert "AWS_SECRET_ACCESS_KEY" not in captured["env"]
         assert captured["env"].get("PATH") == "/usr/bin:/bin"
 
+    def test_sandbox_unavailable_error_degrades_to_failed_result(self, tmp_path: Path, monkeypatch):
+        """CR-01: a confine-tier wrap() raising SandboxUnavailableError inside
+        run_pack() must not crash — it degrades to PackResult(success=False, ...)
+        carrying the install-hint message."""
+        from flowstate.sandbox import SandboxUnavailableError
+
+        fake = _write_fake_repomix(tmp_path)
+        monkeypatch.setenv("FLOWSTATE_REPOMIX_BIN", str(fake))
+
+        def fake_wrap(*args, **kwargs):
+            raise SandboxUnavailableError("bwrap not found. Install bubblewrap.")
+
+        monkeypatch.setattr("flowstate.pack.wrap", fake_wrap)
+
+        result = run_pack(tmp_path, sandbox="confine")
+
+        assert result.success is False
+        assert "bwrap not found" in result.error
+
     def test_compress_flag_included_in_argv(self, tmp_path: Path, monkeypatch):
         """run_pack(compress=True) should pass --compress to repomix."""
         # Write a repomix that records its argv to a file

@@ -2,7 +2,8 @@
 
 from pathlib import Path
 
-from flowstate.orchestrator import _make_bridge, run_pipeline
+from flowstate.orchestrator import _make_bridge, _run_step, run_pipeline
+from flowstate.sandbox import SandboxUnavailableError
 from flowstate.state import FlowStateModel, ToolStatus
 
 
@@ -31,6 +32,24 @@ def test_dry_run_pipeline(tmp_path: Path):
     assert (tmp_path / "research" / "report.md").exists()
     assert (tmp_path / "research" / "strategy.md").exists()
     assert (tmp_path / ".planning" / "ROADMAP.md").exists()
+
+
+def test_run_step_catches_exception_and_blocks(tmp_path: Path):
+    """CR-01: an exception raised by execute_fn() (e.g. SandboxUnavailableError
+    surfacing from a confine-tier wrap() call deep in an adapter) must not crash
+    the pipeline — it degrades to a BLOCKED tool status carrying the error
+    message, mirroring the existing result.success=False failure path, instead
+    of propagating an unhandled traceback and leaving the tool wedged at RUNNING."""
+    state = FlowStateModel()
+
+    def _boom():
+        raise SandboxUnavailableError("bwrap not found. Install bubblewrap.")
+
+    result = _run_step(state, tmp_path, "research", 1, 5, _boom)
+
+    assert result is None
+    assert state.tools["research"].status == ToolStatus.BLOCKED
+    assert "bwrap not found" in (state.tools["research"].error or "")
 
 
 def test_dry_run_creates_state_file(tmp_path: Path):

@@ -136,7 +136,20 @@ def _run_step(
     update_tool(state, tool_name, status=ToolStatus.RUNNING)
     save_state(state, root)
 
-    result = execute_fn()
+    try:
+        result = execute_fn()
+    except Exception as exc:
+        update_tool(state, tool_name, status=ToolStatus.BLOCKED, error=str(exc))
+        console.print(f"  [red]Failed: {exc}[/red]")
+        save_state(state, root)
+        if bus:
+            bus.emit(
+                StepFailed(
+                    payload={"tool": tool_name, "error": str(exc)},
+                    source="orchestrator",
+                )
+            )
+        return None
 
     if result.success:
         update_tool(state, tool_name, status=ToolStatus.COMPLETED)
