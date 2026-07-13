@@ -213,7 +213,7 @@ Plans:
 
 **Wave 2**
 - [x] 25-03-PLAN.md — SBX-05/D-03: macOS confine denial E2E (skip-if-not-darwin; real sandbox-exec allow-inside/deny-outside/deny-~/.ssh + claude auth-survival subcheck) [depends on 25-02]
-- [ ] 25-04-PLAN.md — SBX-05/D-02+D-03: shared Linux Docker re-probe (exact shipped bwrap argv + file credential) + denial E2E + committed 25-SPIKE-LINUX-REPROBE.md; human-gated credential [depends on 25-01]
+- [x] 25-04-PLAN.md — SBX-05/D-02+D-03: shared Linux Docker re-probe (exact shipped bwrap argv + file credential) + denial E2E + committed 25-SPIKE-LINUX-REPROBE.md; human-gated credential [depends on 25-01]
 
 <details>
 <summary>📋 v0.7.0 Retrieval Benchmark Rigor (deferred behind v0.6.1 — renumbers to 16-21 on start)</summary>
