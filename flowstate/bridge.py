@@ -379,6 +379,18 @@ class ClaudeBridge:
                     exit_code=-1,
                     error=f"claude CLI not found at: {self.config.claude_bin}",
                 )
+            except OSError as exc:
+                # WR-02: any other subprocess spawn failure (e.g. a located
+                # sandbox-exec/bwrap binary that exists but isn't executable,
+                # or an exec failure inside the Linux landlock shim) — the
+                # confine tier widens this surface versus the plain `claude`
+                # invocation this codebase shipped before.
+                return BridgeResult(
+                    success=False,
+                    output="",
+                    exit_code=-1,
+                    error=f"claude CLI subprocess failed: {exc}",
+                )
         finally:
             # WR-09/SBX-05: unlink the temp .sb profile on every exit path
             # (success, timeout, FileNotFoundError). missing_ok=True keeps

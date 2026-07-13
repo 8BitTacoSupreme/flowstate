@@ -434,6 +434,23 @@ class TestSandboxWrapLlmSite:
         assert result.success is False
         assert "bwrap not found" in result.error
 
+    def test_subprocess_oserror_degrades_to_failed_result(self, tmp_path: Path, monkeypatch):
+        """WR-02: an OSError raised by subprocess.run (e.g. a located sandbox-exec/
+        bwrap binary that exists but isn't executable) must degrade to
+        BridgeResult(success=False, ...) rather than an unhandled crash."""
+
+        def fake_run_raises(cmd, **kwargs):
+            raise PermissionError("not executable")
+
+        monkeypatch.setattr("flowstate.bridge.subprocess.run", fake_run_raises)
+
+        config = BridgeConfig(claude_bin="/usr/bin/fake-claude", project_root=tmp_path)
+        bridge = ClaudeBridge(config=config)
+        result = bridge.run("Hello")
+
+        assert result.success is False
+        assert "not executable" in result.error
+
     def test_wraps_at_surface_llm(self, tmp_path: Path, monkeypatch):
         """The wrap() call site uses surface literal 'llm' (D-02) — verified by
         confirming argv is unchanged under observe (observe never touches argv)."""
