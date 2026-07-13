@@ -356,6 +356,8 @@ class TestBuildLinuxBwrapArgs:
             project,
             project,
             "--tmpfs",
+            "/tmp",
+            "--tmpfs",
             ssh_dir,
             "--dev",
             "/dev",
@@ -383,8 +385,16 @@ class TestBuildLinuxBwrapArgs:
 
     def test_contains_tmpfs_ssh_shadow(self, tmp_path: Path):
         args = build_linux_bwrap_args(tmp_path)
-        idx = args.index("--tmpfs")
-        assert args[idx + 1] == str(Path.home() / ".ssh")
+        ssh_idx = args.index(str(Path.home() / ".ssh"))
+        assert args[ssh_idx - 1] == "--tmpfs"
+
+    def test_contains_tmpfs_tmp_scratch(self, tmp_path: Path):
+        # 25-CONTEXT.md D-02 / 25-SPIKE-LINUX-REPROBE.md: confined claude
+        # needs a writable /tmp scratch dir (EROFS on /tmp/claude-0 without
+        # it) even though $HOME stays read-only.
+        args = build_linux_bwrap_args(tmp_path)
+        tmp_idx = args.index("/tmp")
+        assert args[tmp_idx - 1] == "--tmpfs"
 
     def test_does_not_contain_bwrap_binary_or_separator(self, tmp_path: Path):
         args = build_linux_bwrap_args(tmp_path)
