@@ -15,10 +15,19 @@ findings:
   warning: 2
   info: 1
   total: 4
-status: issues_found
+status: resolved
+resolution:
+  fixed: [CR-01, WR-01, WR-02]
+  deferred: [IN-01]
+  note: "CR-01/WR-01/WR-02 fixed via /gsd-code-review 25 --fix (commits 68eb4fe, b8f9c99, 6cf3538); 1335 tests @ 91.63%. IN-01 (Info, /tmp project_root shadow) deferred as out-of-scope."
 ---
 
 # Phase 25: Code Review Report
+
+> **Resolution (2026-07-13):** CR-01, WR-01, WR-02 fixed and committed on `main`
+> (`68eb4fe` CR-01, `b8f9c99` WR-01, `6cf3538` WR-02) with integration tests across
+> bridge/tools/pack/distiller/orchestrator; full suite 1335 passed @ 91.63% coverage.
+> IN-01 (Info) intentionally deferred. Original findings preserved below.
 
 **Reviewed:** 2026-07-13T00:20:17Z
 **Depth:** deep
