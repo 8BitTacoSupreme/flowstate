@@ -20,7 +20,7 @@
 - [ ] **Phase 22: The Verdict** - Pre-registered, paired-design run on a real repo measuring quality and tax per context-layer arm — ⏸ PAUSED (code shipped; 5×3 paid run owed)
 - [x] **Phase 23: Linux Parity + Core Seam** - `flowstate/sandbox.py` seam + observe/denylist + macOS SBPL & Linux bwrap+landlock builders shipped (SBX-02); Linux spike **PARITY PROVEN** (SBX-01) — completed 2026-07-12
 - [x] **Phase 24: Thread the Seam + Config** - 6 agent-directed subprocess sites wrapped (llm+tool surfaces, auth preserved), `discipline.py` git-reads deliberately bare; defaulted `ProjectPreferences.sandbox` field (no migration); env-scrub live by default (SBX-03, SBX-04) — completed 2026-07-12
-- [ ] **Phase 25: Confinement + Verification** - Ship the allow-default+selective-deny macOS SBPL + bwrap Linux profiles behind `confine`; E2E-prove a real `claude --print` succeeds confined while writes outside `project_root` and `~/.ssh` reads are denied; fail loud on a missing sandbox binary (SBX-05, SBX-06)
+- [x] **Phase 25: Confinement + Verification** - `confine` tier E2E-proven: macOS SBPL + Linux bwrap profiles run a real confined `claude --print` (auth survives) while writes outside `project_root` and `~/.ssh` reads are denied (SBX-05, macOS pytest + committed Linux Docker artifact); missing sandbox binary fails loud via `SandboxUnavailableError` with an install hint (SBX-06); WR-03 closed with a minimal `--tmpfs /tmp` fix, WR-09 temp-profile leak fixed, WR-2 documented — completed 2026-07-13
 
 <details>
 <summary>✅ v0.3.0 v2 Pivot + Operate-Safely (Phases 1-2) — SHIPPED 2026-06-06</summary>
