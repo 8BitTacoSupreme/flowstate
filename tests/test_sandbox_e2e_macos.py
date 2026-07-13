@@ -62,14 +62,26 @@ def _run_confined(script: str, project_root: Path) -> subprocess.CompletedProces
 class TestMacosConfineDenialE2E:
     """Task 1: real sandbox-exec proves allow-inside / deny-outside / deny-~/.ssh."""
 
-    def test_write_inside_project_root_succeeds(self, tmp_path: Path):
-        target = tmp_path / "inside.txt"
+    def test_write_inside_project_root_succeeds(self):
+        # WR-01: pytest's `tmp_path` resolves under `/private/var/folders` on
+        # macOS, which `build_macos_profile` already unconditionally re-allows
+        # independent of `project_root` — using it here would not actually
+        # exercise the project_root-specific `(subpath "{project}")` allow-rule
+        # (D-03/SBX-05). Use a project_root provably outside
+        # /private/tmp, /private/var/folders, and /dev, so a write succeeding
+        # here can only be explained by that rule firing.
+        project_root = Path.home() / "flowstate_e2e_project"
+        project_root.mkdir(exist_ok=True)
+        try:
+            target = project_root / "inside.txt"
 
-        result = _run_confined(f'echo hello > "{target}"', tmp_path)
+            result = _run_confined(f'echo hello > "{target}"', project_root)
 
-        assert result.returncode == 0, result.stderr
-        assert target.exists()
-        assert target.read_text() == "hello\n"
+            assert result.returncode == 0, result.stderr
+            assert target.exists()
+            assert target.read_text() == "hello\n"
+        finally:
+            shutil.rmtree(project_root, ignore_errors=True)
 
     def test_write_outside_project_root_denied(self, tmp_path: Path):
         # Outside project_root AND outside the profile's re-allowed
