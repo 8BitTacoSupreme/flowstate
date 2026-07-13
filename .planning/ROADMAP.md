@@ -8,7 +8,7 @@
 - ✅ **v0.6.0 Semantic Retrieval** — Phases 9-11 (shipped 2026-07-10)
 - ✅ **v0.6.1 Make the Names Real** — Phases 12-15, 15 plans (shipped 2026-07-11) — [archive](./milestones/v0.6.1-ROADMAP.md)
 - ✅ **v0.6.2 Make the Harness Real** — eval harness runs E2E and fails loud (SEED-002; phases 16-18, shipped 2026-07-11) — [archive](./milestones/v0.6.2-ROADMAP.md)
-- 🚧 **v0.8.0 Harness Tax & Value** — measure the tax, activate the wiki, decouple the evaluator (SEED-001; phases 19-22). Phases 19-21 shipped; **Phase 22 (The Verdict) PAUSED — 5×3 paid benchmark run owed.**
+- 🚧 **v0.8.0 Harness Tax & Value** — measure the tax, activate the wiki, decouple the evaluator (SEED-001; phases 19-22). All 4 phases shipped; **Phase 22 verdict recorded 2026-07-13 — NULL (no context-layer lift over the none baseline at the pre-registered gate). Ready to complete.**
 - 🚧 **v0.9.0 Sandbox Guardrail** — OS-level blast-radius boundary on every agent subprocess (SEED-003; phases 23-25). Scoped in parallel with the owed v0.8.0 verdict run; shares no files with `bench/`.
 - 📋 **v0.7.0 Retrieval Benchmark Rigor** — deferred to Backlog; the deterministic retrieval track, does not gate v0.8.0 (spec: `deferred/v0.7.0-REQUIREMENTS.md`)
 
@@ -17,7 +17,7 @@
 - [x] **Phase 19: The Tax** - Real token/cost/latency accounting through `BridgeResult`, `RunSnapshot`, and `bench/report.py` — completed 2026-07-11
 - [x] **Phase 20: Evaluator Independence** - Judge-model ≠ producer-model enforced in code, with multi-judge averaging — completed 2026-07-11
 - [x] **Phase 21: Activate the Wiki** - Promote the memory→wiki distiller to production and fire the dormant semantic wiki layer — completed 2026-07-11
-- [ ] **Phase 22: The Verdict** - Pre-registered, paired-design run on a real repo measuring quality and tax per context-layer arm — ⏸ PAUSED (code shipped; 5×3 paid run owed)
+- [x] **Phase 22: The Verdict** - Pre-registered paired-design 5×3 real run on floxybot2 — **NULL** across all 4 contrasts (none baseline 5.8 highest; full−none closest at d=0.76, still under the 0.8 gate; all Holm p=1.0); accepted, not re-run; quality+tax per arm in 22-VERDICT.md (VERD-02, VERD-03) — completed 2026-07-13
 - [x] **Phase 23: Linux Parity + Core Seam** - `flowstate/sandbox.py` seam + observe/denylist + macOS SBPL & Linux bwrap+landlock builders shipped (SBX-02); Linux spike **PARITY PROVEN** (SBX-01) — completed 2026-07-12
 - [x] **Phase 24: Thread the Seam + Config** - 6 agent-directed subprocess sites wrapped (llm+tool surfaces, auth preserved), `discipline.py` git-reads deliberately bare; defaulted `ProjectPreferences.sandbox` field (no migration); env-scrub live by default (SBX-03, SBX-04) — completed 2026-07-12
 - [x] **Phase 25: Confinement + Verification** - `confine` tier E2E-proven: macOS SBPL + Linux bwrap profiles run a real confined `claude --print` (auth survives) while writes outside `project_root` and `~/.ssh` reads are denied (SBX-05, macOS pytest + committed Linux Docker artifact); missing sandbox binary fails loud via `SandboxUnavailableError` with an install hint (SBX-06); WR-03 closed with a minimal `--tmpfs /tmp` fix, WR-09 temp-profile leak fixed, WR-2 documented — completed 2026-07-13
@@ -152,11 +152,11 @@ Plans:
 **Wave 1**
 
 - [x] 22-01-PLAN.md — Pre-register the verdict protocol (VERD-01): commit 22-PREREGISTRATION.md before any real run
-- [ ] 22-02-PLAN.md — Build bench/verdict.py: 4-contrast driver + Holm-Bonferroni + quality/tax/compounding report, proven in --mode cheap (VERD-02/03)
+- [x] 22-02-PLAN.md — Build bench/verdict.py: 4-contrast driver + Holm-Bonferroni + quality/tax/compounding report, proven in --mode cheap (VERD-02/03)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 22-03-PLAN.md — Gated paid --mode real run on floxybot2 + write 22-VERDICT.md applying the pre-registered rules (VERD-02/03)
+- [x] 22-03-PLAN.md — Gated paid --mode real run on floxybot2 + write 22-VERDICT.md applying the pre-registered rules (VERD-02/03)
 
 **Note**: expensive — live LLM runs across 5 arms × multiple trials × multiple runs (compounding curve); smoke at reduced trials/runs before scaling per the SEED's cost-reality note.
 
@@ -247,7 +247,7 @@ Scoped and roadmapped this session, then deferred so the adapter stubs get fixed
 | 19. The Tax | v0.8.0 | 3/3 | Complete    | 2026-07-11 |
 | 20. Evaluator Independence | v0.8.0 | 2/2 | Complete    | 2026-07-11 |
 | 21. Activate the Wiki | v0.8.0 | 3/3 | Complete    | 2026-07-11 |
-| 22. The Verdict | v0.8.0 | 1/3 | In Progress|  |
+| 22. The Verdict | v0.8.0 | 3/3 | Complete    | 2026-07-13 |
 | _v0.7.0 Retrieval Benchmark Rigor_ | v0.7.0 | deferred | renumbers 16-21 on start | - |
 
 ## Backlog
