@@ -8,19 +8,11 @@
 - ✅ **v0.6.0 Semantic Retrieval** — Phases 9-11 (shipped 2026-07-10)
 - ✅ **v0.6.1 Make the Names Real** — Phases 12-15, 15 plans (shipped 2026-07-11) — [archive](./milestones/v0.6.1-ROADMAP.md)
 - ✅ **v0.6.2 Make the Harness Real** — eval harness runs E2E and fails loud (SEED-002; phases 16-18, shipped 2026-07-11) — [archive](./milestones/v0.6.2-ROADMAP.md)
-- 🚧 **v0.8.0 Harness Tax & Value** — measure the tax, activate the wiki, decouple the evaluator (SEED-001; phases 19-22). All 4 phases shipped; **Phase 22 verdict recorded 2026-07-13 — NULL (no context-layer lift over the none baseline at the pre-registered gate). Ready to complete.**
-- 🚧 **v0.9.0 Sandbox Guardrail** — OS-level blast-radius boundary on every agent subprocess (SEED-003; phases 23-25). Scoped in parallel with the owed v0.8.0 verdict run; shares no files with `bench/`.
-- 📋 **v0.7.0 Retrieval Benchmark Rigor** — deferred to Backlog; the deterministic retrieval track, does not gate v0.8.0 (spec: `deferred/v0.7.0-REQUIREMENTS.md`)
+- ✅ **v0.8.0 Harness Tax & Value** — measured the tax, activated the wiki, decoupled the evaluator (SEED-001; phases 19-22, shipped 2026-07-13); pre-registered 5×3 real-repo verdict returned **NULL** across all 4 contrasts (no context-layer lift over the none baseline at the pre-registered gate) — [archive](./milestones/v0.8.0-ROADMAP.md)
+- ✅ **v0.9.0 Sandbox Guardrail** — OS-level blast-radius boundary on every agent subprocess, Linux bwrap parity proven, `confine` tier E2E-verified (SEED-003; phases 23-25, shipped 2026-07-13) — [archive](./milestones/v0.9.0-ROADMAP.md)
+- 📋 **v0.7.0 Retrieval Benchmark Rigor** — deferred to Backlog; the deterministic retrieval track, does not gate future milestones (spec: `deferred/v0.7.0-REQUIREMENTS.md`)
 
 ## Phases
-
-- [x] **Phase 19: The Tax** - Real token/cost/latency accounting through `BridgeResult`, `RunSnapshot`, and `bench/report.py` — completed 2026-07-11
-- [x] **Phase 20: Evaluator Independence** - Judge-model ≠ producer-model enforced in code, with multi-judge averaging — completed 2026-07-11
-- [x] **Phase 21: Activate the Wiki** - Promote the memory→wiki distiller to production and fire the dormant semantic wiki layer — completed 2026-07-11
-- [x] **Phase 22: The Verdict** - Pre-registered paired-design 5×3 real run on floxybot2 — **NULL** across all 4 contrasts (none baseline 5.8 highest; full−none closest at d=0.76, still under the 0.8 gate; all Holm p=1.0); accepted, not re-run; quality+tax per arm in 22-VERDICT.md (VERD-02, VERD-03) — completed 2026-07-13
-- [x] **Phase 23: Linux Parity + Core Seam** - `flowstate/sandbox.py` seam + observe/denylist + macOS SBPL & Linux bwrap+landlock builders shipped (SBX-02); Linux spike **PARITY PROVEN** (SBX-01) — completed 2026-07-12
-- [x] **Phase 24: Thread the Seam + Config** - 6 agent-directed subprocess sites wrapped (llm+tool surfaces, auth preserved), `discipline.py` git-reads deliberately bare; defaulted `ProjectPreferences.sandbox` field (no migration); env-scrub live by default (SBX-03, SBX-04) — completed 2026-07-12
-- [x] **Phase 25: Confinement + Verification** - `confine` tier E2E-proven: macOS SBPL + Linux bwrap profiles run a real confined `claude --print` (auth survives) while writes outside `project_root` and `~/.ssh` reads are denied (SBX-05, macOS pytest + committed Linux Docker artifact); missing sandbox binary fails loud via `SandboxUnavailableError` with an install hint (SBX-06); WR-03 closed with a minimal `--tmpfs /tmp` fix, WR-09 temp-profile leak fixed, WR-2 documented — completed 2026-07-13
 
 <details>
 <summary>✅ v0.3.0 v2 Pivot + Operate-Safely (Phases 1-2) — SHIPPED 2026-06-06</summary>
@@ -82,138 +74,36 @@ Full detail: [`milestones/v0.6.2-ROADMAP.md`](./milestones/v0.6.2-ROADMAP.md).
 
 </details>
 
+<details>
+<summary>✅ v0.8.0 Harness Tax & Value (Phases 19-22) — SHIPPED 2026-07-13</summary>
+
+Measured the tax, decoupled the evaluator, activated the dormant wiki layer, then ran the pre-registered paired-design verdict (SEED-001). All 14 requirements (TAX-01..04, IND-01..03, WIKI-03..06, VERD-01..03) complete.
+
+- [x] Phase 19: The Tax (3/3 plans) — real token/cost/latency accounting through `BridgeResult`, `RunSnapshot`, and `bench/report.py` (TAX-01..04)
+- [x] Phase 20: Evaluator Independence (2/2 plans) — judge-model ≠ producer-model enforced in code, with multi-judge averaging (IND-01..03)
+- [x] Phase 21: Activate the Wiki (3/3 plans) — promoted the memory→wiki distiller to production and fired the dormant semantic wiki layer (WIKI-03..06)
+- [x] Phase 22: The Verdict (3/3 plans) — pre-registered paired-design 5×3 real run on floxybot2 — **NULL** across all 4 contrasts (none baseline 5.8 highest; full−none closest at d=0.76, still under the 0.8 gate; all Holm p=1.0); accepted, not re-run (VERD-01..03)
+
+Full detail: [`milestones/v0.8.0-ROADMAP.md`](./milestones/v0.8.0-ROADMAP.md).
+
+</details>
+
+<details>
+<summary>✅ v0.9.0 Sandbox Guardrail (Phases 23-25) — SHIPPED 2026-07-13</summary>
+
+Native OS-level blast-radius boundary on every agent-directed subprocess — macOS Seatbelt + Linux bwrap+landlock, env-scrub `observe` default, `confine` opt-in (SEED-003). All 6 requirements (SBX-01..06) complete.
+
+- [x] Phase 23: Linux Parity + Core Seam (4/4 plans) — `flowstate/sandbox.py` seam + observe/denylist + macOS SBPL & Linux bwrap+landlock builders shipped; Linux spike **PARITY PROVEN** (SBX-01, SBX-02)
+- [x] Phase 24: Thread the Seam + Config (2/2 plans) — 6 agent-directed subprocess sites wrapped (llm+tool surfaces, auth preserved); defaulted `ProjectPreferences.sandbox` field, no migration (SBX-03, SBX-04)
+- [x] Phase 25: Confinement + Verification (4/4 plans) — `confine` tier E2E-proven on macOS + Linux (auth survives, writes outside root / `~/.ssh` reads denied); missing sandbox binary fails loud (SBX-05, SBX-06)
+
+Full detail: [`milestones/v0.9.0-ROADMAP.md`](./milestones/v0.9.0-ROADMAP.md).
+
+</details>
+
 ## Phase Details
 
-### Phase 19: The Tax
-
-**Goal**: Every pipeline run can be measured for what it actually costs (tokens, cost, latency) instead of estimated — the accounting layer the harness has been missing since `bench/` began.
-**Depends on**: v0.6.2 complete (nothing new this phase touches is unbuilt: `RunSnapshot`, `bench/report.py`, `output_format="json"` all already exist)
-**Requirements**: TAX-01, TAX-02, TAX-03, TAX-04
-**Success Criteria** (what must be TRUE):
-
-  1. `BridgeResult` carries a real `usage` field (tokens_in/out/cache_read) populated via the existing `output_format="json"` path, and every existing caller's `.output` is unchanged (no regression).
-  2. `RunSnapshot` records real `tokens_in` / `tokens_out` / `cache_read` / `wall_clock_s` per run, replacing the `len(prefix)//4` `prefix_tokens` estimate as the source of truth.
-  3. `bench/report.py` shows per-arm tokens and seconds alongside the existing quality metrics, visibly excluded from `compounding_score` (Track-2, not Track-1).
-  4. The report's cost-per-success line names `flowstate verify`'s deterministic acceptance gates — not "commits" — as its denominator.
-
-**Plans**: 3 plans
-
-- [x] 19-01-PLAN.md — TAX-01: BridgeResult.usage + duration_s via the json path (text-mode byte-identical) + cumulative bridge totals
-- [x] 19-02-PLAN.md — TAX-02: real tokens/wall_clock_s on RunSnapshot threaded bridge→journal→capture; compute_scorecard unchanged
-- [x] 19-03-PLAN.md — TAX-03/04: per-arm tokens+seconds in report.py (Track-2, excluded) + cost per verified acceptance gate
-
-### Phase 20: Evaluator Independence
-
-**Goal**: The judge can no longer silently grade its own producer's output, and a single judge call becomes a defensible multi-judge verdict — without disturbing `metrics.py`'s authority.
-**Depends on**: Phase 19 (shares the report surface the tax lands on)
-**Requirements**: IND-01, IND-02, IND-03
-**Success Criteria** (what must be TRUE):
-
-  1. Running `bench/judge.py` with `--judge-model` absent, or equal to the producer model, fails loud (explicit error / nonzero exit) instead of silently grading.
-  2. `judge.py` supports multi-judge averaging (majority vote + Wilson CI), mirroring the `--judge-models` pattern already shipped in `bench/grounding.py`.
-  3. A test asserts `bench/metrics.py`'s `compounding_score` stays the authoritative deterministic scorer and the LLM judge remains excluded under the new multi-judge path.
-
-**Plans**: 2 plans
-
-- [x] 20-01-PLAN.md — IND-01/IND-02: independence guard helper + `python -m bench.judge` CLI + multi-judge aggregation (0-10 mean/median + Wilson-CI pass-rate) in judge.py
-- [x] 20-02-PLAN.md — IND-01/IND-03: wire the shared guard into compound_eval.py/close_loop.py + exclusion test proving compounding_score stays deterministic and judge-excluded
-
-### Phase 21: Activate the Wiki
-
-**Goal**: The proven-best context layer (distilled wiki + semantic retrieval, measured 0.825 ≈ oracle 0.800) stops sitting dormant and actually fires on production runs, with the default path staying byte-identical when the flag is off.
-**Depends on**: v0.6.2's shipped `bench/distiller.py` (the producer already exists; this phase is production wiring only)
-**Requirements**: WIKI-03, WIKI-04, WIKI-05, WIKI-06
-**Success Criteria** (what must be TRUE):
-
-  1. A production entry point runs the memory→wiki distiller end-of-run, writing a manifest-tracked, staleness-gated `.planning/codebase/wiki/` article corpus (mirrors the `flowstate pack` pattern) that regenerates only when memory changed, so the *next* run reads this run's distilled knowledge.
-  2. An opt-in config flag makes the orchestrator pass `include_layers={"wiki"}` to `build_context_prefix()`; with the flag off, the output is byte-identical to today's default.
-  3. With the flag on but the `[semantic]` extra absent, the wiki layer degrades to a no-op-with-warning — never a hard crash — and `pip install flowstate[semantic]` is surfaced as the requirement for the KNN path.
-  4. A dogfood smoke-test runs FlowState's own pipeline on a FlowState task with the wiki flag on, against this project's real `memory.db`, and asserts the corpus is globbed and top-k articles are injected with the run green (acceptance = "the layer fires," not "quality improved").
-
-**Plans**: 3 plans
-
-- [x] 21-01-PLAN.md — WIKI-03: promote bench/distiller.py → flowstate/distiller.py (bench re-imports) + `flowstate distill` CLI + kind="wiki" manifest & is_wiki_stale (staleness mirrors flowstate pack); run_pipeline distill side untouched (D-03 fence)
-- [x] 21-02-PLAN.md — WIKI-04/WIKI-05: opt-in `wiki_layer` pref (default false, byte-identical off) + _STANDARD_LAYERS ∪ {wiki} union at orchestrator.py:254 + one-time `[semantic]`-absent degradation warning
-- [x] 21-03-PLAN.md — WIKI-06: dogfood integration test — distill this project's real memory.db, build prefix with the wiki union, assert the layer fires (globbed + top-k injected), skip/static-degrade gracefully
-
-### Phase 22: The Verdict
-
-**Goal**: A pre-registered, paired-design measurement honestly answers whether FlowState's context stack — and specifically the now-active wiki layer — earns its token/latency tax on a real repo, accepting a null result as a legitimate outcome.
-**Depends on**: Phase 19 (tax accounting), Phase 20 (independent judge), Phase 21 (wiki actually fires) — this is the capstone phase; it needs all three measurement primitives in place before it can produce a trustworthy verdict.
-**Requirements**: VERD-01, VERD-02, VERD-03
-**Success Criteria** (what must be TRUE):
-
-  1. Verdict rules — effect-size threshold, CI width, minimum n, what counts as a win — are written down and committed *before* the paired-design run starts.
-  2. A paired-design run via `bench/close_loop.py` executes on a real repo (not `bench/fixtures/sample_project`) across arms `none`/`pack`/`memory`/`wiki`/`full`, and the report shows the compounding curve across run 1→N (run 1 empty memory → no wiki; wiki value, if any, appears run 2+).
-  3. The final report states quality **and** tax per arm, applies the pre-registered rules, and a null `wiki − none` (or any arm) is accepted and documented as a valid outcome that licenses stripping the layer — not retried until significant.
-
-**Plans**: 3 plans
-Plans:
-**Wave 1**
-
-- [x] 22-01-PLAN.md — Pre-register the verdict protocol (VERD-01): commit 22-PREREGISTRATION.md before any real run
-- [x] 22-02-PLAN.md — Build bench/verdict.py: 4-contrast driver + Holm-Bonferroni + quality/tax/compounding report, proven in --mode cheap (VERD-02/03)
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 22-03-PLAN.md — Gated paid --mode real run on floxybot2 + write 22-VERDICT.md applying the pre-registered rules (VERD-02/03)
-
-**Note**: expensive — live LLM runs across 5 arms × multiple trials × multiple runs (compounding curve); smoke at reduced trials/runs before scaling per the SEED's cost-reality note.
-
-### Phase 23: Linux Parity + Core Seam
-
-**Goal**: The Linux confinement unknown is retired (bwrap+landlock either preserves `claude` auth under an allow-default profile, mirroring the passed macOS Seatbelt spike, or the gap is honestly documented), and `flowstate/sandbox.py` exists with the single `wrap(cmd, surface, project_root, env)` seam and a non-blocking `observe` tier — the foundation every later phase threads through.
-**Depends on**: SEED-003 (macOS Seatbelt spike already passed; sandflox is the reference design). Nothing upstream is unbuilt.
-**Requirements**: SBX-01, SBX-02
-**Success Criteria** (what must be TRUE):
-
-  1. A Linux `bwrap`+landlock spike demonstrates an allow-default + selective-deny profile that preserves `claude` auth and API reachability (mirroring the macOS finding), OR the parity gap is documented with its consequence for phases 24–25 — a failed spike is a recorded outcome, not a silent skip.
-  2. `flowstate/sandbox.py` exposes `wrap(cmd, surface, project_root, env)` with per-platform profile builders; the default `observe` tier is env-scrub only and never blocks a command (unit-tested against a fake command; profile emission golden-tested).
-
-**Plans:** 4 plans in 3 waves
-
-- [x] 23-01-PLAN.md — Core seam + observe tier + env-scrub with the _AUTH_EXEMPT carve-out (SBX-02) [wave 1]
-- [x] 23-02-PLAN.md — macOS SBPL profile builder + Linux bwrap mount-namespace arg builder (SBX-02) [wave 2]
-- [x] 23-03-PLAN.md — Linux Landlock ctypes + functional bwrap smoke test + D-03 degradation ladder (SBX-02) [wave 3]
-- [x] 23-04-PLAN.md — Linux bwrap+landlock spike + committed 23-SPIKE-LINUX.md finding (SBX-01) [wave 1]
-
-### Phase 24: Thread the Seam + Config
-
-**Goal**: The agent-directed subprocess sites actually run through `wrap()` with auth intact, and a user can choose their posture via a defaulted `ProjectPreferences.sandbox` field — env-scrub live by default, confinement opt-in — with no state migration.
-**Depends on**: Phase 23 (the `wrap()` seam and `observe` tier must exist before anything routes through them).
-**Requirements**: SBX-03, SBX-04
-**Success Criteria** (what must be TRUE):
-
-  1. The agent-directed subprocess sites are routed through `wrap()` — at minimum `bridge.py:308` (the auth-load-bearing `claude --print` call) — and Keychain/API reachability is preserved on every wrapped call; internal git-read (`discipline.py`) and npm (`gsd_vendor.py`) sites are wrapped or left bare per an explicit, documented plan-time decision.
-  2. `ProjectPreferences` gains a defaulted `sandbox` level field (`observe` / `confine`); load stays backward-compatible with no state migration, and the default is `observe`.
-
-**Plans**: 2 plans in 2 waves
-
-**Wave 1**
-- [x] 24-01-PLAN.md — SBX-04 config field + SBX-03 auth-load-bearing llm sites (ProjectPreferences.sandbox/BridgeConfig.sandbox/_make_bridge; wrap bridge.py + distiller.py at surface "llm", auth preserved)
-
-**Wave 2** *(depends on 24-01)*
-- [x] 24-02-PLAN.md — SBX-03 tool sites (wrap tools/base run_cmd, pack repomix, gsd_vendor npm+node at surface "tool") + deliberate discipline.py bare-git exclusion + full-suite no-regression proof
-
-### Phase 25: Confinement + Verification
-
-**Goal**: The `confine` tier is real and proven — a live `claude --print` succeeds inside the kernel sandbox while writes outside the project root and reads of `~/.ssh` are denied, on both macOS and Linux — and a missing sandbox binary fails loud instead of silently running unconfined.
-**Depends on**: Phase 23 (profile builders) and Phase 24 (the seam + config field the `confine` level toggles).
-**Requirements**: SBX-05, SBX-06
-**Success Criteria** (what must be TRUE):
-
-  1. The `confine` tier ships the allow-default + selective-deny macOS SBPL profile and the Linux bwrap equivalent; an end-to-end test confirms a real `claude --print` succeeds confined (auth survives, API reachable) while a write outside `project_root` and a read of `~/.ssh` are denied.
-  2. Under `confine`, a missing platform sandbox binary (`sandbox-exec` / `bwrap`) fails loud with an install hint — the guardrail never silently runs a command unconfined when confinement was requested.
-
-**Plans**: 4 plans in 2 waves
-
-**Wave 1**
-- [x] 25-01-PLAN.md — SBX-06/D-01: fail-loud confine dispatch (SandboxUnavailableError + per-platform install hint) + WR-2 *_TOKEN scrub-limitation doc (D-04)
-- [x] 25-02-PLAN.md — SBX-05/WR-09: bridge.py temp-profile (.sb) cleanup — try/finally unlink around the confined subprocess.run
-
-**Wave 2**
-- [x] 25-03-PLAN.md — SBX-05/D-03: macOS confine denial E2E (skip-if-not-darwin; real sandbox-exec allow-inside/deny-outside/deny-~/.ssh + claude auth-survival subcheck) [depends on 25-02]
-- [x] 25-04-PLAN.md — SBX-05/D-02+D-03: shared Linux Docker re-probe (exact shipped bwrap argv + file credential) + denial E2E + committed 25-SPIKE-LINUX-REPROBE.md; human-gated credential [depends on 25-01]
+<!-- Phases 19-25 (v0.8.0, v0.9.0) archived — see the <details> blocks above and milestones/v0.8.0-ROADMAP.md / milestones/v0.9.0-ROADMAP.md for full phase detail. -->
 
 <details>
 <summary>📋 v0.7.0 Retrieval Benchmark Rigor (deferred behind v0.6.1 — renumbers to 16-21 on start)</summary>
@@ -248,6 +138,9 @@ Scoped and roadmapped this session, then deferred so the adapter stubs get fixed
 | 20. Evaluator Independence | v0.8.0 | 2/2 | Complete    | 2026-07-11 |
 | 21. Activate the Wiki | v0.8.0 | 3/3 | Complete    | 2026-07-11 |
 | 22. The Verdict | v0.8.0 | 3/3 | Complete    | 2026-07-13 |
+| 23. Linux Parity + Core Seam | v0.9.0 | 4/4 | Complete    | 2026-07-12 |
+| 24. Thread the Seam + Config | v0.9.0 | 2/2 | Complete    | 2026-07-12 |
+| 25. Confinement + Verification | v0.9.0 | 4/4 | Complete    | 2026-07-13 |
 | _v0.7.0 Retrieval Benchmark Rigor_ | v0.7.0 | deferred | renumbers 16-21 on start | - |
 
 ## Backlog
