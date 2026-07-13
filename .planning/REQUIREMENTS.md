@@ -18,7 +18,7 @@
 
 ### Confinement + Verification
 
-- [ ] **SBX-05**: the `confine` tier ships the allow-default + selective-deny **macOS SBPL** profile and the **Linux bwrap** equivalent; an end-to-end test confirms a real `claude --print` succeeds confined (auth survives, API reachable) while a write outside `project_root` and a read of `~/.ssh` are **denied**.
+- [x] **SBX-05**: the `confine` tier ships the allow-default + selective-deny **macOS SBPL** profile and the **Linux bwrap** equivalent; an end-to-end test confirms a real `claude --print` succeeds confined (auth survives, API reachable) while a write outside `project_root` and a read of `~/.ssh` are **denied**.
 - [x] **SBX-06**: under `confine`, a missing platform sandbox binary (`sandbox-exec` / `bwrap`) **fails loud** with an install hint — the guardrail never silently runs a command unconfined when confinement was requested.
 
 ## Traceability
@@ -29,7 +29,7 @@
 | SBX-02 | Phase 23 | Complete |
 | SBX-03 | Phase 24 | Complete |
 | SBX-04 | Phase 24 | Complete |
-| SBX-05 | Phase 25 | Pending |
+| SBX-05 | Phase 25 | Complete |
 | SBX-06 | Phase 25 | Complete |
 
 ## Future Requirements (deferred)

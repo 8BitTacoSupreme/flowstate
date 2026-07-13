@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Sandbox Guardrail
-status: executing
-stopped_at: Phase 25 context gathered
-last_updated: "2026-07-12T23:25:09.525Z"
+status: milestone_complete
+stopped_at: Milestone complete (Phase 25 was final phase)
+last_updated: 2026-07-13T00:22:00.711Z
 last_activity: 2026-07-12 -- Phase 25 execution started
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 21
-  completed_plans: 16
+  completed_plans: 35
   percent: 71
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** Each run starts smarter than the last — durable artifacts + auto-injected memory make work compound across runs.
-**Current focus:** Phase 25 — confinement-verification
+**Current focus:** Milestone complete
 
 ## Current Position
 
-Phase: 25 (confinement-verification) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 25
-Last activity: 2026-07-12 -- Phase 25 execution started
+Phase: 25
+Plan: Not started
+Status: Milestone complete
+Last activity: 2026-07-13
 
 **Parked from v0.8.0:** Phase 22 (The Verdict) code shipped; the 5×3 paid benchmark run is OWED (see Blockers). `.planning/phases/22-the-verdict/` retained intact; v0.8.0 not archived.
 
@@ -36,7 +36,7 @@ Last activity: 2026-07-12 -- Phase 25 execution started
 
 **Velocity:**
 
-- Total plans completed: 36
+- Total plans completed: 40
 - Average duration: ~15 min/plan
 - Total execution time: ~2.5 hours
 
@@ -57,6 +57,7 @@ Last activity: 2026-07-12 -- Phase 25 execution started
 | 19 | 3 | - | - |
 | 20 | 2 | - | - |
 | 21 | 3 | - | - |
+| 25 | 4 | - | - |
 
 **Recent Trend:**
 
