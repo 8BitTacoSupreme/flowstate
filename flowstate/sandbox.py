@@ -273,6 +273,17 @@ def build_linux_bwrap_args(project_root: Path) -> list[str]:
     ssh dir (Information-Disclosure mitigation, 23-RESEARCH.md Security
     Domain). Deterministic: two calls with the same `project_root` return an
     equal list.
+
+    25-CONTEXT.md D-02 (WR-03 re-probe, 25-SPIKE-LINUX-REPROBE.md): the
+    EXACT prior shape (no writable `/tmp`) made a confined `claude --print`
+    fail with EROFS trying to `mkdir /tmp/claude-0` — a scratch/session dir
+    claude writes under `/tmp` regardless of `$HOME`. The `--tmpfs /tmp`
+    entry below is the minimal fix: a private, always-empty tmpfs mounted
+    at `/tmp` inside the confined mount namespace (never exposes the real
+    host `/tmp`'s contents — tighter than a `--bind`), mirroring the macOS
+    profile's `/private/tmp` allow-write entry (`build_macos_profile`).
+    `$HOME` itself stays read-only under `--ro-bind / /`; only `/tmp` and
+    `~/.ssh` get their own private tmpfs mounts.
     """
     project = str(project_root)
     return [
@@ -282,6 +293,8 @@ def build_linux_bwrap_args(project_root: Path) -> list[str]:
         "--bind",
         project,
         project,
+        "--tmpfs",
+        "/tmp",
         "--tmpfs",
         str(Path.home() / ".ssh"),
         "--dev",
